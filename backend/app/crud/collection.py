@@ -70,63 +70,92 @@ class CRUDCollection(CRUDBase[Collection, CollectionCreate, CollectionUpdate]):
         )
 
     async def get_descendant_ids(self, db: AsyncSession, *, collection_id: int) -> list[int]:
-        """递归获取合集及其所有子合集的ID列表（使用 CTE 优化）"""
+        """递归获取合集及其所有子合集的ID列表（使用 CTE 优化，并支持租户隔离）"""
         from sqlalchemy import text
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()
+        tenant_filter = "AND tenant_id = :tid" if tenant_id is not None else ""
 
         # 使用 CTE 递归查询，一次 SQL 获取所有后代
-        query = text("""
+        query = text(f"""
             WITH RECURSIVE descendants AS (
-                SELECT id FROM collection WHERE id = :collection_id
+                SELECT id FROM collection WHERE id = :collection_id {tenant_filter}
                 UNION ALL
                 SELECT c.id FROM collection c
                 INNER JOIN descendants d ON c.parent_id = d.id
+                WHERE 1=1 {tenant_filter.replace("tenant_id", "c.tenant_id")}
             )
             SELECT id FROM descendants
         """)
 
-        result = await db.execute(query, {"collection_id": collection_id})
+        params = {"collection_id": collection_id}
+        if tenant_id is not None:
+            params["tid"] = tenant_id
+
+        result = await db.execute(query, params)
         return [row[0] for row in result.fetchall()]
 
     async def get_path(self, db: AsyncSession, *, collection_id: int) -> str:
-        """获取合集的完整路径（使用 CTE 优化）"""
+        """获取合集的完整路径（使用 CTE 优化，并支持租户隔离）"""
         from sqlalchemy import text
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()
+        tenant_filter = "AND tenant_id = :tid" if tenant_id is not None else ""
 
         # 使用 CTE 递归查询，一次 SQL 获取整个祖先链
-        query = text("""
+        query = text(f"""
             WITH RECURSIVE ancestors AS (
-                SELECT id, title, parent_id, 0 as depth FROM collection WHERE id = :collection_id
+                SELECT id, title, parent_id, 0 as depth FROM collection 
+                WHERE id = :collection_id {tenant_filter}
                 UNION ALL
                 SELECT c.id, c.title, c.parent_id, a.depth + 1 FROM collection c
                 INNER JOIN ancestors a ON c.id = a.parent_id
+                WHERE 1=1 {tenant_filter.replace("tenant_id", "c.tenant_id")}
             )
             SELECT title FROM ancestors ORDER BY depth DESC
         """)
 
-        result = await db.execute(query, {"collection_id": collection_id})
+        params = {"collection_id": collection_id}
+        if tenant_id is not None:
+            params["tid"] = tenant_id
+
+        result = await db.execute(query, params)
         path_parts = [row[0] for row in result.fetchall()]
         return " > ".join(path_parts)
 
     async def get_ancestors(self, db: AsyncSession, *, collection_id: int) -> list[dict]:
-        """获取合集的祖先链（使用 CTE 优化）"""
+        """获取合集的祖先链（使用 CTE 优化，并支持租户隔离）"""
         from sqlalchemy import text
+        from app.core.tenant import get_current_tenant
 
         # 先获取当前合集的 parent_id
         current = await self.get(db, id=collection_id)
         if not current or not current.parent_id:
             return []
 
+        tenant_id = get_current_tenant()
+        tenant_filter = "AND tenant_id = :tid" if tenant_id is not None else ""
+
         # 使用 CTE 递归查询，一次 SQL 获取所有祖先
-        query = text("""
+        query = text(f"""
             WITH RECURSIVE ancestors AS (
-                SELECT id, title, parent_id, 0 as depth FROM collection WHERE id = :parent_id
+                SELECT id, title, parent_id, 0 as depth FROM collection 
+                WHERE id = :parent_id {tenant_filter}
                 UNION ALL
                 SELECT c.id, c.title, c.parent_id, a.depth + 1 FROM collection c
                 INNER JOIN ancestors a ON c.id = a.parent_id
+                WHERE 1=1 {tenant_filter.replace("tenant_id", "c.tenant_id")}
             )
             SELECT id, title FROM ancestors ORDER BY depth DESC
         """)
 
-        result = await db.execute(query, {"parent_id": current.parent_id})
+        params = {"parent_id": current.parent_id}
+        if tenant_id is not None:
+            params["tid"] = tenant_id
+
+        result = await db.execute(query, params)
         return [{"id": row[0], "title": row[1]} for row in result.fetchall()]
 
 

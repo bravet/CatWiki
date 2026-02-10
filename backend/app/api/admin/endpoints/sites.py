@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import check_demo_mode, get_current_active_user
+from app.core.deps import check_demo_mode, get_current_user_with_tenant
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.utils import Paginator, mask_bot_config_inplace
 from app.crud import crud_site, crud_user
@@ -44,7 +44,7 @@ async def list_sites(
     size: int = 10,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[Site]]:
     """获取站点列表（分页）"""
     total = await crud_site.count(db, status=status)
@@ -65,7 +65,7 @@ async def list_sites(
 async def get_site(
     site_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Site]:
     """获取站点详情"""
     site = await crud_site.get(db, id=site_id)
@@ -83,7 +83,7 @@ async def get_site(
 async def get_site_by_slug(
     slug: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Site]:
     """通过 slug 获取站点详情（管理后台）"""
     site = await crud_site.get_by_slug(db, slug=slug)
@@ -106,7 +106,7 @@ async def get_site_by_slug(
 async def create_site(
     site_in: SiteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[Site]:
     """创建站点"""
@@ -134,15 +134,12 @@ async def create_site(
             if site.id not in current_managed_sites:
                 new_managed_sites = current_managed_sites + [site.id]
 
-                # 如果用户只是 EDITOR，升级为 SITE_ADMIN
-                new_role = existing_user.role
-                if existing_user.role == UserRole.EDITOR:
-                    new_role = UserRole.SITE_ADMIN
+                # 用户已存在，追加站点管理权限
 
                 await crud_user.update(
                     db,
                     db_obj=existing_user,
-                    obj_in=UserUpdate(managed_site_ids=new_managed_sites, role=new_role),
+                    obj_in=UserUpdate(managed_site_ids=new_managed_sites, role=existing_user.role),
                 )
         else:
             # 用户不存在，创建新用户
@@ -169,7 +166,7 @@ async def update_site(
     site_id: int,
     site_in: SiteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[Site]:
     """更新站点"""
@@ -197,7 +194,7 @@ async def update_site(
 async def delete_site(
     site_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[None]:
     """删除站点（级联删除关联数据）"""

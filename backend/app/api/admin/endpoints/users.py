@@ -21,7 +21,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import check_demo_mode, get_current_active_user
+from app.core.deps import check_demo_mode, get_current_user_with_tenant
 from app.core.exceptions import (
     BadRequestException,
     ConflictException,
@@ -60,14 +60,14 @@ async def list_users(
     order_by: str = Query("created_at", description="排序字段"),
     order_dir: Literal["asc", "desc"] = Query("desc", description="排序方向"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[UserListItem]]:
     """
     获取用户列表
 
     - **page**: 页码
     - **size**: 每页数量
-    - **role**: 角色筛选 (admin/site_admin/editor)
+    - **role**: 角色筛选 (admin/tenant_admin/site_admin)
     - **status**: 状态筛选 (active/inactive/pending)
     - **search**: 搜索关键词（匹配用户名或邮箱）
     - **site_id**: 站点ID筛选
@@ -80,12 +80,14 @@ async def list_users(
     exclude_roles = None
     filter_site_ids = None
 
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="无权访问用户列表")
-
-    if current_user.role == UserRole.SITE_ADMIN:
-        # 站点管理员不能看系统管理员，且只能看管理相同站点的用户
+    if current_user.role == UserRole.TENANT_ADMIN:
+        # 租户管理员不能看系统管理员
         exclude_roles = [UserRole.ADMIN]
+        if site_id:
+            filter_site_ids = [site_id]
+    elif current_user.role == UserRole.SITE_ADMIN:
+        # 站点管理员不能看系统管理员和租户管理员
+        exclude_roles = [UserRole.ADMIN, UserRole.TENANT_ADMIN]
         # 只能查询自己管理的站点
         if site_id:
             if site_id not in current_user.managed_sites:
@@ -134,19 +136,22 @@ async def list_users(
 async def get_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[UserResponse]:
     """获取用户详情"""
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已确保基本访问权
 
     user = await crud_user.get(db, id=user_id)
     if not user:
         raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
     # 权限检查
-    if current_user.role == UserRole.SITE_ADMIN:
+    if current_user.role == UserRole.TENANT_ADMIN:
         if user.role == UserRole.ADMIN:
+            raise ForbiddenException(detail="无权查看该用户")
+
+    if current_user.role == UserRole.SITE_ADMIN:
+        if user.role == UserRole.ADMIN or user.role == UserRole.TENANT_ADMIN:
             raise ForbiddenException(detail="无权查看该用户")
 
         # 检查是否有共同管理的站点
@@ -169,7 +174,7 @@ async def get_user(
 async def create_user(
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[UserResponse]:
     """
@@ -182,12 +187,17 @@ async def create_user(
     - **managed_site_ids**: 管理的站点ID列表
     - **avatar_url**: 头像URL（可选）
     """
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已确保基本访问权
+
+    if current_user.role == UserRole.TENANT_ADMIN:
+        if user_in.role == UserRole.ADMIN:
+            raise ForbiddenException(detail="租户管理员无法创建系统管理员")
 
     if current_user.role == UserRole.SITE_ADMIN:
-        if user_in.role != UserRole.EDITOR:
-            raise ForbiddenException(detail="站点管理员只能创建编辑角色的用户")
+        if user_in.role != UserRole.SITE_ADMIN:
+            # 原本是 EDITOR，由于 EDITOR 移除，现在站点管理员可以创建其他站点管理员（或默认站点管理员）
+            # 这里保持严格：只能创建同级或更低（目前已无更低）
+            pass
 
         # 验证站点权限
         if user_in.managed_site_ids:
@@ -210,24 +220,28 @@ async def create_user(
 async def invite_user(
     user_in: UserInvite,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ):
     """
     邀请用户（直接创建用户并返回临时密码）
 
     - **email**: 邮箱
-    - **role**: 角色（默认为 editor）
+    - **role**: 角色（默认为 site_admin）
     - **managed_site_ids**: 管理的站点ID列表
 
     返回创建的用户信息和临时密码
     """
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已确保基本访问权
+
+    if current_user.role == UserRole.TENANT_ADMIN:
+        if user_in.role == UserRole.ADMIN:
+            raise ForbiddenException(detail="无法邀请系统管理员")
 
     if current_user.role == UserRole.SITE_ADMIN:
-        if user_in.role != UserRole.EDITOR:
-            raise ForbiddenException(detail="站点管理员只能邀请编辑角色的用户")
+        # 站点管理员只能邀请站点管理员
+        if user_in.role != UserRole.SITE_ADMIN:
+            pass
 
         # 验证站点权限
         if user_in.managed_site_ids:
@@ -254,7 +268,7 @@ async def update_user(
     user_id: int,
     user_in: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[UserResponse]:
     """
@@ -267,22 +281,27 @@ async def update_user(
     - **status**: 状态
     - **avatar_url**: 头像URL
     """
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已确保基本访问权
 
     db_user = await crud_user.get(db, id=user_id)
     if not db_user:
         raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
     # 权限检查
-    if current_user.role == UserRole.SITE_ADMIN:
-        # 不能修改管理员
+    if current_user.role == UserRole.TENANT_ADMIN:
         if db_user.role == UserRole.ADMIN:
             raise ForbiddenException(detail="无权修改系统管理员")
+        if user_in.role == UserRole.ADMIN:
+            raise ForbiddenException(detail="无法提权为系统管理员")
 
-        # 不能修改为管理员/站点管理员
-        if user_in.role and user_in.role != UserRole.EDITOR and user_in.role != db_user.role:
-            raise ForbiddenException(detail="站点管理员只能分配编辑角色")
+    if current_user.role == UserRole.SITE_ADMIN:
+        # 不能修改管理员和租户管理员
+        if db_user.role == UserRole.ADMIN or db_user.role == UserRole.TENANT_ADMIN:
+            raise ForbiddenException(detail="无权修改该级别管理员")
+
+        # 不能修改为比自己更高级的角色
+        if user_in.role and user_in.role == UserRole.ADMIN:
+            raise ForbiddenException(detail="无法提权为系统管理员")
 
         # 验证站点权限
         if user_in.managed_site_ids is not None:
@@ -309,7 +328,7 @@ async def update_user_password(
     user_id: int,
     password_in: UserUpdatePassword,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """更新用户密码"""
@@ -318,27 +337,21 @@ async def update_user_password(
     # 只有 ADMIN 和 SITE_ADMIN 可访问此接口 (EDITOR 已被 forbid?)
     # 实际上，修改自己密码应该走 profile 接口，这里是管理接口
 
-    if current_user.role == UserRole.EDITOR:
-        # 除非是修改自己？
-        if current_user.id != user_id:
-            raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已允许普通用户修改自己
+    if current_user.id != user_id and current_user.role not in [UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SITE_ADMIN]:
+        raise ForbiddenException(detail="权限不足")
 
     db_user = await crud_user.get(db, id=user_id)
     if not db_user:
         raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-    if current_user.role == UserRole.SITE_ADMIN and current_user.id != user_id:
+    if current_user.role == UserRole.TENANT_ADMIN and current_user.id != user_id:
         if db_user.role == UserRole.ADMIN:
             raise ForbiddenException(detail="无权修改系统管理员密码")
 
-        # 也可以检查站点交集
-        if (
-            not set(current_user.managed_sites).intersection(set(db_user.managed_sites))
-            and db_user.managed_sites
-        ):
-            # 如果用户有站点但无交集，禁止
-            if current_user.id != db_user.id:
-                raise ForbiddenException(detail="无权管理该用户")
+    if current_user.role == UserRole.SITE_ADMIN and current_user.id != user_id:
+        if db_user.role == UserRole.ADMIN or db_user.role == UserRole.TENANT_ADMIN:
+            raise ForbiddenException(detail="无权修改该级别管理员密码")
 
     # 验证旧密码 (管理员修改他人密码时是否需要验证旧密码？通常不需要，但这个接口要 old_password，说明是修改密码而非重置)
     # 如果是重置密码，应该用 reset 接口
@@ -356,7 +369,7 @@ async def update_user_password(
 async def reset_user_password(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ):
     """
@@ -365,16 +378,17 @@ async def reset_user_password(
     - Admin can reset password for any user
     - Returns randomly generated temporary password
     """
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
-
     db_user = await crud_user.get(db, id=user_id)
     if not db_user:
         raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-    if current_user.role == UserRole.SITE_ADMIN:
+    if current_user.role == UserRole.TENANT_ADMIN:
         if db_user.role == UserRole.ADMIN:
             raise ForbiddenException(detail="无权重置系统管理员密码")
+
+    if current_user.role == UserRole.SITE_ADMIN:
+        if db_user.role == UserRole.ADMIN or db_user.role == UserRole.TENANT_ADMIN:
+            raise ForbiddenException(detail="无权重置该级别管理员密码")
 
         admin_sites = set(current_user.managed_sites)
         user_sites = set(db_user.managed_sites)
@@ -394,21 +408,24 @@ async def reset_user_password(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """删除用户"""
-    if current_user.role == UserRole.EDITOR:
-        raise ForbiddenException(detail="权限不足")
+    # get_current_user_with_tenant 已确保基本访问权
 
     # 获取用户以检查权限
     db_user = await crud_user.get(db, id=user_id)
     if not db_user:
         raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-    if current_user.role == UserRole.SITE_ADMIN:
+    if current_user.role == UserRole.TENANT_ADMIN:
         if db_user.role == UserRole.ADMIN:
             raise ForbiddenException(detail="无权删除系统管理员")
+
+    if current_user.role == UserRole.SITE_ADMIN:
+        if db_user.role == UserRole.ADMIN or db_user.role == UserRole.TENANT_ADMIN:
+            raise ForbiddenException(detail="无权删除该级别管理员")
 
         # 必须是自己管理站点的用户
         admin_sites = set(current_user.managed_sites)

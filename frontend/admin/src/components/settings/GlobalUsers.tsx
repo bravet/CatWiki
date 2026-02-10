@@ -240,21 +240,9 @@ export function GlobalUsers() {
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {user.role === UserRole.ADMIN ? (
+        {user.role === UserRole.ADMIN || user.role === UserRole.TENANT_ADMIN ? (
           <div className="w-full h-full px-4 py-3 min-h-[50px] flex flex-wrap gap-1 items-center relative pr-8">
-            {user.managed_site_ids && user.managed_site_ids.length > 0 ? (
-              user.managed_site_ids.map((siteId: number) => {
-                const site = sitesMap.get(siteId)
-                if (!site) return null
-                return (
-                  <Badge key={siteId} variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-background">
-                    {site.name}
-                  </Badge>
-                )
-              })
-            ) : (
-              <span className="text-xs text-muted-foreground">全平台</span>
-            )}
+            <span className="text-xs text-muted-foreground">{user.role === UserRole.ADMIN ? "全平台" : "全租户"}</span>
           </div>
         ) : (
           <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -419,17 +407,20 @@ export function GlobalUsers() {
                         <Badge
                           variant={
                             user.role === UserRole.ADMIN ? "default" :
-                              user.role === UserRole.SITE_ADMIN ? "secondary" : "outline"
+                              user.role === UserRole.TENANT_ADMIN ? "secondary" :
+                                user.role === UserRole.SITE_ADMIN ? "outline" : "outline"
                           }
                           className={cn(
                             "font-bold text-[10px] tracking-tight px-2 border-none",
                             user.role === UserRole.ADMIN ? "bg-primary text-primary-foreground" :
-                              user.role === UserRole.SITE_ADMIN ? "bg-amber-500/10 text-amber-600" :
-                                "bg-muted text-muted-foreground"
+                              user.role === UserRole.TENANT_ADMIN ? "bg-blue-500/10 text-blue-600" :
+                                user.role === UserRole.SITE_ADMIN ? "bg-amber-500/10 text-amber-600" :
+                                  "bg-muted text-muted-foreground"
                           )}
                         >
                           {user.role === UserRole.ADMIN ? "系统管理员" :
-                            user.role === UserRole.SITE_ADMIN ? "站点管理员" : "站点编辑"}
+                            user.role === UserRole.TENANT_ADMIN ? "租户管理员" :
+                              user.role === UserRole.SITE_ADMIN ? "站点管理员" : "未知角色"}
                         </Badge>
                       </TableCell>
                       <UserSitesCell user={user} />
@@ -474,11 +465,20 @@ export function GlobalUsers() {
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
                                   <DropdownMenuSubContent className="w-48 z-[200]">
+                                    {isSystemAdmin && (
+                                      <DropdownMenuItem
+                                        onSelect={() => updateRole(user.id, UserRole.ADMIN)}
+                                        className="flex items-center justify-between"
+                                      >
+                                        <span>系统管理员</span>
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem
-                                      onSelect={() => updateRole(user.id, UserRole.ADMIN)}
+                                      onSelect={() => updateRole(user.id, UserRole.TENANT_ADMIN)}
                                       className="flex items-center justify-between"
                                     >
-                                      <span>系统管理员</span>
+                                      <span>租户管理员</span>
+                                      {user.role === UserRole.TENANT_ADMIN && <Check className="h-4 w-4 text-primary" />}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onSelect={() => updateRole(user.id, UserRole.SITE_ADMIN)}
@@ -486,13 +486,6 @@ export function GlobalUsers() {
                                     >
                                       <span>站点管理员</span>
                                       {user.role === UserRole.SITE_ADMIN && <Check className="h-4 w-4 text-primary" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() => updateRole(user.id, UserRole.EDITOR)}
-                                      className="flex items-center justify-between"
-                                    >
-                                      <span>站点编辑</span>
-                                      {user.role === UserRole.EDITOR && <Check className="h-4 w-4 text-primary" />}
                                     </DropdownMenuItem>
                                   </DropdownMenuSubContent>
                                 </DropdownMenuPortal>

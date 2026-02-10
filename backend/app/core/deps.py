@@ -73,6 +73,9 @@ class CommonDependencies:
 # ==================== 认证相关依赖 ====================
 
 
+# ==================== 认证相关依赖 ====================
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
@@ -123,6 +126,65 @@ async def get_current_user(
 
 # get_current_active_user 是 get_current_user 的别名，直接使用 get_current_user 即可
 get_current_active_user = get_current_user
+
+
+async def get_effective_tenant_id(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+) -> int | None:
+    """
+    获取当前请求的有效租户ID
+
+    逻辑：
+    1. 默认情况下返回用户关联的 tenant_id
+    2. 如果用户是平台管理员 (ADMIN)，则允许通过请求头 X-Selected-Tenant-ID 来切换租户
+    """
+    from app.models.user import UserRole
+
+    # 获取基础租户 ID
+    base_tenant_id = current_user.tenant_id
+
+    # 只有平台管理员支持动态切换
+    if current_user.role == UserRole.ADMIN:
+        header_tenant_id = request.headers.get("X-Selected-Tenant-ID")
+        if header_tenant_id:
+            try:
+                # 管理员选择了特定租户
+                return int(header_tenant_id)
+            except ValueError:
+                # 非法 ID 默认返回全平台视图 (None)
+                return None
+        # 未选择 Header 默认返回 None (全平台视图)
+        return None
+
+    # 普通租户账户，强制返回其绑定的租户 ID，不可绕过
+    return base_tenant_id
+
+
+async def set_tenant_context(
+    tenant_id: int | None = Depends(get_effective_tenant_id),
+) -> int | None:
+    """
+    依赖项：在认证后设置当前请求的租户上下文
+    """
+    from app.core.tenant import set_current_tenant
+
+    set_current_tenant(tenant_id)
+    return tenant_id
+
+
+async def get_current_user_with_tenant(
+    current_user: User = Depends(get_current_active_user),
+    tenant_id: int | None = Depends(get_effective_tenant_id),
+) -> User:
+    """
+    复合依赖项：获取当前用户并同时注入租户上下文。
+    替代传统的 Depends(get_current_active_user)。
+    """
+    from app.core.tenant import set_current_tenant
+
+    set_current_tenant(tenant_id)
+    return current_user
 
 
 # ==================== 资源验证依赖 ====================

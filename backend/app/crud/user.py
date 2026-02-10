@@ -180,12 +180,18 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         return result.scalar_one()
 
     async def create(self, db: AsyncSession, *, obj_in: UserCreate) -> User:
-        """创建用户（自动处理密码哈希）"""
+        """创建用户（自动处理密码哈希与租户 ID）"""
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = obj_in.tenant_id
+        if tenant_id is None:
+            tenant_id = get_current_tenant()
+
         db_user = User(
             name=obj_in.name,
             email=obj_in.email,
             password_hash=get_password_hash(obj_in.password),
-            tenant_id=obj_in.tenant_id,
+            tenant_id=tenant_id,
             role=obj_in.role,
             status=UserStatus.ACTIVE,
             avatar_url=obj_in.avatar_url,
@@ -202,7 +208,13 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         return db_user
 
     async def invite(self, db: AsyncSession, *, obj_in: UserInvite) -> tuple[User, str]:
-        """邀请用户（直接创建用户并生成随机密码）"""
+        """邀请用户（支持租户 ID 自动填充）"""
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = obj_in.tenant_id
+        if tenant_id is None:
+            tenant_id = get_current_tenant()
+
         generated_password = generate_random_password()
         password_hash = get_password_hash(generated_password)
 
@@ -210,7 +222,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             name=obj_in.email.split("@")[0],  # 从邮箱提取用户名
             email=obj_in.email,
             password_hash=password_hash,
-            tenant_id=obj_in.tenant_id,
+            tenant_id=tenant_id,
             role=obj_in.role,
             status=UserStatus.ACTIVE,
         )

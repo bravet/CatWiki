@@ -47,7 +47,7 @@ function SiteSwitcherComponent() {
   const [open, setOpen] = useState(false)
   // 检查权限
   const currentUser = typeof window !== 'undefined' ? getUserInfo() : null
-  const canManageSites = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.SITE_ADMIN
+  const canManageSites = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.TENANT_ADMIN || currentUser?.role === UserRole.SITE_ADMIN
 
   // 使用 SiteContext 获取站点列表
   const { sites, isLoadingSites } = useSite()

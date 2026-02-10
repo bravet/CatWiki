@@ -29,11 +29,18 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
     """文档 CRUD 操作（异步版本）"""
 
     async def create(self, db: AsyncSession, *, obj_in: DocumentCreate) -> Document:
-        """创建文档（自动计算阅读时间）"""
+        """创建文档（自动计算阅读时间与租户 ID）"""
         from app.core.reading_time import calculate_reading_time
+        from app.core.tenant import get_current_tenant
 
         # 转换为字典
         obj_in_data = obj_in.model_dump()
+
+        # 自动填充租户 ID
+        if obj_in_data.get("tenant_id") is None:
+            tenant_id = get_current_tenant()
+            if tenant_id is not None:
+                obj_in_data["tenant_id"] = tenant_id
 
         # 在创建之前计算阅读时间
         if obj_in_data.get("content"):
@@ -113,6 +120,7 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         query = select(self.model).options(
             load_only(
                 self.model.id,
+                self.model.tenant_id,
                 self.model.title,
                 self.model.summary,
                 self.model.cover_image,
@@ -195,15 +203,24 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         user_agent: str | None = None,
         referer: str | None = None,
     ) -> Document | None:
-        """增加浏览量（不更新 updated_at）
+        """增加浏览量（不支持跨租户更新）
 
         同时记录浏览事件到 document_view_events 表，用于统计今日浏览和独立访客。
         """
         from app.crud.document_view_event import crud_document_view_event
+        from app.core.tenant import get_current_tenant
 
-        # 1. 原逻辑：累加 views 字段
+        tenant_id = get_current_tenant()
+        tenant_filter = "AND tenant_id = :tid" if tenant_id is not None else ""
+
+        # 1. 原逻辑：累加 views 字段（带租户过滤防止越权）
+        params = {"id": document_id}
+        if tenant_id is not None:
+            params["tid"] = tenant_id
+
         await db.execute(
-            text("UPDATE document SET views = views + 1 WHERE id = :id"), {"id": document_id}
+            text(f"UPDATE document SET views = views + 1 WHERE id = :id {tenant_filter}"),
+            params,
         )
 
         # 2. 新增：记录浏览事件（如果提供了 site_id）
@@ -277,7 +294,7 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
     async def batch_update_vector_status(
         self, db: AsyncSession, *, document_ids: list[int], status: str
     ) -> int:
-        """批量更新文档的向量化状态
+        """批量更新文档的向量化状态（支持租户隔离）
 
         Args:
             document_ids: 文档ID列表
@@ -286,10 +303,16 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         Returns:
             更新的文档数量
         """
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()
+        stmt = update(self.model).where(self.model.id.in_(document_ids))
+
+        if tenant_id is not None:
+            stmt = stmt.where(self.model.tenant_id == tenant_id)
+
         result = await db.execute(
-            update(self.model)
-            .where(self.model.id.in_(document_ids))
-            .values(vector_status=status, vector_error=None)
+            stmt.values(vector_status=status, vector_error=None)
         )
         await db.commit()
         return result.rowcount

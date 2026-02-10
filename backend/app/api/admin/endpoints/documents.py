@@ -26,11 +26,15 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_active_user
+from app.core.deps import (
+    get_current_user_with_tenant,
+    get_db,
+    get_rustfs,
+)
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.core.utils import Paginator, build_collection_map, enrich_document_dict, get_vector_id
 from app.crud import crud_collection, crud_document, crud_site
-from app.db.database import AsyncSessionLocal, get_db
+from app.db.database import AsyncSessionLocal
 from app.models.document import Document as DocumentModel
 from app.models.document import VectorStatus, DocumentStatus
 from app.models.user import User
@@ -204,7 +208,7 @@ async def list_documents(
     order_dir: str | None = Query("desc", description="排序方向: asc, desc"),
     exclude_content: bool = Query(True, description="是否排除文档内容（用于列表展示，提升性能）"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[Document]]:
     """获取文档列表（分页）"""
 
@@ -266,7 +270,7 @@ async def list_documents(
 async def get_document(
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """获取文档详情（管理后台查看，不增加浏览量）"""
     document = await crud_document.get_with_related_site(db, id=document_id)
@@ -291,7 +295,7 @@ async def get_document(
 async def create_document(
     document_in: DocumentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """创建文档"""
     # 验证站点存在
@@ -326,7 +330,7 @@ async def import_document(
     extract_images: bool = Form(False),
     extract_tables: bool = Form(False),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """
     导入文档 (上传 -> 解析 -> 创建)
@@ -443,7 +447,7 @@ async def update_document(
     document_id: int,
     document_in: DocumentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """更新文档"""
     document = await crud_document.get(db, id=document_id)
@@ -465,7 +469,7 @@ async def update_document(
 async def delete_document(
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[None]:
     """删除文档"""
     document = await crud_document.get(db, id=document_id)
@@ -503,7 +507,7 @@ async def vectorize_documents(
     request: VectorizeRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[VectorizeResponse]:
     """批量向量化文档（将文档状态设置为 pending，并启动向量化后台任务）"""
     # 输入验证
@@ -551,7 +555,7 @@ async def vectorize_single_document(
     document_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """向量化单个文档（会启动向量化后台任务）"""
     document = await crud_document.get(db, id=document_id)
@@ -584,7 +588,7 @@ async def vectorize_single_document(
 async def remove_document_vector(
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """移除文档向量（从向量库删除并重置状态为 none）"""
     document = await crud_document.get(db, id=document_id)
@@ -619,7 +623,7 @@ async def remove_document_vector(
 async def get_document_chunks(
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[list[dict]]:
     """获取文档的向量切片信息"""
     logger.info(f"🔍 [Chunks] Requesting chunks for document_id: {document_id}")
@@ -648,7 +652,7 @@ async def get_document_chunks(
 async def retrieve_vectors(
     request: VectorRetrieveRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[VectorRetrieveResult]:
     """
     语义检索向量数据库 (delegates to VectorService)

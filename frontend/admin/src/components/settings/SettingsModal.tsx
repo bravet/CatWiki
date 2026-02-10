@@ -70,8 +70,9 @@ function SettingsContent() {
 
   const userInfo = mounted ? getUserInfo() : null
   const isAdmin = userInfo?.role === UserRole.ADMIN
+  const isTenantAdmin = userInfo?.role === UserRole.TENANT_ADMIN
   const isSiteAdmin = userInfo?.role === UserRole.SITE_ADMIN
-  const canAccessSettings = isAdmin || isSiteAdmin
+  const canAccessSettings = isAdmin || isTenantAdmin || isSiteAdmin
 
   // Determine Context
   const context = searchParams.get("context")
@@ -80,8 +81,8 @@ function SettingsContent() {
 
   // Handle Tab State (Internal or optional query param)
   useEffect(() => {
-    // Optional: allow deep linking to specific settings tab via separate param, e.g. ?settingsTab=
-    const tab = searchParams.get("settingsTab")
+    // Optional: allow deep linking to specific settings tab via separate param, e.g. ?tab=
+    const tab = searchParams.get("tab")
     if (tab) {
       setActiveTab(tab)
     } else if (isSiteAdmin) {
@@ -94,7 +95,7 @@ function SettingsContent() {
     setActiveTab(value)
     // Optional: Update URL to persist tab selection without navigation
     const params = new URLSearchParams(searchParams.toString())
-    params.set("settingsTab", value)
+    params.set("tab", value)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
@@ -102,7 +103,7 @@ function SettingsContent() {
     // Remove 'modal' param to close
     const params = new URLSearchParams(searchParams.toString())
     params.delete("modal")
-    params.delete("settingsTab") // Clean up tab param too
+    params.delete("tab") // Clean up tab param too
     router.replace(`${pathname}?${params.toString()}`)
   }
 
@@ -121,7 +122,7 @@ function SettingsContent() {
     params.delete("context")
     params.delete("siteId")
     // Return to sites tab
-    params.set("settingsTab", "sites")
+    params.set("tab", "sites")
     router.replace(`${pathname}?${params.toString()}`)
   }
 
@@ -147,7 +148,7 @@ function SettingsContent() {
             )}
             <div>
               <h1 className="text-base font-bold text-slate-900 leading-tight">
-                {isSiteSettings ? "站点设置" : "平台设置"}
+                {isSiteSettings ? "站点设置" : "系统设置"}
               </h1>
             </div>
           </div>
@@ -186,7 +187,7 @@ function SettingsContent() {
           <Tabs value={activeTab} onValueChange={handleTabChange} orientation="vertical" className="flex-1 flex overflow-hidden">
             {/* Sidebar */}
             <TabsList className="w-64 h-full bg-slate-50/50 border-r border-slate-100 flex-col items-stretch justify-start p-4 space-y-1">
-              {isAdmin && (
+              {(isAdmin || isTenantAdmin) && (
                 <TabsTrigger
                   value="models"
                   className={cn(
@@ -212,7 +213,7 @@ function SettingsContent() {
                 站点管理
               </TabsTrigger>
 
-              {isAdmin && (
+              {(isAdmin || isTenantAdmin) && (
                 <TabsTrigger
                   value="users"
                   className={cn(
@@ -226,7 +227,7 @@ function SettingsContent() {
                 </TabsTrigger>
               )}
 
-              {isAdmin && (
+              {(isAdmin || isTenantAdmin) && (
                 <TabsTrigger
                   value="doc-processor"
                   className={cn(

@@ -50,7 +50,7 @@ const allMenuItems: MenuItem[] = [
     title: "运营概览",
     href: "/",
     icon: LayoutGrid,
-    roles: ["admin", "site_admin"] // 管理员和站点管理员可见
+    roles: ["admin", "tenant_admin", "site_admin"] // 管理员和站点管理员可见
   },
   {
     title: "文档管理",
@@ -60,7 +60,7 @@ const allMenuItems: MenuItem[] = [
       { title: "文档列表", href: "/documents" },
       { title: "发布文档", href: "/documents/new" },
     ],
-    roles: ["admin", "site_admin", "editor"] // 所有角色都可见
+    roles: ["admin", "tenant_admin", "site_admin"] // 所有角色都可见
   },
 ]
 
@@ -93,7 +93,7 @@ function AdminSidebarComponent() {
 
   // 如果是全平台系统管理页面 (用户管理、系统设置)
   const isGlobalManagement = pathname.startsWith('/users') || pathname.startsWith('/settings')
-  if (isGlobalManagement && userRole === 'admin') {
+  if (isGlobalManagement && (userRole === 'admin' || userRole === 'tenant_admin')) {
     return (
       <div className="w-64 bg-muted/50 border-r border-border h-screen flex flex-col sticky top-0">
         <div className="p-6">
@@ -102,7 +102,7 @@ function AdminSidebarComponent() {
               <Settings className="text-primary-foreground h-5 w-5" />
             </div>
             <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/70 truncate">
-              系统管理
+              {userRole === 'admin' ? '系统管理' : '租户设置'}
             </span>
           </div>
 
@@ -168,6 +168,26 @@ function AdminSidebarComponent() {
                 <Users className="h-4 w-4" />
               </div>
               <span className="text-sm font-semibold">用户权限</span>
+            </Link>
+
+            <Link
+              href="/settings?tab=doc-processor"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
+                pathname.startsWith('/settings') && searchParams.get('tab') === 'doc-processor'
+                  ? "bg-card text-primary shadow-md shadow-black/5 border border-border"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <div className={cn(
+                "p-2 rounded-lg transition-colors",
+                pathname.startsWith('/settings') && searchParams.get('tab') === 'doc-processor'
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted group-hover:bg-card text-muted-foreground"
+              )} suppressHydrationWarning>
+                <FileText className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-semibold">文档解析</span>
             </Link>
           </nav>
         </div>

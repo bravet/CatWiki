@@ -31,7 +31,7 @@ export interface Site {
 }
 
 // 用户角色类型
-export type UserRole = "admin" | "site_admin" | "editor"
+export type UserRole = "admin" | "tenant_admin" | "site_admin"
 
 // 用户状态类型
 export type UserStatus = "active" | "inactive"

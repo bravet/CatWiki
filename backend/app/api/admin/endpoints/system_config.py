@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import check_demo_mode, get_current_active_user
+from app.core.deps import check_demo_mode, get_current_user_with_tenant
 from app.core.exceptions import NotFoundException
 from app.core.utils import mask_variable, mask_bot_config_inplace, MASKED_VARIABLE
 from app.crud.system_config import crud_system_config
@@ -105,7 +105,7 @@ def _mask_ai_config_inplace(config_value: dict) -> None:
 )
 async def get_ai_config(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[SystemConfigResponse | None]:
     """
     获取 AI 模型配置
@@ -135,7 +135,7 @@ async def get_ai_config(
 async def update_ai_config(
     config_in: AIConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[SystemConfigResponse]:
     """
@@ -225,7 +225,7 @@ async def update_ai_config(
 )
 async def get_bot_config(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[SystemConfigResponse | None]:
     """
     获取机器人配置
@@ -256,7 +256,7 @@ async def get_bot_config(
 async def update_bot_config(
     config_in: BotConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[SystemConfigResponse]:
     """
@@ -278,7 +278,7 @@ async def update_bot_config(
 @router.get("", response_model=ApiResponse[dict], operation_id="listAdminConfigs")
 async def get_all_configs(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     获取所有配置（便捷接口）
@@ -314,7 +314,7 @@ async def get_all_configs(
 async def delete_config(
     config_key: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """
@@ -338,7 +338,7 @@ async def delete_config(
 async def test_model_connection(
     request: TestConnectionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """
@@ -469,7 +469,7 @@ def _mask_doc_processor_config_inplace(config_value: dict) -> None:
 )
 async def get_doc_processor_config(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict | None]:
     """
     获取文档处理服务配置
@@ -494,7 +494,7 @@ async def get_doc_processor_config(
 async def update_doc_processor_config(
     config_in: DocProcessorsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """
@@ -538,7 +538,7 @@ async def update_doc_processor_config(
 async def test_doc_processor_connection(
     request: TestDocProcessorRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[dict]:
     """

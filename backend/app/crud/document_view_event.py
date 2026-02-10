@@ -31,15 +31,23 @@ class CRUDDocumentViewEvent:
         *,
         document_id: int,
         site_id: int,
+        tenant_id: int | None = None,  # 新增：允许显式传入
         ip_address: str | None = None,
         member_id: int | None = None,  # 预留：未来会员系统
         user_agent: str | None = None,
         referer: str | None = None,
     ) -> DocumentViewEvent:
-        """记录一次文档浏览事件"""
+        """记录一次文档浏览事件（支持租户 ID 自动填充）"""
+        from app.core.tenant import get_current_tenant
+
+        # 自动填充租户 ID
+        if tenant_id is None:
+            tenant_id = get_current_tenant()
+
         event = DocumentViewEvent(
             document_id=document_id,
             site_id=site_id,
+            tenant_id=tenant_id,
             ip_address=ip_address,
             member_id=member_id,
             user_agent=user_agent,

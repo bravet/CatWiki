@@ -19,7 +19,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_active_user
+from app.core.deps import get_current_user_with_tenant
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas import ApiResponse
@@ -33,7 +33,7 @@ router = APIRouter()
 async def get_site_stats(
     site_id: int = Query(..., description="站点ID"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[SiteStats]:
     """获取站点统计数据
 

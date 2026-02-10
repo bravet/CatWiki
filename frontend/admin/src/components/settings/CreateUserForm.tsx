@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useInviteUser, useSitesList } from "@/hooks"
+import { getUserInfo } from "@/lib/auth"
 import { UserRole, type Site } from "@/lib/api-client"
 import {
   Select,
@@ -46,8 +47,12 @@ interface CreateUserFormProps {
 
 export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName }: CreateUserFormProps) {
   const [email, setEmail] = useState("")
-  const [role, setRole] = useState<UserRole>(UserRole.EDITOR)
+  const [role, setRole] = useState<UserRole>(UserRole.SITE_ADMIN)
   const [selectedSites, setSelectedSites] = useState<number[]>(fixedSiteId ? [fixedSiteId] : [])
+
+  const userInfo = typeof window !== 'undefined' ? getUserInfo() : null
+  const isPlatformAdmin = userInfo?.role === UserRole.ADMIN
+  const isTenantAdmin = userInfo?.role === UserRole.TENANT_ADMIN
 
   const { data: sites } = useSitesList({ page: 1, size: 100 })
   const inviteUserMutation = useInviteUser()
@@ -69,7 +74,7 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
     inviteUserMutation.mutate({
       email: email.trim(),
       role: role,
-      managed_site_ids: role === UserRole.ADMIN ? [] : selectedSites,
+      managed_site_ids: (role === UserRole.ADMIN || role === UserRole.TENANT_ADMIN) ? [] : selectedSites,
     } as any, {
       onSuccess: (data) => {
         if (data && 'user' in data && 'password' in data) {
@@ -177,18 +182,6 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
           <CardContent className="space-y-4">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div
-                  className={`border rounded-xl p-4 cursor-pointer transition-all ${role === UserRole.EDITOR ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-slate-200 hover:border-slate-300'}`}
-                  onClick={() => setRole(UserRole.EDITOR)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="font-semibold text-sm">站点编辑</span>
-                    {role === UserRole.EDITOR && <Check className="h-4 w-4 text-primary" />}
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    仅可访问和编辑被分配的站点内容。适合普通内容创作者。
-                  </p>
-                </div>
 
                 <div
                   className={`border rounded-xl p-4 cursor-pointer transition-all ${role === UserRole.SITE_ADMIN ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-slate-200 hover:border-slate-300'}`}
@@ -203,7 +196,22 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
                   </p>
                 </div>
 
-                {!fixedSiteId && (
+                {!fixedSiteId && (isPlatformAdmin || isTenantAdmin) && (
+                  <div
+                    className={`border rounded-xl p-4 cursor-pointer transition-all ${role === UserRole.TENANT_ADMIN ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-slate-200 hover:border-slate-300'}`}
+                    onClick={() => setRole(UserRole.TENANT_ADMIN)}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-semibold text-sm">租户管理员</span>
+                      {role === UserRole.TENANT_ADMIN && <Check className="h-4 w-4 text-primary" />}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      管理当前租户下的所有站点、用户和全局配置，不可跨租户。
+                    </p>
+                  </div>
+                )}
+
+                {!fixedSiteId && isPlatformAdmin && (
                   <div
                     className={`border rounded-xl p-4 cursor-pointer transition-all ${role === UserRole.ADMIN ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-slate-200 hover:border-slate-300'}`}
                     onClick={() => setRole(UserRole.ADMIN)}
@@ -213,7 +221,7 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
                       {role === UserRole.ADMIN && <Check className="h-4 w-4 text-primary" />}
                     </div>
                     <p className="text-xs text-slate-500 leading-relaxed">
-                      拥有全平台最高权限，可管理所有站点、用户和系统配置。
+                      拥有全平台最高权限，可管理所有所有租户、站点和全局配置。
                     </p>
                   </div>
                 )}
@@ -221,7 +229,7 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
             </div>
 
 
-            {role !== UserRole.ADMIN && !fixedSiteId && (
+            {(role !== UserRole.ADMIN && role !== UserRole.TENANT_ADMIN) && !fixedSiteId && (
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <label className="text-sm font-medium text-slate-700 block mb-3">
                   分配站点 <span className="text-slate-500 font-normal">({selectedSites.length} 已选)</span>
@@ -251,7 +259,7 @@ export function CreateUserForm({ onCancel, onSuccess, fixedSiteId, fixedSiteName
                   </div>
                 )}
                 <p className="text-xs text-slate-500 mt-2">
-                  选择该用户可以{role === UserRole.SITE_ADMIN ? "管理" : "编辑"}的站点。
+                  选择该用户可以管理的站点。
                 </p>
               </div>
             )}

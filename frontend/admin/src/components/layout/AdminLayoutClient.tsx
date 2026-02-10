@@ -134,7 +134,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {(userInfo?.role === 'admin' || userInfo?.role === 'site_admin') && (
+            {(userInfo?.role === 'admin' || userInfo?.role === 'tenant_admin' || userInfo?.role === 'site_admin') && (
               <Link
                 href="?modal=settings"
                 scroll={false}

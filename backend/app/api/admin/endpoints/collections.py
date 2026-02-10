@@ -19,7 +19,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import check_demo_mode, get_current_active_user, get_valid_site
+from app.core.deps import check_demo_mode, get_current_user_with_tenant, get_valid_site
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.crud import crud_collection, crud_document, crud_site
 from app.db.database import get_db
@@ -42,7 +42,7 @@ async def list_collections(
     parent_id: int | None = Query(None, description="父合集ID，为空则获取根合集"),
     db: AsyncSession = Depends(get_db),
     site: Site = Depends(get_valid_site),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[list[Collection]]:
     """获取合集列表"""
     # 获取合集列表（parent_id=None 获取根合集，否则获取子合集）
@@ -60,7 +60,7 @@ async def get_collection_tree(
     ),
     db: AsyncSession = Depends(get_db),
     site: Site = Depends(get_valid_site),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[list[CollectionTree]]:
     """获取合集树形结构（优化版：批量加载文档，避免N+1查询）"""
 
@@ -128,7 +128,7 @@ async def get_collection_tree(
 async def get_collection(
     collection_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Collection]:
     """获取合集详情"""
     collection = await crud_collection.get(db, id=collection_id)
@@ -147,7 +147,7 @@ async def get_collection(
 async def create_collection(
     collection_in: CollectionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[Collection]:
     """创建合集"""
@@ -175,7 +175,7 @@ async def update_collection(
     collection_id: int,
     collection_in: CollectionUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[Collection]:
     """更新合集"""
@@ -204,7 +204,7 @@ async def update_collection(
 async def delete_collection(
     collection_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[None]:
     """删除合集"""
@@ -241,7 +241,7 @@ async def move_collection(
     collection_id: int,
     move_request: MoveCollectionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
     _: None = Depends(check_demo_mode),
 ) -> ApiResponse[Collection]:
     """

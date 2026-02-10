@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
 
 from app.core.config import settings
-from app.core.deps import get_current_active_user, get_rustfs
+from app.core.deps import get_current_user_with_tenant, get_rustfs
 from app.core.exceptions import (
     BadRequestException,
     DatabaseException,
@@ -71,7 +71,7 @@ async def upload_file(
     file: UploadFile = File(..., description="要上传的文件"),
     folder: str = Query("uploads", description="存储文件夹"),
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     上传文件到 RustFS
@@ -141,7 +141,7 @@ async def upload_multiple_files(
     files: list[UploadFile] = File(..., description="要上传的多个文件"),
     folder: str = Query("uploads", description="存储文件夹"),
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     批量上传文件到 RustFS
@@ -232,7 +232,7 @@ async def upload_multiple_files(
 async def download_file(
     object_name: str,
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ):
     """
     下载文件
@@ -281,7 +281,7 @@ async def download_file(
 async def delete_file(
     object_name: str,
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[None]:
     """
     删除文件
@@ -314,7 +314,7 @@ async def list_files(
     prefix: str = Query("", description="文件路径前缀"),
     recursive: bool = Query(True, description="是否递归列出"),
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     列出文件
@@ -363,7 +363,7 @@ async def list_files(
 async def get_file_info(
     object_name: str,
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     获取文件信息
@@ -416,7 +416,7 @@ async def get_presigned_url(
     object_name: str,
     expires_hours: int = Query(1, ge=1, le=168, description="URL 有效期（小时）"),
     rustfs: RustFSService = Depends(get_rustfs),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     获取文件的预签名 URL（用于临时访问私有文件）

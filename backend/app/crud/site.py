@@ -34,8 +34,17 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         return query
 
     async def create(self, db: AsyncSession, *, obj_in: SiteCreate) -> Site:
-        """创建站点（过滤掉非模型字段）"""
+        """创建站点（过滤掉非模型字段，并支持租户 ID 自动填充）"""
+        from app.core.tenant import get_current_tenant
+
         obj_in_data = obj_in.model_dump(exclude={"admin_email", "admin_name", "admin_password"})
+
+        # 自动填充租户 ID
+        if obj_in_data.get("tenant_id") is None:
+            tenant_id = get_current_tenant()
+            if tenant_id is not None:
+                obj_in_data["tenant_id"] = tenant_id
+
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
         await db.commit()
@@ -109,36 +118,55 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         return updated_site
 
     async def increment_article_count(self, db: AsyncSession, *, site_id: int) -> None:
-        """原子增加文章计数"""
-        await db.execute(
-            update(Site).where(Site.id == site_id).values(article_count=Site.article_count + 1)
-        )
+        """原子增加文章计数（支持租户隔离）"""
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()
+        stmt = update(Site).where(Site.id == site_id)
+        if tenant_id is not None:
+            stmt = stmt.where(Site.tenant_id == tenant_id)
+
+        await db.execute(stmt.values(article_count=Site.article_count + 1))
         await db.commit()
 
     async def decrement_article_count(self, db: AsyncSession, *, site_id: int) -> None:
-        """原子减少文章计数"""
-        await db.execute(
-            update(Site)
-            .where(Site.id == site_id)
-            .where(Site.article_count > 0)
-            .values(article_count=Site.article_count - 1)
-        )
+        """原子减少文章计数（支持租户隔离）"""
+        from app.core.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()
+        stmt = update(Site).where(Site.id == site_id).where(Site.article_count > 0)
+        if tenant_id is not None:
+            stmt = stmt.where(Site.tenant_id == tenant_id)
+
+        await db.execute(stmt.values(article_count=Site.article_count - 1))
         await db.commit()
 
     async def remove_with_relationships(self, db: AsyncSession, *, id: int) -> bool:
-        """删除站点及其所有关联数据（高性能批量删除）"""
+        """删除站点及其所有关联数据（高性能批量删除，支持租户隔离）"""
         from app.models.collection import Collection
         from app.models.document import Document
+        from app.core.tenant import get_current_tenant
 
+        tenant_id = get_current_tenant()
+
+        # 1. 查找站点（会自动应用拦截器过滤）
         site = await self.get(db, id=id)
         if not site:
             return False
 
-        # 批量删除文档
-        await db.execute(delete(Document).where(Document.site_id == id))
-        # 批量删除合集
-        await db.execute(delete(Collection).where(Collection.site_id == id))
-        # 删除站点
+        # 2. 批量删除文档
+        doc_del = delete(Document).where(Document.site_id == id)
+        if tenant_id is not None:
+            doc_del = doc_del.where(Document.tenant_id == tenant_id)
+        await db.execute(doc_del)
+
+        # 3. 批量删除合集
+        coll_del = delete(Collection).where(Collection.site_id == id)
+        if tenant_id is not None:
+            coll_del = coll_del.where(Collection.tenant_id == tenant_id)
+        await db.execute(coll_del)
+
+        # 4. 删除站点
         await db.delete(site)
 
         await db.commit()
