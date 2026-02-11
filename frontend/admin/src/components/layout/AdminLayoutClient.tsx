@@ -23,7 +23,13 @@ import { SiteProvider } from '@/contexts/SiteContext'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { UserMenu } from '@/components/layout/UserMenu'
 import Link from 'next/link'
-import { Settings, ShieldCheck } from 'lucide-react'
+import {
+  Search,
+  Settings,
+  ShieldCheck,
+  User,
+  Globe
+} from "lucide-react"
 import { getUserInfo } from '@/lib/auth'
 import { useState, useEffect } from 'react'
 import { useDemoMode } from '@/hooks/useHealth'
@@ -40,7 +46,16 @@ const SiteSwitcher = dynamic(() => import('@/components/layout/SiteSwitcher').th
   loading: () => <div className="w-40 h-12 bg-slate-100 rounded-xl" />
 })
 
+const TenantSwitcher = dynamic(() => import('@/components/layout/TenantSwitcher').then(mod => ({ default: mod.TenantSwitcher })), {
+  ssr: false,
+  loading: () => <div className="w-40 h-12 bg-slate-100 rounded-xl" />
+})
+
 const SettingsModal = dynamic(() => import('@/components/settings/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
+  ssr: false
+})
+
+const PlatformModal = dynamic(() => import('@/components/platform/PlatformModal').then(mod => ({ default: mod.PlatformModal })), {
   ssr: false
 })
 
@@ -100,6 +115,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-slate-50/50">
       {/* Settings Modal Overlay */}
       {searchParams.get('modal') === 'settings' && <SettingsModal />}
+      {searchParams.get('modal') === 'platform' && <PlatformModal />}
 
       <ErrorBoundary
         fallback={
@@ -117,9 +133,14 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         {/* Top Header */}
         <header className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-10 px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-6">
-            <Suspense fallback={<div className="w-32 h-10 bg-slate-100 animate-pulse rounded-xl" />}>
-              <SiteSwitcher />
-            </Suspense>
+            <div className="flex items-center gap-3">
+              <Suspense fallback={<div className="w-40 h-12 bg-slate-100 animate-pulse rounded-xl" />}>
+                <TenantSwitcher />
+              </Suspense>
+              <Suspense fallback={<div className="w-32 h-10 bg-slate-100 animate-pulse rounded-xl" />}>
+                <SiteSwitcher />
+              </Suspense>
+            </div>
             <div className="h-6 w-px bg-slate-200" />
             <div>
               <h2 className="text-sm font-medium text-slate-500">欢迎回来, {welcomeName}</h2>
@@ -132,6 +153,17 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 <ShieldCheck className="h-3.5 w-3.5" />
                 <span className="text-xs font-bold tracking-wide">演示模式，部分操作受限</span>
               </div>
+            )}
+
+            {userInfo?.role === 'admin' && (
+              <Link
+                href="?modal=platform"
+                scroll={false}
+                className="p-2 transition-all hover:bg-slate-100 rounded-xl text-slate-500 hover:text-primary active:scale-95 group relative"
+                title="平台管理"
+              >
+                <Globe className="h-5 w-5" />
+              </Link>
             )}
 
             {(userInfo?.role === 'admin' || userInfo?.role === 'tenant_admin' || userInfo?.role === 'site_admin') && (

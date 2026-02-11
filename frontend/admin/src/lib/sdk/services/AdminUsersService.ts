@@ -23,7 +23,7 @@ export class AdminUsersService {
      *
      * - **page**: 页码
      * - **size**: 每页数量
-     * - **role**: 角色筛选 (admin/site_admin/editor)
+     * - **role**: 角色筛选 (admin/tenant_admin/site_admin)
      * - **status**: 状态筛选 (active/inactive/pending)
      * - **search**: 搜索关键词（匹配用户名或邮箱）
      * - **site_id**: 站点ID筛选
@@ -203,7 +203,7 @@ export class AdminUsersService {
      * 邀请用户（直接创建用户并返回临时密码）
      *
      * - **email**: 邮箱
-     * - **role**: 角色（默认为 editor）
+     * - **role**: 角色（默认为 site_admin）
      * - **managed_site_ids**: 管理的站点ID列表
      *
      * 返回创建的用户信息和临时密码

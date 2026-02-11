@@ -13,6 +13,7 @@ import { AdminHealthService } from './services/AdminHealthService';
 import { AdminSitesService } from './services/AdminSitesService';
 import { AdminStatsService } from './services/AdminStatsService';
 import { AdminSystemConfigsService } from './services/AdminSystemConfigsService';
+import { AdminTenantsService } from './services/AdminTenantsService';
 import { AdminUsersService } from './services/AdminUsersService';
 type HttpRequestConstructor = new (config: OpenAPIConfig) => BaseHttpRequest;
 export class CatWikiAdminSdk {
@@ -24,6 +25,7 @@ export class CatWikiAdminSdk {
     public readonly adminSites: AdminSitesService;
     public readonly adminStats: AdminStatsService;
     public readonly adminSystemConfigs: AdminSystemConfigsService;
+    public readonly adminTenants: AdminTenantsService;
     public readonly adminUsers: AdminUsersService;
     public readonly request: BaseHttpRequest;
     constructor(config?: Partial<OpenAPIConfig>, HttpRequest: HttpRequestConstructor = FetchHttpRequest) {
@@ -46,6 +48,7 @@ export class CatWikiAdminSdk {
         this.adminSites = new AdminSitesService(this.request);
         this.adminStats = new AdminStatsService(this.request);
         this.adminSystemConfigs = new AdminSystemConfigsService(this.request);
+        this.adminTenants = new AdminTenantsService(this.request);
         this.adminUsers = new AdminUsersService(this.request);
     }
 }

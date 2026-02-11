@@ -46,6 +46,7 @@ const TOKEN_KEY = 'auth_token_data'
 const AUTH_COOKIE_NAME = 'isAuthenticated'
 const USER_INFO_KEY = 'userInfo'
 const LAST_SITE_SLUG_KEY = 'lastSiteSlug'
+const SELECTED_TENANT_ID_KEY = 'selectedTenantId'
 
 // Token 默认有效期：7 天
 const TOKEN_EXPIRES_DAYS = 7
@@ -241,6 +242,29 @@ export function getLastSiteSlug(): string | null {
 export function setLastSiteSlug(slug: string) {
   if (typeof window === 'undefined') return
   localStorage.setItem(LAST_SITE_SLUG_KEY, slug)
+}
+
+// ==================== 租户管理 ====================
+
+/**
+ * 获取当前选中的租户 ID (仅管理员)
+ */
+export function getSelectedTenantId(): number | null {
+  if (typeof window === 'undefined') return null
+  const id = localStorage.getItem(SELECTED_TENANT_ID_KEY)
+  return id ? parseInt(id, 10) : null
+}
+
+/**
+ * 设置当前选中的租户 ID (仅管理员)
+ */
+export function setSelectedTenantId(id: number | null) {
+  if (typeof window === 'undefined') return
+  if (id === null) {
+    localStorage.removeItem(SELECTED_TENANT_ID_KEY)
+  } else {
+    localStorage.setItem(SELECTED_TENANT_ID_KEY, id.toString())
+  }
 }
 
 // ==================== 认证状态管理 ====================

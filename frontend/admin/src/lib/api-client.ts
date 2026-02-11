@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { CatWikiAdminSdk } from './sdk/CatWikiAdminSdk'
-import { getToken, clearAllAuth } from './auth'
+import { getToken, clearAllAuth, getSelectedTenantId } from './auth'
 import { FetchHttpRequest } from './sdk/core/FetchHttpRequest'
 import { ApiError } from './sdk/core/ApiError'
 import type { ApiRequestOptions } from './sdk/core/ApiRequestOptions'
@@ -89,10 +89,14 @@ class CustomHttpRequest extends FetchHttpRequest {
 
     const stateCode = isInitialized ? "0x4f4b" : "0x4b4f"
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const selectedTenantId = getSelectedTenantId()
 
     const headers = { ...(options.headers || {}) } as any
     headers['X-App-State'] = stateCode
     headers['X-Admin-Origin'] = origin
+    if (selectedTenantId) {
+      headers['X-Selected-Tenant-ID'] = selectedTenantId.toString()
+    }
 
     const originalPromise = super.request<T>({
       ...options,
@@ -170,6 +174,32 @@ const siteApi = {
 
   delete: (id: number) =>
     wrapResponse<void>(client.adminSites.deleteAdminSite({ siteId: id })),
+}
+
+
+const tenantApi = {
+  list: (params: { page?: number; size?: number } = {}) =>
+    wrapResponse<Models.PaginatedResponse_TenantSchema__>(client.adminTenants.listAdminTenants({
+      page: params.page ?? 1,
+      size: params.size ?? 10,
+    })),
+  create: (data: Models.TenantCreate) =>
+    wrapResponse<Models.TenantSchema_>(client.adminTenants.createAdminTenant({
+      requestBody: data,
+    })),
+  get: (id: number) =>
+    wrapResponse<Models.TenantSchema_>(client.adminTenants.getAdminTenant({
+      tenantId: id,
+    })),
+  update: (id: number, data: Models.TenantUpdate) =>
+    wrapResponse<Models.TenantSchema_>(client.adminTenants.updateAdminTenant({
+      tenantId: id,
+      requestBody: data,
+    })),
+  delete: (id: number) =>
+    wrapResponse<void>(client.adminTenants.deleteAdminTenant({
+      tenantId: id,
+    })),
 }
 
 
@@ -321,6 +351,7 @@ const healthApi = {
 
 export const api = {
   site: siteApi,
+  tenant: tenantApi,
   collection: collectionApi,
   document: documentApi,
   user: userApi,
