@@ -139,16 +139,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         返回:
             创建的模型实例
         """
-        from app.core.tenant import get_current_tenant
-
         obj_in_data = obj_in.model_dump()
-
-        # 核心逻辑：自动填充租户 ID
-        # 如果模型有 tenant_id 字段，且输入数据中没传，且当前请求上下文中存在有效的 tenant_id
-        if hasattr(self.model, "tenant_id") and obj_in_data.get("tenant_id") is None:
-            tenant_id = get_current_tenant()
-            if tenant_id is not None:
-                obj_in_data["tenant_id"] = tenant_id
 
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)

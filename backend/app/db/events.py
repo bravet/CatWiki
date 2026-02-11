@@ -60,3 +60,15 @@ def register_tenant_filters(session_factory=None):
                 )
             )
             # logger.debug(f"应用多租户过滤: tenant_id={tenant_id}")
+        return
+
+    @event.listens_for(Base, "before_insert", propagate=True)
+    def apply_tenant_on_insert(mapper, connection, target):
+        """
+        在数据入库前自动填充 tenant_id
+        """
+        if hasattr(target, "tenant_id") and getattr(target, "tenant_id") is None:
+            tenant_id = get_current_tenant()
+            if tenant_id is not None:
+                setattr(target, "tenant_id", tenant_id)
+                # logger.debug(f"SQLAlchemy 事件: 自动填充 tenant_id={tenant_id} -> {target.__class__.__name__}")

@@ -707,10 +707,15 @@ function PlatformTenants() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-slate-600">企业 Logo <span className="text-slate-400 text-xs font-normal">(选填)</span></Label>
-                    <ImageUpload
-                      value={formData.logo_url}
-                      onChange={(url) => setFormData({ ...formData, logo_url: url || "" })}
-                    />
+                    <div className="w-28">
+                      <ImageUpload
+                        value={formData.logo_url}
+                        onChange={(url) => setFormData({ ...formData, logo_url: url || "" })}
+                        aspect="aspect-square"
+                        text="上传 Logo"
+                        compact={true}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -977,10 +982,15 @@ function PlatformTenants() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-slate-600">企业 Logo <span className="text-slate-400 text-xs font-normal">(选填)</span></Label>
-                    <ImageUpload
-                      value={editFormData.logo_url}
-                      onChange={(url) => setEditFormData({ ...editFormData, logo_url: url || "" })}
-                    />
+                    <div className="w-28">
+                      <ImageUpload
+                        value={editFormData.logo_url}
+                        onChange={(url) => setEditFormData({ ...editFormData, logo_url: url || "" })}
+                        aspect="aspect-square"
+                        text="上传 Logo"
+                        compact={true}
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">

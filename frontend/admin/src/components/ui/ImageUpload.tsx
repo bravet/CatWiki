@@ -27,9 +27,20 @@ interface ImageUploadProps {
   onChange: (url: string | null) => void
   disabled?: boolean
   className?: string
+  aspect?: string
+  text?: string
+  compact?: boolean
 }
 
-export function ImageUpload({ value, onChange, disabled, className }: ImageUploadProps) {
+export function ImageUpload({
+  value,
+  onChange,
+  disabled,
+  className,
+  aspect = "aspect-[16/10]",
+  text = "点击上传封面图",
+  compact = false
+}: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [isCompressing, setIsCompressing] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null)
@@ -185,7 +196,7 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
       {previewUrl ? (
         // 预览模式
         <div className="relative group">
-          <div className="aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100 border-2 border-slate-200 transition-all group-hover:border-primary/30">
+          <div className={cn(aspect, "rounded-xl overflow-hidden bg-slate-100 border-2 border-slate-200 transition-all group-hover:border-primary/30")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
@@ -195,24 +206,28 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
           </div>
 
           {/* 悬停遮罩 - 优雅的渐变效果 */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex flex-col items-center justify-end pb-6 gap-3">
-            <div className="flex items-center gap-3">
+          <div className={cn(
+            "absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl flex flex-col items-center justify-end gap-3",
+            compact ? "pb-2" : "pb-6"
+          )}>
+            <div className={cn("flex items-center", compact ? "gap-1.5" : "gap-3")}>
               {/* 更换图片按钮 */}
               <button
                 type="button"
                 onClick={handleClick}
                 disabled={disabled || isProcessing}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white/95 hover:bg-white text-slate-700 rounded-xl font-medium text-sm shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cn(
+                  "flex items-center justify-center bg-white/95 hover:bg-white text-slate-700 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed",
+                  compact ? "w-8 h-8" : "px-4 py-2.5 text-sm"
+                )}
+                title="更换图片"
               >
                 {isProcessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {isCompressing ? '压缩中...' : '上传中...'}
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    更换图片
+                    {!compact && <span className="ml-2">更换图片</span>}
                   </>
                 )}
               </button>
@@ -222,15 +237,18 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
                 type="button"
                 onClick={handleRemove}
                 disabled={disabled || isProcessing}
-                className="flex items-center justify-center w-10 h-10 bg-red-500/90 hover:bg-red-500 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cn(
+                  "flex items-center justify-center bg-red-500/90 hover:bg-red-500 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed",
+                  compact ? "w-8 h-8" : "w-10 h-10"
+                )}
                 title="移除图片"
               >
-                <X className="h-5 w-5" />
+                <X className={cn(compact ? "h-4 w-4" : "h-5 w-5")} />
               </button>
             </div>
 
             {/* 提示文字 */}
-            <span className="text-white/90 text-xs font-medium">点击更换或删除封面图</span>
+            {!compact && <span className="text-white/90 text-[10px] font-medium">点击更换或删除</span>}
           </div>
         </div>
       ) : (
@@ -238,8 +256,9 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
         <div
           onClick={handleClick}
           className={cn(
-            "aspect-[16/10] border-2 border-dashed border-slate-200 rounded-2xl",
-            "flex flex-col items-center justify-center gap-3",
+            aspect, "border-2 border-dashed border-slate-200 rounded-xl",
+            "flex flex-col items-center justify-center",
+            compact ? "gap-1.5 p-2" : "gap-3 p-4",
             "hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group",
             "bg-slate-50/30",
             (disabled || isProcessing) && "opacity-50 cursor-not-allowed"
@@ -247,11 +266,11 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
         >
           {isProcessing ? (
             <>
-              <div className="p-3 bg-white rounded-full shadow-sm">
-                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+              <div className={cn("bg-white rounded-full shadow-sm", compact ? "p-1.5" : "p-3")}>
+                <Loader2 className={cn("text-primary animate-spin", compact ? "h-4 w-4" : "h-6 w-6")} />
               </div>
-              <span className="text-[11px] font-semibold text-slate-500">
-                {isCompressing ? '智能压缩中...' : '上传中...'}
+              <span className="text-[10px] font-semibold text-slate-500">
+                {isCompressing ? '压缩中...' : '上传中...'}
               </span>
               {isCompressing && (
                 <span className="text-[10px] text-slate-400">
@@ -261,19 +280,26 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
             </>
           ) : (
             <>
-              <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300">
-                <ImageIcon className="h-6 w-6 text-slate-300 group-hover:text-primary transition-colors" />
+              <div className={cn("bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300", compact ? "p-1.5" : "p-3")}>
+                <ImageIcon className={cn("text-slate-300 group-hover:text-primary transition-colors", compact ? "h-4 w-4" : "h-6 w-6")} />
               </div>
               <div className="text-center">
-                <span className="text-[11px] font-semibold text-slate-400 group-hover:text-primary transition-colors block">
-                  点击上传封面图
+                <span className={cn(
+                  "font-semibold text-slate-400 group-hover:text-primary transition-colors block px-2",
+                  compact ? "text-[10px]" : "text-[11px]"
+                )}>
+                  {text}
                 </span>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  支持 JPG、PNG、WebP，最大 10MB
-                </span>
-                <span className="text-[9px] text-slate-300 mt-0.5 block">
-                  📦 自动智能压缩，节省存储空间
-                </span>
+                {!compact && (
+                  <>
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      支持 JPG、PNG、WebP，最大 10MB
+                    </span>
+                    <span className="text-[9px] text-slate-300 mt-0.5 block">
+                      📦 自动智能压缩，节省存储空间
+                    </span>
+                  </>
+                )}
               </div>
             </>
           )}

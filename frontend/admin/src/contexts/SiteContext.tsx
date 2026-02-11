@@ -81,11 +81,12 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
   const sites = useMemo(() => {
     if (!currentUser) return []
-    // System Admins see all sites
-    if (currentUser.role === UserRole.ADMIN) {
+    // System Admins and Tenant Admins see all sites
+    // (For Tenant Admins, the backend already filters sites by tenant_id)
+    if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.TENANT_ADMIN) {
       return allSites
     }
-    // Others only see managed sites
+    // Others (Site Admins) only see explicitly managed sites
     const managedIds = currentUser.managed_site_ids || []
     return allSites.filter((site: Site) => managedIds.includes(site.id))
 

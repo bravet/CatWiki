@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-初始化 Demo 站点和医学知识文档
+初始化 Health 站点和医学知识文档
 用于 Docker 开发环境自动创建演示数据
 """
 
@@ -50,35 +50,10 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-async def create_default_admin_user():
-    """创建默认平台管理员用户"""
-    async with AsyncSessionLocal() as db:
-        try:
-            # 检查管理员是否已存在
-            admin_email = "admin@example.com"
-            user = await crud_user.get_by_email(db, email=admin_email)
-            if not user:
-                # 创建管理员 (平台级，tenant_id=None)
-                user_in = UserCreate(
-                    name="Admin",
-                    email=admin_email,
-                    password="admin123",
-                    role=UserRole.ADMIN,
-                    status=UserStatus.ACTIVE,
-                    tenant_id=None,
-                )
-                user = await crud_user.create(db, obj_in=user_in)
-                logger.info(f"✅ 创建默认平台管理员用户：{user.email} / admin123")
-            else:
-                logger.info(f"✅ 平台管理员用户已存在：{user.email}")
-            return user
-        except Exception as e:
-            logger.error(f"❌ 创建管理员用户失败: {e}", exc_info=True)
-            raise
 
 
-async def create_demo_tenant():
-    """创建或获取 demo 租户"""
+async def create_health_tenant():
+    """创建或获取 health 租户"""
     async with AsyncSessionLocal() as db:
         try:
             tenant_slug = "catwiki-team"
@@ -94,16 +69,16 @@ async def create_demo_tenant():
                     platform_resources_allowed=["models", "doc_processors"],
                 )
                 tenant = await crud_tenant.create(db, obj_in=tenant_in)
-                logger.info(f"✅ 创建 Demo 租户：{tenant.name} (Slug: {tenant.slug})")
+                logger.info(f"✅ 创建 Health 租户：{tenant.name} (Slug: {tenant.slug})")
             else:
-                logger.info(f"✅ Demo 租户已存在：{tenant.name}")
+                logger.info(f"✅ Health 租户已存在：{tenant.name}")
             return tenant
         except Exception as e:
-            logger.error(f"❌ 创建 Demo 租户失败: {e}", exc_info=True)
+            logger.error(f"❌ 创建 Health 租户失败: {e}", exc_info=True)
             raise
 
 
-async def create_demo_tenant_admin(tenant_id: int, managed_site_ids: list[int] = None):
+async def create_health_tenant_admin(tenant_id: int, managed_site_ids: list[int] = None):
     """创建租户管理员"""
     async with AsyncSessionLocal() as db:
         try:
@@ -129,16 +104,16 @@ async def create_demo_tenant_admin(tenant_id: int, managed_site_ids: list[int] =
             raise
 
 
-async def create_demo_site(tenant_id: int):
-    """创建或获取 demo 站点"""
+async def create_health_site(tenant_id: int):
+    """创建或获取 health 站点"""
     async with AsyncSessionLocal() as db:
         try:
             # 检查站点是否已存在
-            demo_site = await crud_site.get_by_name(db, name="医学科普")
-            if not demo_site:
+            health_site = await crud_site.get_by_name(db, name="医学科普")
+            if not health_site:
                 # 创建新站点
                 site_create = SiteCreate(
-                    name="医学科普",
+                    name="健康百科",
                     tenant_id=tenant_id,
                     slug="medical",
                     description="医学知识科普站点，提供常见疾病、健康生活、急救知识等内容",
@@ -152,25 +127,25 @@ async def create_demo_site(tenant_id: int):
                         {"text": "日常饮食应该注意什么？", "category": "健康生活"},
                     ],
                 )
-                demo_site = await crud_site.create(db, obj_in=site_create)
+                health_site = await crud_site.create(db, obj_in=site_create)
                 await db.commit()
-                await db.refresh(demo_site)
+                await db.refresh(health_site)
                 logger.info(
-                    f"✅ 创建 Demo 站点：{demo_site.name} (ID: {demo_site.id}, Slug: {demo_site.slug})"
+                    f"✅ 创建 Health 站点：{health_site.name} (ID: {health_site.id}, Slug: {health_site.slug})"
                 )
             else:
                 logger.info(
-                    f"✅ Demo 站点已存在：{demo_site.name} (ID: {demo_site.id}, Slug: {demo_site.slug})"
+                    f"✅ Health 站点已存在：{health_site.name} (ID: {health_site.id}, Slug: {health_site.slug})"
                 )
 
-            return demo_site
+            return health_site
         except Exception as e:
             await db.rollback()
-            logger.error(f"❌ 创建 Demo 站点失败: {e}", exc_info=True)
+            logger.error(f"❌ 创建 Health 站点失败: {e}", exc_info=True)
             raise
 
 
-async def init_medical_documents(tenant_id: int, site_id: int):
+async def init_health_documents(tenant_id: int, site_id: int):
     """初始化医学知识文档"""
     async with AsyncSessionLocal() as db:
         try:
@@ -1396,28 +1371,25 @@ def get_medical_data():
     }
 
 
-async def init_demo_data():
-    """初始化 Demo 数据"""
-    logger.info("🚀 开始初始化 Demo 数据...")
-
-    # 1. 创建默认平台管理员
-    await create_default_admin_user()
+async def init_health_data():
+    """初始化 Health 数据"""
+    logger.info("🚀 开始初始化 Health 数据...")
 
     # 2. 创建默认租户
-    tenant = await create_demo_tenant()
+    tenant = await create_health_tenant()
 
-    # 4. 创建或获取 demo 站点
-    demo_site = await create_demo_site(tenant.id)
+    # 4. 创建或获取 health 站点
+    health_site = await create_health_site(tenant.id)
 
     # 3. 创建租户管理员 (绑定刚才创建的站点)
-    await create_demo_tenant_admin(tenant.id, managed_site_ids=[demo_site.id])
+    await create_health_tenant_admin(tenant.id, managed_site_ids=[health_site.id])
 
     # 5. 初始化医学知识文档
     logger.debug("📚 初始化医学知识文档...")
-    await init_medical_documents(tenant.id, demo_site.id)
+    await init_health_documents(tenant.id, health_site.id)
 
-    logger.info("✅ Demo 数据初始化完成！")
+    logger.info("✅ Health 数据初始化完成！")
 
 
 if __name__ == "__main__":
-    asyncio.run(init_demo_data())
+    asyncio.run(init_health_data())

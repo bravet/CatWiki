@@ -126,9 +126,17 @@ services:
         uv run alembic upgrade head &&
         echo '✅ 数据库迁移完成' &&
         echo '' &&
-        echo ' 初始化 Demo 站点和医学知识文档...' &&
-        uv run python scripts/init_demo_data.py &&
-        echo '✅ Demo 数据初始化完成' &&
+        echo ' 🔐 初始化平台管理员...' &&
+        uv run python scripts/init_admin_data.py &&
+        echo '✅ 平台管理员初始化完成' &&
+        echo '' &&
+        echo ' 初始化 Health 站点和医学知识文档...' &&
+        uv run python scripts/init_health_data.py &&
+        echo '✅ Health 数据初始化完成' &&
+        echo '' &&
+        echo ' 初始化 Baby 站点和育儿知识文档...' &&
+        uv run python scripts/init_baby_data.py &&
+        echo '✅ Baby 数据初始化完成' &&
         echo '' &&
         echo '🗄️  初始化 RustFS 对象存储...' &&
         uv run python scripts/init_rustfs.py &&
@@ -142,9 +150,11 @@ services:
         echo '   📧 邮箱: admin@example.com' &&
         echo '   🔑 密码: admin123' &&
         echo '' &&
-        echo '📚 Demo 站点：' &&
-        echo '   🔗 访问: http://localhost:8002/medical' &&
+        echo '📚 Health 站点：' &&
+        echo '   🔗 访问: http://localhost:8002/health' &&
         echo '' &&
+        echo '📚 Baby 站点：' &&
+        echo '   🔗 访问: http://localhost:8002/baby-guide' &&
         echo '🔧 管理后台：' &&
         echo '   🔗 访问: http://localhost:8001' &&
         echo '' &&
