@@ -135,6 +135,7 @@ function SettingsContent() {
     const params = new URLSearchParams(searchParams.toString())
     params.delete("siteId")
     params.set("modal", "settings")
+    params.set("tab", "sites")
     router.replace(`${pathname}?${params.toString()}`)
   }
 
@@ -147,6 +148,17 @@ function SettingsContent() {
         {/* Window Header */}
         <div className="h-14 px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-4">
+            {isSiteSettings && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBackToGlobal}
+                className="h-8 w-8 rounded-full hover:bg-slate-100 -ml-2 transition-colors"
+                title="返回列表"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            )}
             <div className="flex items-center gap-2">
               <div className="p-2 bg-slate-100 rounded-lg">
                 <Settings className="h-4 w-4 text-slate-600" />
@@ -161,10 +173,11 @@ function SettingsContent() {
             {/* 仅在非模型配置 Tab 显示保存按钮 (因为模型配置现在有独立的保存逻辑) */}
             {isAiDirty && activeTab !== "models" && (
               <Button
+                size="sm"
                 onClick={() => handleSave()}
-                className="flex items-center gap-2 h-8 px-4 text-xs rounded-full shadow-sm animate-in fade-in zoom-in duration-300"
+                className="flex items-center gap-2 h-9 px-4 animate-in fade-in zoom-in duration-300"
               >
-                <Save className="h-3 w-3" />
+                <Save className="h-4 w-4" />
                 保存配置
               </Button>
             )}

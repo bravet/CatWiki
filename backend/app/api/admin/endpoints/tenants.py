@@ -99,6 +99,23 @@ async def create_tenant(
     )
 
     await crud_user.create(db, obj_in=admin_in)
+    
+    # 3. 为新租户初始化 AI 配置 (默认为 custom 模式)
+    from app.crud.system_config import crud_system_config
+    
+    default_ai_config = {
+        "chat": {"provider": "", "model": "", "apiKey": "", "baseUrl": "", "mode": "custom"},
+        "embedding": {"provider": "", "model": "", "apiKey": "", "baseUrl": "", "mode": "custom"},
+        "rerank": {"provider": "", "model": "", "apiKey": "", "baseUrl": "", "mode": "custom"},
+        "vl": {"provider": "", "model": "", "apiKey": "", "baseUrl": "", "mode": "custom"},
+    }
+    
+    await crud_system_config.update_by_key(
+        db,
+        config_key="ai_config",
+        config_value=default_ai_config,
+        tenant_id=tenant.id
+    )
 
     return ApiResponse.ok(data=tenant, msg="创建成功")
 
@@ -175,6 +192,20 @@ async def delete_tenant(
     # 4. Delete Users
     deleted_users = await crud_user.delete_by_tenant(db, tenant_id=tenant_id)
     logger.info(f"Deleted {deleted_users} users for tenant {tenant_id}")
+
+    # 5. Delete System Configs
+    from app.crud.system_config import crud_system_config
+    deleted_configs = await crud_system_config.delete_by_tenant(db, tenant_id=tenant_id)
+    logger.info(f"Deleted {deleted_configs} system configs for tenant {tenant_id}")
+
+    # 6. Delete Vector Data
+    try:
+        from app.core.vector.vector_store import VectorStoreManager
+        vsm = await VectorStoreManager.get_instance()
+        await vsm.delete_by_metadata("tenant_id", tenant_id)
+        logger.info(f"Deleted vector data for tenant {tenant_id}")
+    except Exception as e:
+        logger.error(f"Failed to delete vector data for tenant {tenant_id}: {e}")
 
     await crud_tenant.delete(db, id=tenant_id)
     return ApiResponse.ok(msg="删除成功")

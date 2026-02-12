@@ -123,8 +123,8 @@ export function GlobalSites() {
             </div>
           </div>
           <Button
-            className="flex items-center gap-2 rounded-xl shadow-lg shadow-primary/20"
-            size="default"
+            className="flex items-center gap-2"
+            size="sm"
             onClick={handleStartCreate}
           >
             <Plus className="h-4 w-4" />
@@ -149,7 +149,7 @@ export function GlobalSites() {
                       <Globe className="h-4 w-4" />
                     </div>
                     <div className="flex gap-1">
-                      <Link href={`?modal=settings&context=site&siteId=${site.id}`} scroll={false}>
+                      <Link href={`?modal=site-settings&siteId=${site.id}`} scroll={false}>
                         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="站点设置">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
@@ -188,14 +188,14 @@ export function GlobalSites() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <a href={`${CLIENT_SITE_URL}/${site.slug || site.id}`} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 rounded-xl border-border/60 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 shadow-sm">
+                      <Button variant="outline" size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 border-border/60 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 shadow-sm">
                         <BookOpen className="h-3.5 w-3.5" />
                         进入站点
                         <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
                       </Button>
                     </a>
                     <Link href={`/${site.slug || site.id}`}>
-                      <Button size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 shadow-sm shadow-primary/20">
+                      <Button size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 shadow-sm shadow-primary/10">
                         <LayoutGrid className="h-3.5 w-3.5" />
                         内容管理
                       </Button>

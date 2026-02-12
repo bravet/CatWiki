@@ -44,7 +44,7 @@ export function ModelDetailCard({ modelType, onBack }: ModelDetailCardProps) {
               variant="ghost"
               size="icon"
               onClick={onBack}
-              className="h-10 w-10 rounded-xl hover:bg-background/80 shadow-sm border border-border/50 bg-background/50 transition-all"
+              className="h-10 w-10 hover:bg-background/80 shadow-sm border border-border/50 bg-background/50 transition-all"
               title="返回模型设置"
             >
               <ChevronRight className="h-5 w-5 rotate-180" />

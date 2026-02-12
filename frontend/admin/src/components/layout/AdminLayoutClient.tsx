@@ -111,7 +111,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50/50">
       {/* Settings Modal Overlay */}
-      {searchParams.get('modal') === 'settings' && <SettingsModal />}
+      {(searchParams.get('modal') === 'settings' || searchParams.get('modal') === 'site-settings') && <SettingsModal />}
       {searchParams.get('modal') === 'platform' && <PlatformModal />}
 
       <ErrorBoundary

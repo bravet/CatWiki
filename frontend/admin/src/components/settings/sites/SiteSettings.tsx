@@ -200,7 +200,7 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
             onClick={handleSave}
             disabled={updateSiteMutation.isPending}
             size="sm"
-            className="flex items-center gap-2 h-9 px-4 rounded-xl shadow-lg shadow-primary/20 animate-in fade-in zoom-in duration-300"
+            className="flex items-center gap-2 h-9 px-4 animate-in fade-in zoom-in duration-300"
           >
             <Save className="h-4 w-4" />
             {updateSiteMutation.isPending ? "保存中..." : "保存修改"}

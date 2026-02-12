@@ -342,8 +342,8 @@ export function GlobalUsers() {
           </div>
 
           <Button
-            className="flex items-center gap-2 rounded-xl shadow-lg shadow-primary/20"
-            size="default"
+            className="flex items-center gap-2"
+            size="sm"
             onClick={handleStartCreate}
           >
             <Plus className="h-4 w-4" />
