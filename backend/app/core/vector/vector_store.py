@@ -19,7 +19,7 @@
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Any
 from urllib.parse import quote_plus
 
 from langchain_core.documents import Document as LangChainDocument
@@ -57,7 +57,7 @@ class VectorStoreManager:
         # key: config_hash, value: PGVectorStore
         self._vector_stores: dict[str, PGVectorStore] = {}
         # key: config_hash, value: Embeddings
-        self._embeddings_cache: dict[str, any] = {}
+        self._embeddings_cache: dict[str, Any] = {}
 
         # 当前上下文选中的实例 (由 _ensure_initialized 动态指向)
         self._current_store: PGVectorStore | None = None
@@ -66,14 +66,14 @@ class VectorStoreManager:
     async def _ensure_initialized(self, tenant_id: int | None = None, force: bool = False):
         """确保向量存储已初始化（懒加载，支持多实例池）"""
         try:
-            from app.core.ai.dynamic_config_manager import dynamic_config_manager
+            from app.services.configuration_service import configuration_service
             from app.core.infra.tenant import get_current_tenant
 
             # 1. 获取目标租户配置
             if tenant_id is None:
                 tenant_id = get_current_tenant()
 
-            embedding_conf = await dynamic_config_manager.get_embedding_config(
+            embedding_conf = await configuration_service.get_embedding_config(
                 tenant_id, force=force
             )
 

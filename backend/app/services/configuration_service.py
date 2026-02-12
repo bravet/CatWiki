@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""全局动态配置管理器 (精准日志版)
+"""全局配置服务 (Configuration Service)
 
-实现了显式的“获取即解析”路由逻辑。
-具备精准的缓存控制与双策略日志系统：
-- 🔍 [数据库读取]：当从 DB 全量加载或强制刷新时，展示完整可视化诊断卡片。
-- ⚡ [缓存命中]：当命中内存缓存时，仅展示轻量级命中提示，减少日志洗版。
+负责管理系统级与租户级的动态配置，核心职责：
+1. 配置路由：根据 mode (Custom/Platform) 决定配置源。
+2. 缓存管理：基于 TTL 的多级缓存策略。
+3. 安全审计：敏感信息脱敏与访问日志。
 """
 
 import logging
@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 AI_CONFIG_KEY = "ai_config"
 
 
-class DynamicConfigManager:
-    """动态配置管理器 (单例)
+class ConfigurationService:
+    """配置服务 (单例模式)
 
     职责：
     1. 缓存管理：基于 TTL (默认 60s) 的本地内存缓存。
@@ -49,7 +49,7 @@ class DynamicConfigManager:
        - 当这些核心字段发生变化时，代表该模块的“身份”改变，将触发后端对应实例的重置或重新初始化。
     """
 
-    _instance: Optional["DynamicConfigManager"] = None
+    _instance: Optional["ConfigurationService"] = None
 
     def __init__(self, cache_ttl: int = 60):
         self._config_cache: Dict[str, Dict[str, Any]] = {}
@@ -57,8 +57,8 @@ class DynamicConfigManager:
         self._cache_ttl = cache_ttl
 
     @classmethod
-    def get_instance(cls) -> "DynamicConfigManager":
-        """获取管理器单例实例"""
+    def get_instance(cls) -> "ConfigurationService":
+        """获取服务单例实例"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -98,7 +98,7 @@ class DynamicConfigManager:
 
         log_msg = (
             f"\n{'=' * 60}\n"
-            f"🔍 [AI Config Routing] -> 🔄 从数据库新鲜加载\n"
+            f"🔍 [Config Service] -> 🔄 从数据库新鲜加载\n"
             f"   - 模块段: {section}\n"
             f"   - 目标租户: {target}\n"
             f"   - 指纹标识: {config.get('_hash', 'N/A')}\n"
@@ -140,7 +140,7 @@ class DynamicConfigManager:
 
                 return raw_data, True
             except Exception as e:
-                logger.error(f"❌ [ConfigManager] DB 读取异常 (租户: {tenant_id}): {e}")
+                logger.error(f"❌ [ConfigService] DB 读取异常 (租户: {tenant_id}): {e}")
                 # 发生异常时尝试返回过期缓存保证系统不直接崩掉，但返回 False 表示未成功刷新
                 return self._config_cache.get(cache_key, {}), False
 
@@ -156,12 +156,12 @@ class DynamicConfigManager:
         if tenant_id == -1:
             self._config_cache.clear()
             self._last_update_map.clear()
-            logger.info("🧹 [ConfigManager] 已清空全部 AI 配置缓存")
+            logger.info("🧹 [ConfigService] 已清空全部配置缓存")
         else:
             cache_key = f"tenant:{tenant_id}" if tenant_id else "platform"
             self._config_cache.pop(cache_key, None)
             self._last_update_map.pop(cache_key, None)
-            logger.info(f"🧹 [ConfigManager] 已清除 {cache_key} 的 AI 配置缓存")
+            logger.info(f"🧹 [ConfigService] 已清除 {cache_key} 的配置缓存")
 
     async def _resolve_config(
         self, section: str, tenant_id: int | None = None, force: bool = False
@@ -202,7 +202,7 @@ class DynamicConfigManager:
                     )
                 else:
                     logger.debug(
-                        f"⚡ [ConfigManager] Cache hit for '{section}' (Tenant {tenant_id}, Mode: custom)"
+                        f"⚡ [ConfigService] Cache hit for '{section}' (Tenant {tenant_id}, Mode: custom)"
                     )
                 return tenant_section
 
@@ -234,7 +234,7 @@ class DynamicConfigManager:
             self._log_resolved_config(section, target_name, "Platform (平台共享)", platform_section)
         else:
             logger.debug(
-                f"⚡ [ConfigManager] Cache hit for '{section}' ({target_name}, Mode: platform)"
+                f"⚡ [ConfigService] Cache hit for '{section}' ({target_name}, Mode: platform)"
             )
 
         return platform_section
@@ -265,4 +265,4 @@ class DynamicConfigManager:
 
 
 # 全局单例
-dynamic_config_manager = DynamicConfigManager.get_instance()
+configuration_service = ConfigurationService.get_instance()

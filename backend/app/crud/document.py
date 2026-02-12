@@ -215,15 +215,19 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         current_tenant_id = tenant_id if tenant_id is not None else get_current_tenant()
         tenant_filter = "AND tenant_id = :tid" if current_tenant_id is not None else ""
 
-        # 1. 原逻辑：累加 views 字段（带租户过滤防止越权）
-        params = {"id": document_id}
-        if current_tenant_id is not None:
-            params["tid"] = current_tenant_id
+        # 1. ORM 逻辑：累加 views 字段（ORM 拦截器会自动追加 tenant_id 过滤）
+        # 显式设置 updated_at=Document.updated_at 以绕过 onupdate=utc_now 自动更新
+        from sqlalchemy import update
 
-        await db.execute(
-            text(f"UPDATE document SET views = views + 1 WHERE id = :id {tenant_filter}"),
-            params,
+        stmt = (
+            update(self.model)
+            .where(self.model.id == document_id)
+            .values(
+                views=self.model.views + 1,
+                updated_at=self.model.updated_at,
+            )
         )
+        await db.execute(stmt)
 
         # 2. 新增：记录浏览事件（如果提供了 site_id）
         if site_id is not None:

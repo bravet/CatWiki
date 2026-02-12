@@ -36,10 +36,10 @@ class Reranker:
 
     async def _get_instance_config(self, tenant_id: int | None = None) -> Dict[str, Any]:
         """获取并确认为当前上下文准备的配置实例"""
-        from app.core.ai.dynamic_config_manager import dynamic_config_manager
+        from app.services.configuration_service import configuration_service
 
         # 获取数据库或缓存中的动态配置
-        rerank_conf = await dynamic_config_manager.get_rerank_config(tenant_id=tenant_id)
+        rerank_conf = await configuration_service.get_rerank_config(tenant_id=tenant_id)
         conf_hash = rerank_conf.get("_hash")
 
         # 构造最终执行所需的配置（按指纹隔离）

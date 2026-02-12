@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Optional
 from langchain_openai import ChatOpenAI
-from app.core.ai.dynamic_config_manager import dynamic_config_manager
+from app.services.configuration_service import configuration_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class LLMManager:
         """根据租户获取模型实例 (带缓存)"""
 
         # 1. 获取配置
-        config = await dynamic_config_manager.get_chat_config(tenant_id=tenant_id, force=force)
+        config = await configuration_service.get_chat_config(tenant_id=tenant_id, force=force)
         conf_hash = config.get("_hash")
 
         # 为了支持不同 Temperature 的复用，将 Temperature 混入索引 Key

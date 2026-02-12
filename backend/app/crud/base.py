@@ -19,7 +19,7 @@ CRUD 基类 - 简化数据库操作（异步版本）
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import Base
@@ -42,7 +42,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.model = model
         self.primary_key = "id"  # 默认主键名为 id
 
-    def _apply_filters(self, query, **kwargs):
+    def _apply_filters(self, query: Select, **kwargs) -> Select:
         """
         子类重写此方法以应用特定的过滤逻辑。
         默认实现：尝试根据关键字进行精确匹配。

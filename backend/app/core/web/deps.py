@@ -150,9 +150,17 @@ async def get_effective_tenant_id(
         if header_tenant_id:
             try:
                 # 管理员选择了特定租户
-                return int(header_tenant_id)
+                target_tenant_id = int(header_tenant_id)
+                logger.warning(
+                    f"🚨 [安全审计] 管理员 {current_user.id} ({current_user.email}) "
+                    f"切换租户上下文至: {target_tenant_id}"
+                )
+                return target_tenant_id
             except ValueError:
                 # 非法 ID 默认返回全平台视图 (None)
+                logger.warning(
+                    f"⚠️ [安全警告] 管理员 {current_user.id} 提供了无效的租户ID: {header_tenant_id}"
+                )
                 return None
         # 未选择 Header 默认返回 None (全平台视图)
         return None

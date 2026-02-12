@@ -541,6 +541,67 @@ async def delete_document(
 # ============ 向量化相关接口 ============
 
 
+async def _dispatch_vectorization_tasks(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    document_ids: list[int],
+) -> tuple[list[int], int]:
+    """
+    统一处理向量化任务分发
+    Returns:
+        (success_ids, failed_count)
+    """
+    # 批量获取文档
+    documents = await crud_document.get_multi(db, ids=document_ids)
+    document_map = {doc.id: doc for doc in documents}
+
+    success_ids = []
+    failed_count = 0
+
+    # 筛选可向量化的文档
+    for doc_id in document_ids:
+        document = document_map.get(doc_id)
+        if document and can_vectorize(document):
+            success_ids.append(doc_id)
+        else:
+            failed_count += 1
+
+    if not success_ids:
+        return [], failed_count
+
+    # 1. 批量更新状态为 PENDING
+    await crud_document.batch_update_vector_status(
+        db, document_ids=success_ids, status=VectorStatus.PENDING
+    )
+
+    # 2. 检查向量服务可用性
+    try:
+        from app.core.vector.vector_store import VectorStoreManager
+
+        # 获取实例并强制检查初始化状态
+        vector_store = await VectorStoreManager.get_instance()
+        await vector_store._ensure_initialized(force=True)
+
+    except (ValueError, Exception) as e:
+        error_msg = str(e)
+        logger.error(f"Vector store check failed: {e}")
+        # 回滚状态为 FAILED
+        await crud_document.batch_update_vector_status(
+            db,
+            document_ids=success_ids,
+            status=VectorStatus.FAILED,
+            error=f"向量服务不可用: {error_msg}",
+        )
+        # 抛出异常中断流程
+        raise BadRequestException(detail=f"向量服务暂不可用: {error_msg}")
+
+    # 3. 分发后台任务
+    for doc_id in success_ids:
+        background_tasks.add_task(process_vectorization_task, doc_id)
+
+    return success_ids, failed_count
+
+
 @router.post(
     ":batchVectorize",
     response_model=ApiResponse[VectorizeResponse],
@@ -553,57 +614,12 @@ async def vectorize_documents(
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[VectorizeResponse]:
     """批量向量化文档（将文档状态设置为 pending，并启动向量化后台任务）"""
-    # 输入验证
     if not request.document_ids:
         raise BadRequestException(detail="文档ID列表不能为空")
 
-    # 批量获取文档（优化：避免 N+1 查询）
-    documents = await crud_document.get_multi(db, ids=request.document_ids)
-    document_map = {doc.id: doc for doc in documents}
-
-    success_ids = []
-    failed_count = 0
-
-    for doc_id in request.document_ids:
-        document = document_map.get(doc_id)
-        if document and can_vectorize(document):
-            success_ids.append(doc_id)
-        else:
-            failed_count += 1
-
-    # 批量更新状态（优化：一次批量更新代替多次单独更新）
-    if success_ids:
-        await crud_document.batch_update_vector_status(
-            db, document_ids=success_ids, status=VectorStatus.PENDING
-        )
-
-    # 为每个成功的文档启动异步后台任务
-    if success_ids:
-        # Check vector store availability (Synchronous check)
-        try:
-            from app.core.vector.vector_store import VectorStoreManager
-
-            # 获取实例并强制检查初始化状态（这会触发配置验证）
-            vector_store = await VectorStoreManager.get_instance()
-            await vector_store._ensure_initialized(force=True)
-
-        except ValueError as e:
-            # Revert status to FAILED if config is missing
-            await crud_document.batch_update_vector_status(
-                db, document_ids=success_ids, status=VectorStatus.FAILED, error=str(e)
-            )
-            raise BadRequestException(detail=str(e))
-        except Exception as e:
-            logger.error(f"Vector store check failed: {e}")
-            # Revert status
-            await crud_document.batch_update_vector_status(
-                db, document_ids=success_ids, status=VectorStatus.FAILED, error="向量服务暂不可用"
-            )
-            # 这里的 detail 会直接显示给前端用户
-            raise BadRequestException(detail=f"向量服务暂不可用: {str(e)}")
-
-        for doc_id in success_ids:
-            background_tasks.add_task(process_vectorization_task, doc_id)
+    success_ids, failed_count = await _dispatch_vectorization_tasks(
+        db, background_tasks, request.document_ids
+    )
 
     return ApiResponse.ok(
         data=VectorizeResponse(
@@ -625,46 +641,26 @@ async def vectorize_single_document(
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """向量化单个文档（会启动向量化后台任务）"""
+    # 检查文档是否存在 (保持原有 404 逻辑)
     document = await crud_document.get(db, id=document_id)
     if not document:
         raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
-    # 检查文档是否可以向量化
-    if not can_vectorize(document):
+    # 复用批量处理逻辑
+    try:
+        success_ids, _ = await _dispatch_vectorization_tasks(
+            db, background_tasks, [document_id]
+        )
+    except BadRequestException as e:
+        # 捕获服务不可用异常，直接抛出
+        raise e
+
+    if not success_ids:
+        # 说明不可向量化 (can_vectorize 返回 False)
         raise BadRequestException(detail=f"文档当前状态为 {document.vector_status}，无法重新学习")
 
-    # 更新状态为 pending
-    document = await crud_document.update_vector_status(
-        db, document_id=document_id, status=VectorStatus.PENDING
-    )
-
-    # Check vector store availability (Synchronous check)
-    try:
-        from app.core.vector.vector_store import VectorStoreManager
-
-        # 获取实例并强制检查初始化状态（这会触发配置验证）
-        vector_store = await VectorStoreManager.get_instance()
-        await vector_store._ensure_initialized(force=True)
-
-    except ValueError as e:
-        # Revert status to FAILED if config is missing
-        await crud_document.update_vector_status(
-            db, document_id=document_id, status=VectorStatus.FAILED, error=str(e)
-        )
-        raise BadRequestException(detail=str(e))
-    except Exception as e:
-        logger.error(f"Vector store check failed: {e}")
-        # Revert status
-        await crud_document.update_vector_status(
-            db, document_id=document_id, status=VectorStatus.FAILED, error="向量服务暂不可用"
-        )
-        # 这里的 detail 会直接显示给前端用户
-        raise BadRequestException(detail=f"向量服务暂不可用: {str(e)}")
-
-    # 启动异步后台任务
-    background_tasks.add_task(process_vectorization_task, document_id)
-
-    # 构建文档字典
+    # 重新获取文档以返回最新状态
+    document = await crud_document.get(db, id=document_id)
     document_dict = await enrich_document_dict(document, db, crud_collection)
 
     return ApiResponse.ok(data=document_dict, msg="已加入学习队列")

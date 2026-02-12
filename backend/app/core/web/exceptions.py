@@ -125,3 +125,23 @@ def setup_exception_handlers(app: FastAPI):
                 "data": {"errors": exc.errors()} if settings.DEBUG else None,
             },
         )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """全局兜底异常处理器"""
+        import traceback
+
+        # 记录完整堆栈信息
+        logger_module = logging.getLogger("app.core.web.exceptions")
+        logger_module.error(f"Uncaught Exception: {exc}", exc_info=True)
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "code": 500,
+                "msg": "服务器内部错误，请联系管理员",
+                "data": {"detail": str(exc), "traceback": traceback.format_exc()}
+                if settings.DEBUG
+                else None,
+            },
+        )

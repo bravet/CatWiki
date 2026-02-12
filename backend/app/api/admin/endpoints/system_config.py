@@ -267,9 +267,9 @@ async def update_ai_config(
 
     # 强制清除配置缓存，确保所有的 Manager 都能读取到最新写入数据库的值
     try:
-        from app.core.ai.dynamic_config_manager import dynamic_config_manager
+        from app.services.configuration_service import configuration_service
 
-        dynamic_config_manager.clear_cache(tenant_id=target_tenant_id)
+        configuration_service.clear_cache(tenant_id=target_tenant_id)
         logger.info(f"🧹 Cleared AI config cache for tenant: {target_tenant_id}")
     except Exception as e:
         logger.error(f"❌ Failed to clear config cache: {e}")

@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = Field(default=5432, ge=1, le=65535)
 
     # 数据库连接池配置
-    DB_POOL_SIZE: int = Field(default=10, ge=1, le=50)
-    DB_MAX_OVERFLOW: int = Field(default=20, ge=0, le=100)
+    DB_POOL_SIZE: int = Field(default=10, ge=1, le=200)
+    DB_MAX_OVERFLOW: int = Field(default=20, ge=0, le=200)
     DB_POOL_TIMEOUT: int = Field(default=30, ge=1)
     DB_POOL_RECYCLE: int = Field(default=3600, ge=300)
 
