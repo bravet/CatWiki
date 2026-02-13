@@ -133,7 +133,7 @@ prod-up:
 prod-rebuild:
 	@echo "🔧 [CatWiki] 无缓存重新构建生产环境..."
 	set -a && . deploy/docker/.env.client && . deploy/docker/.env.admin && set +a && \
-	docker compose -f deploy/docker/docker-compose.prod.yml build --no-cache
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile init build --no-cache
 	set -a && . deploy/docker/.env.client && . deploy/docker/.env.admin && set +a && \
 	docker compose -f deploy/docker/docker-compose.prod.yml --profile init up -d
 
