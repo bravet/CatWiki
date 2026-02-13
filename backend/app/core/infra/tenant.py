@@ -43,6 +43,13 @@ def get_current_tenant() -> Optional[int]:
 
     # 尝试加载 EE 版默认值 (例如支持平台全局视角)
     try:
+        from app.core.infra.config import settings
+
+        # 双重保险：只有配置为 enterprise 时才尝试加载 EE 逻辑
+        # 这防止了即使有代码但配置错误（或被攻击者手动放置了文件）的情况
+        if settings.CATWIKI_EDITION != "enterprise":
+            return 1
+
         from app.ee.loader import get_ee_default_tenant_id
 
         return get_ee_default_tenant_id()

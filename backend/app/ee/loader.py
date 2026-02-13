@@ -70,9 +70,15 @@ def get_ee_tenant_id(current_user, request) -> int | None:
     Supports platform administrators switching contexts via headers.
     """
     from app.models.user import UserRole
+    # 延迟导入，防止循环引用
+    from app.ee.license import license_service
 
     # 只有平台管理员支持动态切换
     if current_user.role == UserRole.ADMIN:
+        # 安全加固：如果未授权，禁止切换租户
+        if not license_service.is_valid:
+            return current_user.tenant_id
+
         header_tenant_id = request.headers.get("X-Selected-Tenant-ID")
         if header_tenant_id:
             try:
