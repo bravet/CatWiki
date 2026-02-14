@@ -1,0 +1,37 @@
+
+> catwiki-admin@0.1.0 build /Users/junyao/Desktop/CatWiki/frontend/admin
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 4.2s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/5) ...
+  Generating static pages using 11 workers (1/5) 
+  Generating static pages using 11 workers (2/5) 
+  Generating static pages using 11 workers (3/5) 
+✓ Generating static pages using 11 workers (5/5) in 121.9ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /[slug]
+├ ƒ /[slug]/documents
+├ ƒ /[slug]/documents/edit/[id]
+├ ƒ /[slug]/documents/new
+├ ƒ /[slug]/users
+├ ○ /login
+├ ƒ /sites/edit/[id]
+└ ○ /sites/new
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

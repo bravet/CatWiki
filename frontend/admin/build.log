@@ -1,0 +1,28 @@
+
+> catwiki-admin@0.1.0 build /Users/junyao/Desktop/CatWiki/frontend/admin
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 4.0s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/5) ...
+⨯ useSearchParams() should be wrapped in a suspense boundary at page "/404". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at Q (/Users/junyao/Desktop/CatWiki/frontend/admin/.next/server/chunks/ssr/_90b1f57a._.js:2:2111)
+    at o (/Users/junyao/Desktop/CatWiki/frontend/admin/.next/server/chunks/ssr/_90b1f57a._.js:4:5285)
+    at ad (/Users/junyao/Desktop/CatWiki/frontend/admin/.next/server/chunks/ssr/src_components_layout_AdminLayoutClient_tsx_093e6fe5._.js:1:17535)
+    at an (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84360)
+    at ai (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86179)
+    at al (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107953)
+    at as (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105368)
+    at am (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:112882)
+    at au (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:109985)
+    at al (/Users/junyao/Desktop/CatWiki/frontend/admin/node_modules/.pnpm/next@16.1.6_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:108231)
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /_not-found/page: /_not-found, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

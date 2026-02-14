@@ -205,7 +205,9 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
       <ReactQueryProvider>
         <SiteProvider>
           <Toaster position="top-center" richColors />
-          <AdminLayoutContent>{children}</AdminLayoutContent>
+          <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+            <AdminLayoutContent>{children}</AdminLayoutContent>
+          </Suspense>
         </SiteProvider>
       </ReactQueryProvider>
     </ErrorBoundary>
