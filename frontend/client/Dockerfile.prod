@@ -6,6 +6,9 @@ WORKDIR /app
 # 配置 npm 使用淘宝镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
+# 安装基础依赖 (libc6-compat 用于 Turbopack/SWC 兼容性)
+RUN apk add --no-cache libc6-compat git
+
 # 复制依赖文件
 COPY package.json pnpm-lock.yaml ./
 
@@ -18,7 +21,9 @@ RUN pnpm config set registry https://registry.npmmirror.com
 # 安装依赖
 RUN pnpm install --frozen-lockfile
 
-# 复制源代码
+
+
+# 复制源代码 (放在安装依赖之后，利用 Docker 缓存)
 COPY . .
 
 # 构建参数
@@ -41,6 +46,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# 安装运行时基础依赖
+RUN apk add --no-cache libc6-compat
+
 # 添加非 root 用户
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -49,6 +57,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+
 
 # 设置文件所有者
 RUN chown -R nextjs:nodejs /app

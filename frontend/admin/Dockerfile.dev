@@ -7,6 +7,9 @@ WORKDIR /app
 # 配置 npm 使用淘宝镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
+# 安装基础依赖 (libc6-compat 用于 Turbopack/SWC 兼容性, git 用于依赖安装)
+RUN apk add --no-cache libc6-compat git
+
 # 安装 pnpm（使用淘宝镜像源）
 RUN npm install -g pnpm --registry=https://registry.npmmirror.com
 
