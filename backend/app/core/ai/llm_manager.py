@@ -41,36 +41,41 @@ class LLMManager:
         return cls._instance
 
     async def get_model(
-        self, tenant_id: Optional[int] = None, temperature: float = 0.7, force: bool = False
+        self,
+        tenant_id: Optional[int] = None,
+        model_name: Optional[str] = None,
+        temperature: float = 0.7,
+        force: bool = False,
     ) -> ChatOpenAI:
         """根据租户获取模型实例 (带缓存)"""
 
         # 1. 获取配置
         config = await configuration_service.get_chat_config(tenant_id=tenant_id, force=force)
-        conf_hash = config.get("_hash")
+        
+        # 处理模型覆盖
+        effective_model = model_name or config.get("model") or "gpt-3.5-turbo"
+        conf_hash = config.get("_hash", "default")
 
-        # 为了支持不同 Temperature 的复用，将 Temperature 混入索引 Key
-        # 实际上 ChatOpenAI 实例通常可以设置不同的 temperature，但为了保险起见，
-        # 我们按 (Hash, Temp) 进行对象级别复用
-        pool_key = f"{conf_hash}_{temperature}"
+        # 为了支持不同 Temperature 和 Model Override 的复用，将它们混入索引 Key
+        pool_key = f"{conf_hash}_{effective_model}_{temperature}"
 
         # 2. 检查池化缓存
         if pool_key in self._models and not force:
             logger.debug(
-                f"⚡ [LLMManager] Reusing Chat model instance (Hash: {conf_hash[:8]}, Temp: {temperature})"
+                f"⚡ [LLMManager] Reusing Chat model instance (Model: {effective_model}, Temp: {temperature})"
             )
             return self._models[pool_key]
 
         # 3. 初始化新实例
         logger.info(
             f"🔄 [LLMManager] Initializing new Chat model... "
-            f"(Tenant: {tenant_id}, Model: {config.get('model')}, Temp: {temperature}, Hash: {conf_hash[:8]})"
+            f"(Tenant: {tenant_id}, Model: {effective_model}, Temp: {temperature}, Hash: {conf_hash[:8]})"
         )
 
         new_llm = ChatOpenAI(
-            model=config["model"],
-            api_key=config["apiKey"],
-            base_url=config["baseUrl"],
+            model=effective_model,
+            api_key=config.get("apiKey"),
+            base_url=config.get("baseUrl"),
             temperature=temperature,
             streaming=True,
         )

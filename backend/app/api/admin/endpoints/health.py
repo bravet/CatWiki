@@ -58,6 +58,7 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> ApiResponse[Health
         "environment": settings.ENVIRONMENT,
         "edition": settings.CATWIKI_EDITION,
         "is_licensed": license_service.is_valid,
+        "is_demo": False,
         "timestamp": datetime.now(UTC).isoformat(),
         "checks": {},
     }

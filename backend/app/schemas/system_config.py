@@ -103,6 +103,56 @@ class TestConnectionRequest(BaseModel):
     config: ModelConfig = Field(..., description="模型配置")
 
 
+
+# ============ 机器人配置相关 Schema ============
+
+
+class WebWidgetConfig(BaseModel):
+    """网页挂件配置"""
+
+    enabled: bool = Field(default=False, description="是否启用")
+    title: str = Field(default="AI 助手", description="挂件标题")
+    welcomeMessage: str = Field(default="你好！有什么我可以帮你的吗？", description="欢迎语")
+    primaryColor: str = Field(default="#3b82f6", description="主题色")
+    position: Literal["right", "left"] = Field(default="right", description="位置")
+
+
+class ApiBotConfig(BaseModel):
+    """API 机器人配置"""
+
+    enabled: bool = Field(default=False, description="是否启用")
+    apiEndpoint: str = Field(default="", description="API 端点 (只读)")
+    apiKey: str = Field(default="", description="API Key")
+    timeout: int = Field(default=30, description="超时时间(秒)")
+
+
+class WecomSmartRobotConfig(BaseModel):
+    """企业微信智能机器人配置"""
+
+    enabled: bool = Field(default=False, description="是否启用")
+    callbackUrl: str = Field(default="", description="回调地址")
+    token: str = Field(default="", description="Token")
+    encodingAesKey: str = Field(default="", description="Encoding AES Key")
+
+
+class BotConfig(BaseModel):
+    """机器人完整配置"""
+
+    webWidget: WebWidgetConfig = Field(..., description="网页挂件配置")
+    apiBot: ApiBotConfig = Field(..., description="API 机器人配置")
+    wecomSmartRobot: WecomSmartRobotConfig = Field(
+        default_factory=WecomSmartRobotConfig, description="企业微信智能机器人配置"
+    )
+
+
+class BotConfigUpdate(BaseModel):
+    """更新机器人配置"""
+
+    webWidget: WebWidgetConfig = Field(..., description="网页挂件配置")
+    apiBot: ApiBotConfig = Field(..., description="API 机器人配置")
+    wecomSmartRobot: WecomSmartRobotConfig = Field(..., description="企业微信智能机器人配置")
+
+
 # ============ 文档处理服务配置相关 Schema ============
 
 

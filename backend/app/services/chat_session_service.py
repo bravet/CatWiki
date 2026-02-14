@@ -23,7 +23,7 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.vector.rag_utils import extract_sources_from_messages
+from app.core.vector.rag_utils import convert_messages_to_openai, extract_sources_from_messages
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 
@@ -44,11 +44,13 @@ class ChatSessionService:
         user_message: str,
         member_id: str | None = None,
         tenant_id: int | None = None,
+        _retry_count: int = 0,
     ) -> ChatSession:
         """创建或更新会话记录
-
+        
         Args:
             member_id: 会员ID或访客ID（可选）
+            _retry_count: 内部重试计数，防止无限递归
         """
         try:
             # 1. 尝试查找现有会话
@@ -86,14 +88,20 @@ class ChatSessionService:
                     logger.info(
                         f"✨ [ChatSession] Created: thread_id={thread_id}, site_id={site_id}"
                     )
-                except IntegrityError:
-                    # 并发冲突：可能在查询后被其他请求创建了
+                except IntegrityError as ie:
+                    # 并发冲突：可能在查询后被其他请求创建了，也可能是其他约束冲突
                     await db.rollback()
+                    
+                    if _retry_count >= 1:
+                        # 超过重试次数，可能是非并发导致的约束错误（如 tenant_id IS NULL）
+                        logger.error(f"❌ [ChatSession] IntegrityError persisting after retry: {ie}")
+                        raise ie
+                        
                     logger.warning(
-                        f"⚠️ [ChatSession] Concurrent creation detected for {thread_id}, retrying as update."
+                        f"⚠️ [ChatSession] IntegrityError for {thread_id}, retrying as update. Error: {ie}"
                     )
                     return await ChatSessionService.create_or_update(
-                        db, thread_id, site_id, user_message, member_id, tenant_id
+                        db, thread_id, site_id, user_message, member_id, tenant_id, _retry_count=_retry_count + 1
                     )
 
             return session
@@ -229,61 +237,22 @@ class ChatSessionService:
         if last_human_idx == -1:
             return 0
 
-        new_messages = messages[last_human_idx + 1 :]
+        if last_human_idx == -1:
+            return 0
+
+        new_langchain_messages = messages[last_human_idx + 1 :]
+        new_openai_messages = convert_messages_to_openai(new_langchain_messages)
+        
         saved_count = 0
-
-        for msg in new_messages:
-            role = "assistant"
-            tool_calls = None
-            tool_call_id = None
-
-            if isinstance(msg, AIMessage):
-                role = "assistant"
-                if hasattr(msg, "tool_calls") and msg.tool_calls:
-                    # 按照 OpenAI 标准格式保存 tool_calls
-                    tool_calls = []
-                    for tc in msg.tool_calls:
-                        args = tc.get("args")
-                        tool_calls.append(
-                            {
-                                "id": tc.get("id"),
-                                "type": "function",
-                                "function": {
-                                    "name": tc.get("name"),
-                                    "arguments": args
-                                    if isinstance(args, str)
-                                    else json.dumps(args, ensure_ascii=False),
-                                },
-                            }
-                        )
-            elif isinstance(msg, ToolMessage):
-                role = "tool"
-                tool_call_id = msg.tool_call_id
-            elif isinstance(msg, HumanMessage):
-                role = "user"
-            elif isinstance(msg, SystemMessage):
-                # 系统消息（如摘要后的提示）通常不需要存入给用户看的消息流中
-                # 如果需要也可以存
-                continue
-            else:
-                continue
-
-            additional_kwargs = getattr(msg, "additional_kwargs", {}).copy()
-
-            # 特别处理 AIMessage 的 Token 使用信息
-            if isinstance(msg, AIMessage) and hasattr(msg, "usage_metadata") and msg.usage_metadata:
-                additional_kwargs["usage_metadata"] = msg.usage_metadata
-
+        for msg_dict in new_openai_messages:
             await ChatSessionService.save_message(
                 db=db,
                 thread_id=thread_id,
-                role=role,
-                content=msg.content
-                if isinstance(msg.content, str)
-                else json.dumps(msg.content, ensure_ascii=False),
-                tool_calls=tool_calls,
-                tool_call_id=tool_call_id,
-                additional_kwargs=additional_kwargs,
+                role=msg_dict["role"],
+                content=msg_dict.get("content"),
+                tool_calls=msg_dict.get("tool_calls"),
+                tool_call_id=msg_dict.get("tool_call_id"),
+                additional_kwargs=msg_dict.get("additional_kwargs"),
             )
             saved_count += 1
 
@@ -573,54 +542,5 @@ class ChatSessionService:
 
     @staticmethod
     def _messages_to_openai(messages: list[BaseMessage], filter_system: bool = False) -> list[dict]:
-        """将 LangChain 格式消息转换为 OpenAI 格式 (完全兼容 tool calling)"""
-        result = []
-        for msg in messages:
-            if isinstance(msg, SystemMessage):
-                if filter_system:
-                    continue
-                result.append({"role": "system", "content": msg.content})
-
-            elif isinstance(msg, AIMessage):
-                message_dict = {"role": "assistant"}
-
-                # 处理 content（可能为空字符串或 None）
-                if msg.content:
-                    message_dict["content"] = msg.content
-                else:
-                    message_dict["content"] = None
-
-                # 处理 tool_calls（如果存在）
-                if hasattr(msg, "tool_calls") and msg.tool_calls:
-                    tool_calls_list = []
-                    for tc in msg.tool_calls:
-                        # LangChain 的 tool_call 结构转换为 OpenAI 格式
-                        tool_call_dict = {
-                            "id": tc.get("id", ""),
-                            "type": "function",
-                            "function": {
-                                "name": tc.get("name", ""),
-                                "arguments": json.dumps(tc.get("args", {}), ensure_ascii=False),
-                            },
-                        }
-                        tool_calls_list.append(tool_call_dict)
-                    message_dict["tool_calls"] = tool_calls_list
-
-                result.append(message_dict)
-
-            elif isinstance(msg, HumanMessage):
-                result.append({"role": "user", "content": msg.content})
-
-            elif isinstance(msg, ToolMessage):
-                # OpenAI 格式的 tool role 消息
-                result.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": msg.tool_call_id,
-                        "content": msg.content
-                        if isinstance(msg.content, str)
-                        else json.dumps(msg.content, ensure_ascii=False),
-                    }
-                )
-
-        return result
+        """将 LangChain 格式消息转换为 OpenAI 格式 (委托给统一工具)"""
+        return convert_messages_to_openai(messages, filter_system=filter_system)

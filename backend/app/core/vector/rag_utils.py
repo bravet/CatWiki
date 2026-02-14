@@ -104,6 +104,73 @@ def convert_tool_call_chunk_to_openai(tc_chunk: dict[str, Any]) -> dict[str, Any
     return cleaned_tc
 
 
+def convert_messages_to_openai(messages: list[BaseMessage], filter_system: bool = False) -> list[dict]:
+    """将 LangChain 格式消息列表统一转换为 OpenAI 格式 (完全兼容 tool calling)"""
+    result = []
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            if filter_system:
+                continue
+            result.append({"role": "system", "content": msg.content})
+
+        elif isinstance(msg, AIMessage):
+            message_dict = {"role": "assistant"}
+
+            # 处理 content（可能为空字符串或 None）
+            if msg.content:
+                message_dict["content"] = msg.content
+            else:
+                message_dict["content"] = None
+
+            # 处理 tool_calls（如果存在）
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                tool_calls_list = []
+                for tc in msg.tool_calls:
+                    tool_call_dict = {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("name", ""),
+                            "arguments": json.dumps(tc.get("args", {}), ensure_ascii=False)
+                            if not isinstance(tc.get("args"), str)
+                            else tc.get("args"),
+                        },
+                    }
+                    tool_calls_list.append(tool_call_dict)
+                message_dict["tool_calls"] = tool_calls_list
+
+            # 附加元数据
+            if hasattr(msg, "additional_kwargs") and msg.additional_kwargs:
+                # 排除已经被显式提取的字段
+                message_dict["additional_kwargs"] = {
+                    k: v for k, v in msg.additional_kwargs.items() if k not in ["tool_calls"]
+                }
+            
+            # 记录 Token 使用 (LangChain 0.2+)
+            if hasattr(msg, "usage_metadata") and msg.usage_metadata:
+                if "additional_kwargs" not in message_dict:
+                    message_dict["additional_kwargs"] = {}
+                message_dict["additional_kwargs"]["usage_metadata"] = msg.usage_metadata
+
+            result.append(message_dict)
+
+        elif isinstance(msg, HumanMessage):
+            result.append({"role": "user", "content": msg.content})
+
+        elif isinstance(msg, ToolMessage):
+            result.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": msg.tool_call_id,
+                    "content": msg.content
+                    if isinstance(msg.content, str)
+                    else json.dumps(msg.content, ensure_ascii=False),
+                }
+            )
+
+    return result
+
+
 def is_meaningful_message(msg: BaseMessage) -> bool:
     """判断消息是否具有实际语义内容（过滤掉 System、Remove 等）"""
     if isinstance(msg, SystemMessage | RemoveMessage):

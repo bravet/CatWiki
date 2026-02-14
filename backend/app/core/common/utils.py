@@ -307,6 +307,29 @@ async def enrich_document_dict(
 # ==================== 脱敏工具函数 ====================
 
 
+
+def mask_bot_config_inplace(config_value: dict) -> None:
+    """对机器人配置进行原地脱敏处理"""
+    if not config_value:
+        return
+
+    # 1. API Bot
+    api_bot = config_value.get("apiBot", {})
+    if api_bot:
+        if "apiEndpoint" in api_bot:
+            api_bot["apiEndpoint"] = mask_variable(api_bot["apiEndpoint"])
+        if "apiKey" in api_bot:
+            api_bot["apiKey"] = mask_variable(api_bot["apiKey"])
+
+    # 2. WeCom Smart Robot
+    wecom = config_value.get("wecomSmartRobot", {})
+    if wecom:
+        if "token" in wecom:
+            wecom["token"] = mask_variable(wecom["token"])
+        if "encodingAesKey" in wecom:
+            wecom["encodingAesKey"] = mask_variable(wecom["encodingAesKey"])
+
+
 def filter_client_site_data(site: Any) -> Any:
     """过滤客户端站点数据中的敏感信息"""
     if not site:
@@ -318,7 +341,7 @@ def filter_client_site_data(site: Any) -> Any:
         bot_config = site.get("bot_config")
 
     if bot_config:
-        # 仅保留 webWidget 配置，彻底移除 apiBot 和 wechat 等包含密钥的配置
+        # 仅保留 webWidget 配置，彻底移除 apiBot 和 wecomSmartRobot 等包含密钥的配置
         filtered_config = {}
         if "webWidget" in bot_config:
             filtered_config["webWidget"] = bot_config["webWidget"]

@@ -16,6 +16,7 @@
 异常处理器和自定义异常类
 """
 
+import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

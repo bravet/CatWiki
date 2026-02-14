@@ -27,6 +27,10 @@ export type HealthResponse = {
      */
     is_licensed: boolean;
     /**
+     * 是否为演示模式
+     */
+    is_demo?: boolean;
+    /**
      * 检查时间戳
      */
     timestamp: string;

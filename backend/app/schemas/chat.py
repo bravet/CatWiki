@@ -72,7 +72,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "gpt-3.5-turbo"
+    model: Optional[str] = None
     message: str  # 单条消息（必填）
     thread_id: str  # 会话ID（必填），用于持久化
     temperature: Optional[float] = 0.7

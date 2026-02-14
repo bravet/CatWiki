@@ -81,6 +81,10 @@ dev-up:
 dev-down:
 	docker compose -f docker-compose.dev.yml down
 
+# 重建并启动服务
+dev-rebuild:
+	docker compose -f docker-compose.dev.yml up -d --build
+
 # 重启后端
 dev-restart:
 	docker compose -f docker-compose.dev.yml restart backend
