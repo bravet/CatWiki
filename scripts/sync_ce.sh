@@ -161,10 +161,14 @@ update_env_file() {
 }
 
 update_env_file "backend/.env.example"
+update_env_file "backend/.env"
 update_env_file "deploy/docker/.env.backend"
 update_env_file "deploy/docker/.env.admin"
 update_env_file "deploy/docker/.env.client"
 update_env_file "frontend/admin/.env.example"
+update_env_file "frontend/admin/.env"
+update_env_file "frontend/client/.env.example"
+update_env_file "frontend/client/.env"
 
 # ---- 安全检查 ----
 echo "[5/6] 运行安全检查..."
