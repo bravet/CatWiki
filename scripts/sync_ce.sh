@@ -196,14 +196,14 @@ update_env_file() {
 }
 
 update_env_file "backend/.env.example"
-update_env_file "backend/.env"
+# 注意：不修改 backend/.env，这是开发者本地配置（.gitignore），切换回 ee 后不会还原
 update_env_file "deploy/docker/.env.backend"
 update_env_file "deploy/docker/.env.admin"
 update_env_file "deploy/docker/.env.client"
 update_env_file "frontend/admin/.env.example"
-update_env_file "frontend/admin/.env"
+# 注意：不修改 frontend/admin/.env，同上
 update_env_file "frontend/client/.env.example"
-update_env_file "frontend/client/.env"
+# 注意：不修改 frontend/client/.env，同上
 
 # ---- 安全检查 ----
 echo "[5/6] 运行安全检查..."
