@@ -256,7 +256,15 @@ echo "  [PASS] 所有安全检查通过"
 echo "[6/6] 提交 CE 版本..."
 
 git add -A
-git commit -m "release: sync CE from EE $(date +%Y-%m-%d)" --allow-empty
+
+# 获取源分支最新的一条提交摘要，作为同步记录详情
+EE_LATEST_MSG=$(git log -1 --pretty=format:"%h %s" "$SOURCE_BRANCH" | sed 's/"/\\"/g')
+COMMIT_MSG="chore: sync CE from EE $(date +%Y-%m-%d)
+
+Upstream: 
+- $EE_LATEST_MSG"
+
+git commit -m "$COMMIT_MSG" --allow-empty
 
 echo ""
 echo "======== CE 变更摘要 ========"
