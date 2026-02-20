@@ -50,14 +50,18 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> ApiResponse[Health
 
     from app.core.infra.rustfs import get_rustfs_service
 
-    from app.ee.license import license_service
+    try:
+        from app.ee.license import license_service
+        is_licensed = license_service.is_valid
+    except ImportError:
+        is_licensed = False
 
     health_status = {
         "status": "healthy",
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
         "edition": settings.CATWIKI_EDITION,
-        "is_licensed": license_service.is_valid,
+        "is_licensed": is_licensed,
         "is_demo": False,
         "timestamp": datetime.now(UTC).isoformat(),
         "checks": {},
