@@ -83,7 +83,7 @@ const envSchema = z.object({
    * CatWiki 版本
    * community | enterprise
    */
-  NEXT_PUBLIC_CATWIKI_EDITION: z.literal('community').catch('community').default('community'),
+  NEXT_PUBLIC_CATWIKI_EDITION: z.string().optional().transform(() => 'community' as const),
 })
 
 /**

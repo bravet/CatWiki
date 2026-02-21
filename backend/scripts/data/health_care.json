@@ -1,8 +1,8 @@
 {
   "tenant": {
-    "name": "CatWiki Demo",
-    "slug": "default",
-    "description": "CatWiki 社区版默认团队",
+    "name": "Health Team",
+    "slug": "health",
+    "description": "health 官方演示团队",
     "plan": "pro",
     "status": "active"
   },
