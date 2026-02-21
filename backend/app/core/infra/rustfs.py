@@ -394,7 +394,7 @@ def get_rustfs_service() -> RustFSService:
     return rustfs_service
 
 
-def init_rustfs() -> bool:
+async def init_rustfs() -> bool:
     """初始化 RustFS 服务"""
     service = get_rustfs_service()
     if service.is_available():

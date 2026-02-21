@@ -98,7 +98,7 @@ class LifecycleManager:
         # 3. RustFS 检查
         try:
             rustfs = get_rustfs_service()
-            await rustfs.client.list_buckets()
+            rustfs.client.list_buckets()
             results["rustfs"] = "healthy"
         except Exception as e:
             results["rustfs"] = f"unhealthy: {str(e)}"

@@ -467,6 +467,9 @@ class VectorStoreManager:
             target_columns = ["collection_id", "tenant_id"]
 
             async with self._sa_engine.connect() as conn:
+                # 使用 AUTOCOMMIT 模式执行 Schema 修改
+                conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+
                 # 获取当前所有列名
                 result = await conn.execute(
                     text(
@@ -482,7 +485,6 @@ class VectorStoreManager:
                         await conn.execute(
                             text(f"ALTER TABLE {self.collection_name} ADD COLUMN {col} INTEGER")
                         )
-                        await conn.commit()
                         logger.info(f"✅ [Schema] 成功添加列 '{col}'")
 
         except Exception as e:
@@ -499,6 +501,10 @@ class VectorStoreManager:
             target_indexes = ["id", "site_id", "collection_id", "tenant_id"]
 
             async with self._sa_engine.connect() as conn:
+                # 关键：必须设置 isolation_level 为 AUTOCOMMIT 
+                # 否则 CREATE INDEX CONCURRENTLY 会因为在事务块中执行而报错
+                conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+
                 # 获取当前所有索引
                 result = await conn.execute(
                     text(
@@ -517,7 +523,6 @@ class VectorStoreManager:
                                 f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {index_name} ON {self.collection_name} ({col})"
                             )
                         )
-                        await conn.commit()
                         logger.info(f"✅ [Index] 成功创建索引 '{index_name}'")
 
         except Exception as e:
