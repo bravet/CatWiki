@@ -70,6 +70,7 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
         self, db: AsyncSession, *, config_key: str, config_value: dict, tenant_id: int | None = None
     ) -> SystemConfig:
         """根据配置键更新配置（如果不存在则创建）"""
+        # 注意: 避免并发或跨 Session 缓存导致的幻读
         db_config = await self.get_by_key(db, config_key=config_key, tenant_id=tenant_id)
 
         if db_config:
@@ -79,17 +80,27 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
             await db.refresh(db_config)
             return db_config
         else:
-            # 创建新配置
-            db_config = SystemConfig(
-                tenant_id=tenant_id,
-                config_key=config_key,
-                config_value=config_value,
-                is_active=True,
-            )
-            db.add(db_config)
-            await db.commit()
-            await db.refresh(db_config)
-            return db_config
+            # 创建新配置之前再次尝试通过原生 insert on conflict 或 try except 解决并发冲突
+            from sqlalchemy.exc import IntegrityError
+            try:
+                db_config = SystemConfig(
+                    tenant_id=tenant_id,
+                    config_key=config_key,
+                    config_value=config_value,
+                    is_active=True,
+                )
+                db.add(db_config)
+                await db.commit()
+                await db.refresh(db_config)
+                return db_config
+            except IntegrityError:
+                await db.rollback()
+                # 说明存在并发冲突，回滚后使用更新逻辑
+                db_config = await self.get_by_key(db, config_key=config_key, tenant_id=tenant_id)
+                db_config.config_value = config_value
+                await db.commit()
+                await db.refresh(db_config)
+                return db_config
 
     async def delete_by_key(self, db: AsyncSession, *, config_key: str) -> bool:
         """根据配置键删除配置"""
