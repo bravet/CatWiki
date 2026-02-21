@@ -89,7 +89,7 @@ def download_openapi_specs():
         except Exception as e:
             print(f"  ❌ 下载 {name.upper()} 规范失败: {e}")
             print("\n💡 提示: 请确保后端服务正在运行")
-            print("  请先运行: make dev")
+            print("  请先运行: make dev-up")
             sys.exit(1)
 
     return specs

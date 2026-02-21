@@ -80,7 +80,7 @@ services:
   # 后端初始化服务（只在首次启动或手动触发时运行）
   # 负责：
   # 1. 运行数据库迁移（alembic upgrade head）
-  # 2. 创建初始管理员用户（admin@example.com / admin123）
+  # 2. 创建初始管理员用户
   # 3. 创建 Demo 站点（医学科普）和初始化医学知识文档
   # 4. 初始化 RustFS 对象存储
   backend-init:
@@ -110,7 +110,6 @@ services:
       - /app/.venv
       - /app/__pycache__
       - /app/.pytest_cache
-      - /app/**/__pycache__
     depends_on:
       - postgres
       - rustfs
@@ -126,34 +125,20 @@ services:
         uv run alembic upgrade head &&
         echo '✅ 数据库迁移完成' &&
         echo '' &&
-        echo ' 🔐 初始化平台管理员...' &&
-        echo '✅ 平台管理员初始化完成' &&
-        echo '' &&
-        echo ' 初始化 Health 站点和医学知识文档...' &&
-        uv run python scripts/init_health_tenant.py &&
-        echo '✅ Health 数据初始化完成' &&
-        echo '' &&
-        echo '' &&
-        echo '🗄️  初始化 RustFS 对象存储...' &&
-        uv run python scripts/init_rustfs.py &&
-        echo '✅ RustFS 初始化完成' &&
+        echo '� 执行系统资源初始化 (多租户 / 知识库 / 对象存储)...' &&
+        uv run python scripts/init.py &&
         echo '' &&
         echo '==========================================' &&
         echo '🎉 CatWiki 初始化完成！' &&
         echo '==========================================' &&
         echo '' &&
-        echo '📋 默认管理员账号：' &&
-        echo '   📧 邮箱: admin@example.com' &&
-        echo '   🔑 密码: admin123' &&
+        echo '📋 默认账号请查看登录页面提示' &&
         echo '' &&
-        echo '📚 Health 站点：' &&
-        echo '   🔗 访问: http://localhost:8002/health' &&
-        echo '' &&
-        echo '🔧 管理后台：' &&
+        echo ' 管理后台：' &&
         echo '   🔗 访问: http://localhost:8001' &&
         echo '' &&
         echo '📖 API 文档：' &&
-        echo '   🔗 访问: http://localhost:3000/docs' &&
+        echo '   🔗 访问: http://localhost:8000/docs' &&
         echo '' &&
         echo '📚 文档站点：' &&
         echo '   🔗 访问: http://localhost:8003' &&
@@ -198,9 +183,7 @@ services:
       # 排除不需要同步的目录（保留容器内的虚拟环境）
       - /app/.venv
       - /app/__pycache__
-      - /app/**/__pycache__
       - /app/.git
-      - /app/*.pyc
       - /app/.pytest_cache
     depends_on:
       postgres:

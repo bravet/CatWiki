@@ -76,6 +76,7 @@ export class BotService {
     /**
      * Create Site Chat Completion
      * 创建聊天补全 (专用接口，兼容 OpenAI 格式)
+     * [企业版专属功能]
      * @returns ChatCompletionResponse Successful Response
      * @throws ApiError
      */

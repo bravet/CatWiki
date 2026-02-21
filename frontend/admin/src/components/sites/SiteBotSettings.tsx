@@ -19,6 +19,7 @@
 
 "use client"
 
+import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -32,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Bot, Code, MessageCircle, ShieldCheck, Save, Eye, EyeOff, RefreshCw, Copy, ChevronDown, ChevronUp, MessageSquare, Crown } from "lucide-react"
+import { Bot, Code, ShieldCheck, Save, Eye, EyeOff, RefreshCw, Copy, ChevronDown, ChevronUp, Crown } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ChatWidgetPreview } from "@/components/features/ChatWidgetPreview"
 import { cn } from "@/lib/utils"
@@ -65,6 +66,16 @@ interface SiteBotSettingsProps {
       token: string
       encodingAesKey: string
     }
+    feishuBot: {
+      enabled: boolean
+      appId: string
+      appSecret: string
+    }
+    dingtalkBot: {
+      enabled: boolean
+      clientId: string
+      clientSecret: string
+    }
   }
   onChange: (section: string, field: string, value: any) => void
 }
@@ -75,15 +86,19 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
   const [showKey, setShowKey] = useState(false)
   const [showWecomToken, setShowWecomToken] = useState(false)
   const [showWecomAESKey, setShowWecomAESKey] = useState(false)
+  const [showFeishuAppSecret, setShowFeishuAppSecret] = useState(false)
+  const [showDingtalkClientSecret, setShowDingtalkClientSecret] = useState(false)
   const isDemoMode = useDemoMode()
   const { data: healthData } = useHealth()
   const isCommunity = healthData?.edition === 'community'
 
-  const { webWidget, apiBot, wecomSmartRobot } = config || { webWidget: {}, apiBot: {}, wecomSmartRobot: {} } as any
+  const { webWidget, apiBot, wecomSmartRobot, feishuBot, dingtalkBot } = config || { webWidget: {}, apiBot: {}, wecomSmartRobot: {}, feishuBot: {}, dingtalkBot: {} } as any
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
     webWidget: webWidget?.enabled || false,
     apiBot: apiBot?.enabled || false,
-    wecomSmartRobot: wecomSmartRobot?.enabled || false
+    wecomSmartRobot: wecomSmartRobot?.enabled || false,
+    feishuBot: feishuBot?.enabled || false,
+    dingtalkBot: dingtalkBot?.enabled || false
   })
 
   const toggleExpand = (card: string) => {
@@ -474,8 +489,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
               className="flex items-center gap-3 cursor-pointer flex-1"
               onClick={() => toggleExpand("wecomSmartRobot")}
             >
-              <div className="p-2 bg-blue-50 rounded-lg text-blue-600 border border-blue-100">
-                <MessageSquare className="h-5 w-5" />
+              <div className="p-1.5 rounded-lg border border-slate-100">
+                <Image src="/icons/wecom.svg" alt="企业微信" width={28} height={28} className="rounded" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -628,6 +643,286 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                 </div>
               </div>
             </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* 飞书机器人 */}
+      <Card className="border-slate-200/60 shadow-sm rounded-2xl overflow-hidden mt-6">
+        <CardHeader className="border-b border-slate-50 pb-4">
+          <div className="flex items-center justify-between">
+            <div
+              className="flex items-center gap-3 cursor-pointer flex-1"
+              onClick={() => toggleExpand("feishuBot")}
+            >
+              <div className="p-1.5 rounded-lg border border-slate-100">
+                <Image src="/icons/feishu.svg" alt="飞书" width={28} height={28} className="rounded" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-xl font-bold">飞书机器人</CardTitle>
+                  {expandedCards.feishuBot ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                </div>
+                <CardDescription>
+                  在飞书中与您的知识库对话
+                </CardDescription>
+              </div>
+            </div>
+            <label
+              className={`flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300 transition-colors ${isDemoMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={feishuBot?.enabled ?? false}
+                onChange={(e) => {
+                  if (isDemoMode) return
+                  onChange("feishuBot", "enabled", e.target.checked)
+                  if (e.target.checked) setExpandedCards(prev => ({ ...prev, feishuBot: true }))
+                }}
+                disabled={isDemoMode}
+                className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-slate-700">启用</span>
+            </label>
+          </div>
+        </CardHeader>
+        {expandedCards.feishuBot && (
+          <CardContent className="space-y-6 pt-6 animate-in fade-in duration-300">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    App ID <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      placeholder="cli_xxxxxxxxxxxxxxxxxx"
+                      value={feishuBot?.appId || ""}
+                      onChange={(e) => onChange("feishuBot", "appId", e.target.value)}
+                      readOnly={isDemoMode && feishuBot?.appId === "********"}
+                      autoComplete="off"
+                      className="rounded-xl border-slate-200 h-11 pr-16 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = feishuBot?.appId || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("App ID 已复制")
+                        }}
+                        disabled={!feishuBot?.enabled || (isDemoMode && feishuBot?.appId === "********")}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    App Secret <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      type={showFeishuAppSecret ? "text" : "password"}
+                      placeholder="飞书应用 App Secret"
+                      value={feishuBot?.appSecret || ""}
+                      onChange={(e) => onChange("feishuBot", "appSecret", e.target.value)}
+                      readOnly={isDemoMode && feishuBot?.appSecret === "********"}
+                      autoComplete="new-password"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg"
+                        onClick={() => setShowFeishuAppSecret(!showFeishuAppSecret)}
+                        disabled={!feishuBot?.enabled}
+                        type="button"
+                      >
+                        {showFeishuAppSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = feishuBot?.appSecret || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("App Secret 已复制")
+                        }}
+                        disabled={!feishuBot?.enabled || (isDemoMode && feishuBot?.appSecret === "********")}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {feishuBot?.enabled && (
+              <div className="flex gap-4 mt-2">
+                <div className="min-w-[120px]" />
+                <div className="flex-1 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                  <p className="text-xs font-semibold text-indigo-900 mb-2">配置说明：</p>
+                  <ol className="text-[11px] text-indigo-700 space-y-1.5 list-decimal list-inside">
+                    <li>在飞书开放平台创建「企业自建应用」并开启机器人能力</li>
+                    <li>在「凭证与基础信息」页获取 App ID 和 App Secret</li>
+                    <li>在「事件与回调」中选择「使用长连接接收事件」</li>
+                    <li>添加「接收消息 (im.message.receive_v1)」事件并配置权限</li>
+                    <li>发布应用版本后，将 App ID 和 App Secret 填入上方输入框</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* 钉钉机器人 */}
+      <Card className="border-slate-200/60 shadow-sm rounded-2xl overflow-hidden mt-6">
+        <CardHeader className="border-b border-slate-50 pb-4">
+          <div className="flex items-center justify-between">
+            <div
+              className="flex items-center gap-3 cursor-pointer flex-1"
+              onClick={() => toggleExpand("dingtalkBot")}
+            >
+              <div className="p-1.5 rounded-lg border border-slate-100">
+                <Image src="/icons/dingtalk.svg" alt="钉钉" width={28} height={28} className="rounded" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-xl font-bold">钉钉机器人</CardTitle>
+                  {expandedCards.dingtalkBot ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                </div>
+                <CardDescription>
+                  在钉钉中与您的知识库对话
+                </CardDescription>
+              </div>
+            </div>
+            <label
+              className={`flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300 transition-colors ${isDemoMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={dingtalkBot?.enabled ?? false}
+                onChange={(e) => {
+                  if (isDemoMode) return
+                  onChange("dingtalkBot", "enabled", e.target.checked)
+                  if (e.target.checked) setExpandedCards(prev => ({ ...prev, dingtalkBot: true }))
+                }}
+                disabled={isDemoMode}
+                className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-slate-700">启用</span>
+            </label>
+          </div>
+        </CardHeader>
+        {expandedCards.dingtalkBot && (
+          <CardContent className="space-y-6 pt-6 animate-in fade-in duration-300">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    Client ID <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      placeholder="dingxxxxxxxxxx"
+                      value={dingtalkBot?.clientId || ""}
+                      onChange={(e) => onChange("dingtalkBot", "clientId", e.target.value)}
+                      readOnly={isDemoMode && dingtalkBot?.clientId === "********"}
+                      autoComplete="off"
+                      className="rounded-xl border-slate-200 h-11 pr-16 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = dingtalkBot?.clientId || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("Client ID 已复制")
+                        }}
+                        disabled={!dingtalkBot?.enabled || (isDemoMode && dingtalkBot?.clientId === "********")}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    Client Secret <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      type={showDingtalkClientSecret ? "text" : "password"}
+                      placeholder="钉钉应用 Client Secret"
+                      value={dingtalkBot?.clientSecret || ""}
+                      onChange={(e) => onChange("dingtalkBot", "clientSecret", e.target.value)}
+                      readOnly={isDemoMode && dingtalkBot?.clientSecret === "********"}
+                      autoComplete="new-password"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg"
+                        onClick={() => setShowDingtalkClientSecret(!showDingtalkClientSecret)}
+                        disabled={!dingtalkBot?.enabled}
+                        type="button"
+                      >
+                        {showDingtalkClientSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = dingtalkBot?.clientSecret || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("Client Secret 已复制")
+                        }}
+                        disabled={!dingtalkBot?.enabled || (isDemoMode && dingtalkBot?.clientSecret === "********")}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {dingtalkBot?.enabled && (
+              <div className="flex gap-4 mt-2">
+                <div className="min-w-[120px]" />
+                <div className="flex-1 p-4 bg-orange-50 border border-orange-100 rounded-xl">
+                  <p className="text-xs font-semibold text-orange-900 mb-2">配置说明：</p>
+                  <ol className="text-[11px] text-orange-700 space-y-1.5 list-decimal list-inside">
+                    <li>在钉钉开放平台创建「企业内部应用」并开启机器人能力</li>
+                    <li>在「凭证与基础信息」页获取 Client ID 和 Client Secret</li>
+                    <li>在「事件与回调」中配置 Stream 模式</li>
+                    <li>添加消息接收相关权限</li>
+                    <li>发布应用后，将 Client ID 和 Client Secret 填入上方输入框</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>

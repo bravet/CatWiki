@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Dakewe-Reranker 实现
+"""Reranker 实现
 
 使用 OpenAI 兼容的重排序接口对向量检索结果进行精排。
 """

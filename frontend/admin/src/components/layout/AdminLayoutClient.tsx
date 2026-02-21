@@ -46,18 +46,19 @@ const SiteSwitcher = dynamic(() => import('@/components/layout/SiteSwitcher').th
   loading: () => <div className="w-40 h-12 bg-slate-100 rounded-xl" />
 })
 
-const TenantSwitcher = dynamic(() => import('@/components/layout/TenantSwitcher').then(mod => ({ default: mod.TenantSwitcher })), {
-  ssr: false,
-  loading: () => <div className="w-40 h-12 bg-slate-100 rounded-xl" />
-})
+const TenantSwitcher = dynamic(
+  () => import('@/ee/components/TenantSwitcher').then(mod => ({ default: mod.TenantSwitcher })).catch(() => ({ default: () => null })),
+  { ssr: false }
+)
 
 const SettingsModal = dynamic(() => import('@/components/settings/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
   ssr: false
 })
 
-const PlatformModal = dynamic(() => import('@/components/platform/PlatformModal').then(mod => ({ default: mod.PlatformModal })), {
-  ssr: false
-})
+const PlatformModal = dynamic(
+  () => import('@/ee/components/PlatformModal').then(mod => ({ default: mod.PlatformModal })).catch(() => ({ default: () => null })),
+  { ssr: false }
+)
 
 /**
  * 管理后台客户端布局组件

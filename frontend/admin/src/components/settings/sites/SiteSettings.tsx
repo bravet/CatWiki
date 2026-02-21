@@ -88,6 +88,9 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
         ...siteData.bot_config,
         webWidget: { ...initialConfigs.botConfig.webWidget, ...siteData.bot_config.webWidget },
         apiBot: { ...initialConfigs.botConfig.apiBot, ...siteData.bot_config.apiBot },
+        wecomSmartRobot: { ...initialConfigs.botConfig.wecomSmartRobot, ...siteData.bot_config.wecomSmartRobot },
+        feishuBot: { ...initialConfigs.botConfig.feishuBot, ...siteData.bot_config.feishuBot },
+        dingtalkBot: { ...initialConfigs.botConfig.dingtalkBot, ...siteData.bot_config.dingtalkBot },
       } : initialConfigs.botConfig
 
       setName(siteData.name)
@@ -155,6 +158,9 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
           ...updatedSite.bot_config,
           webWidget: { ...initialConfigs.botConfig.webWidget, ...updatedSite.bot_config.webWidget },
           apiBot: { ...initialConfigs.botConfig.apiBot, ...updatedSite.bot_config.apiBot },
+          wecomSmartRobot: { ...initialConfigs.botConfig.wecomSmartRobot, ...updatedSite.bot_config.wecomSmartRobot },
+          feishuBot: { ...initialConfigs.botConfig.feishuBot, ...updatedSite.bot_config.feishuBot },
+          dingtalkBot: { ...initialConfigs.botConfig.dingtalkBot, ...updatedSite.bot_config.dingtalkBot },
         } : initialConfigs.botConfig
 
         // 更新本地状态，以便 UI 立即映射新生成的 Key 等

@@ -100,29 +100,14 @@ services:
         uv run alembic upgrade head &&
         echo '✅ 数据库迁移完成' &&
         echo '' &&
-        echo '🔐 初始化平台管理员...' &&
-        echo '✅ 平台管理员初始化完成' &&
-        echo '' &&
-        echo '📚 初始化 Health 站点和医学知识文档...' &&
-        uv run python scripts/init_health_tenant.py &&
-        echo '✅ Health 数据初始化完成' &&
-        echo '' &&
-        echo '' &&
-        echo '🗄️  初始化 RustFS 对象存储...' &&
-        uv run python scripts/init_rustfs.py &&
-        echo '✅ RustFS 初始化完成' &&
+        echo '🔧 执行系统资源初始化 (多租户 / 知识库 / 对象存储)...' &&
+        uv run python scripts/init.py &&
         echo '' &&
         echo '==========================================' &&
         echo '🎉 CatWiki 生产环境初始化完成！' &&
         echo '==========================================' &&
         echo '' &&
-        echo '📋 默认管理员账号：' &&
-        echo '   📧 邮箱: admin@example.com' &&
-        echo '   🔑 密码: admin123' &&
-        echo '' &&
-        echo '📚 Health 站点：' &&
-        echo '   🌐 域名: health' &&
-        echo '' &&
+        echo '📋 默认账号请查看登录页面提示' &&
         echo '' &&
         echo '==========================================' &&
         echo ''

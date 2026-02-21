@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # 环境配置
     ENVIRONMENT: str = Field(default="local", pattern="^(local|dev|prod)$")
     DEBUG: bool = Field(default=False)
-    CATWIKI_EDITION: str = Field(default="community", pattern="^(community|enterprise)$")
+    CATWIKI_EDITION: str = "community"  # CE: hardcoded, cannot be overridden
     CATWIKI_LICENSE_KEY: str | None = Field(default=None)
 
     # 数据库配置

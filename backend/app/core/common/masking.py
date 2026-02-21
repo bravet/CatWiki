@@ -59,6 +59,22 @@ def mask_bot_config_inplace(config_value: dict) -> None:
         if "encodingAesKey" in wecom:
             wecom["encodingAesKey"] = mask_variable(wecom["encodingAesKey"])
 
+    # 3. Feishu Bot
+    feishu = config_value.get("feishuBot", {})
+    if feishu:
+        if "appId" in feishu:
+            feishu["appId"] = mask_variable(feishu["appId"])
+        if "appSecret" in feishu:
+            feishu["appSecret"] = mask_variable(feishu["appSecret"])
+
+    # 4. DingTalk Bot
+    dingtalk = config_value.get("dingtalkBot", {})
+    if dingtalk:
+        if "clientId" in dingtalk:
+            dingtalk["clientId"] = mask_variable(dingtalk["clientId"])
+        if "clientSecret" in dingtalk:
+            dingtalk["clientSecret"] = mask_variable(dingtalk["clientSecret"])
+
 
 def filter_client_site_data(site: Any) -> Any:
     """过滤客户端站点数据中的敏感信息"""

@@ -45,6 +45,16 @@ export type BotConfig = {
     token: string
     encodingAesKey: string
   }
+  feishuBot: {
+    enabled: boolean
+    appId: string
+    appSecret: string
+  }
+  dingtalkBot: {
+    enabled: boolean
+    clientId: string
+    clientSecret: string
+  }
 }
 
 export type AIConfigs = {
@@ -107,6 +117,16 @@ export const initialConfigs: AIConfigs = {
       callbackUrl: "",
       token: "",
       encodingAesKey: ""
+    },
+    feishuBot: {
+      enabled: false,
+      appId: "",
+      appSecret: ""
+    },
+    dingtalkBot: {
+      enabled: false,
+      clientId: "",
+      clientSecret: ""
     }
   }
 }
