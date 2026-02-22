@@ -86,9 +86,7 @@ class VectorStoreManager:
                     if mode == "custom":
                         from app.core.web.exceptions import BadRequestException
 
-                        raise BadRequestException(
-                            f"已开启自定义向量化模式，但未配置 API Key。"
-                        )
+                        raise BadRequestException(f"已开启自定义向量化模式，但未配置 API Key。")
 
                     raise ValueError(
                         f"未找到有效的 Embedding 配置 (租户: {tenant_id}, 模式: {mode})，请检查 AI 模型配置。"

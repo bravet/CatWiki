@@ -283,6 +283,8 @@ export function CreateSiteForm({ onCancel, onSuccess }: CreateSiteFormProps) {
                     placeholder="如留空则默认为 123456"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
+                    autoComplete="new-password"
+                    name="site_admin_password_new"
                   />
                   <p className="text-[10px] text-slate-500">若该邮箱已存在，系统将自动关联无需密码；若为新用户，此密码将作为初始密码。</p>
                 </div>

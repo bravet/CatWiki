@@ -50,6 +50,7 @@ import { DocumentStatus } from "@/lib/api-client"
 import { toast } from "sonner"
 import { getRoutePath, useRouteContext } from "@/lib/routing"
 import { useSiteData, useDocument, useCollectionTree, useUpdateDocument, documentKeys } from "@/hooks"
+import { useCurrentTenant } from "@/hooks/useHealth"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/api-client"
 import { env } from "@/lib/env"
@@ -66,6 +67,8 @@ export default function EditDocumentPage() {
   const documentId = parseInt(params.id as string)
   const currentSite = useSiteData()
   const siteId = currentSite.id
+  const { data: currentTenant } = useCurrentTenant()
+  const tenantSlug = currentTenant?.slug || 'default'
 
   const [title, setTitle] = useState("")
   const [summary, setSummary] = useState("")
@@ -125,7 +128,7 @@ export default function EditDocumentPage() {
   const handlePreview = () => {
     const clientUrl = env.NEXT_PUBLIC_CLIENT_URL
     const slug = routeContext.slug || currentSite.slug || 'demo'
-    window.open(`${clientUrl}/${slug}?documentId=${documentId}`, '_blank')
+    window.open(`${clientUrl}/${tenantSlug}/${slug}?documentId=${documentId}`, '_blank')
   }
 
   const handleSave = async (newStatus?: DocumentStatus) => {

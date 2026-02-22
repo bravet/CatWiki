@@ -51,16 +51,20 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
   const [showWecomAESKey, setShowWecomAESKey] = useState(false)
   const [showFeishuAppSecret, setShowFeishuAppSecret] = useState(false)
   const [showDingtalkClientSecret, setShowDingtalkClientSecret] = useState(false)
+  const [showWecomKefuSecret, setShowWecomKefuSecret] = useState(false)
+  const [showWecomKefuToken, setShowWecomKefuToken] = useState(false)
+  const [showWecomKefuAESKey, setShowWecomKefuAESKey] = useState(false)
   const { data: healthData } = useHealth()
   const isCommunity = healthData?.edition === 'community'
 
-  const { webWidget, apiBot, wecomSmartRobot, feishuBot, dingtalkBot } = config
+  const { webWidget, apiBot, wecomSmartRobot, feishuBot, dingtalkBot, wecomKefu } = config
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
     webWidget: webWidget?.enabled || false,
     apiBot: apiBot?.enabled || false,
     wecomSmartRobot: wecomSmartRobot?.enabled || false,
     feishuBot: feishuBot?.enabled || false,
-    dingtalkBot: dingtalkBot?.enabled || false
+    dingtalkBot: dingtalkBot?.enabled || false,
+    wecomKefu: wecomKefu?.enabled || false
   })
 
   const toggleExpand = (card: string) => {
@@ -73,12 +77,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
       const endpoint = `${env.NEXT_PUBLIC_API_URL}/v1/bot/site-completions`
       onChange("apiBot", "apiEndpoint", endpoint)
     }
-    // 自动同步 WeCom Smart Robot 回调地址
-    if (config?.wecomSmartRobot?.enabled && !config.wecomSmartRobot.callbackUrl) {
-      const endpoint = `${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart-robot?site_id=${siteId}`
-      onChange("wecomSmartRobot", "callbackUrl", endpoint)
-    }
-  }, [config?.apiBot?.enabled, config?.apiBot?.apiEndpoint, config?.wecomSmartRobot?.enabled, config?.wecomSmartRobot?.callbackUrl, onChange, siteId])
+  }, [config?.apiBot?.enabled, config?.apiBot?.apiEndpoint, onChange, siteId])
 
   return (
     <div className="space-y-6">
@@ -313,6 +312,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                     onChange={(e) => onChange("apiBot", "apiKey", e.target.value)}
                     placeholder="在此设置访问该接口的密钥"
                     disabled={!apiBot.enabled}
+                    autoComplete="new-password"
+                    name="api_bot_key_disable_autofill"
                     className="bg-white font-mono rounded-xl pr-28 h-11"
                   />
                   <div className="absolute right-1 top-1.5 flex gap-1">
@@ -449,7 +450,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                   {expandedCards.wecomSmartRobot ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 </div>
                 <CardDescription>
-                  直接在企业微信中与您的知识库对话
+                  在企业微信中与您的知识库对话
                 </CardDescription>
               </div>
             </div>
@@ -484,7 +485,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                   <div className="flex-1 space-y-2">
                     <div className="relative group">
                       <Input
-                        value={wecomSmartRobot?.callbackUrl || `${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart-robot?site_id=${siteId}`}
+                        value={`${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart-robot?site_id=${siteId}`}
                         readOnly
                         className="bg-slate-50 font-mono text-xs pr-20 border-slate-200 rounded-xl h-11"
                       />
@@ -493,7 +494,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                         size="sm"
                         className="absolute right-1 top-1.5 h-8 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg px-2"
                         onClick={() => {
-                          const endpoint = wecomSmartRobot?.callbackUrl || `${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart-robot?site_id=${siteId}`
+                          const endpoint = `${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart-robot?site_id=${siteId}`
                           navigator.clipboard.writeText(endpoint)
                           toast.success("回调地址已复制")
                         }}
@@ -517,6 +518,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       placeholder="WeCom Robot Token"
                       value={wecomSmartRobot?.token || ""}
                       onChange={(e) => onChange("wecomSmartRobot", "token", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_robot_token_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -558,6 +561,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       placeholder="EncodingAESKey"
                       value={wecomSmartRobot?.encodingAesKey || ""}
                       onChange={(e) => onChange("wecomSmartRobot", "encodingAesKey", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_robot_aes_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -590,6 +595,22 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                 </div>
               </div>
             </div>
+
+            {wecomSmartRobot?.enabled && (
+              <div className="flex gap-4 mt-2">
+                <div className="min-w-[120px]" />
+                <div className="flex-1 p-4 bg-sky-50 border border-sky-100 rounded-xl">
+                  <p className="text-xs font-semibold text-sky-900 mb-2">配置说明：</p>
+                  <ol className="text-[11px] text-sky-700 space-y-1.5 list-decimal list-inside">
+                    <li>登录企业微信管理后台并进入「安全与管理」-「管理工具」-「智能机器人」</li>
+                    <li>点击「添加机器人」，选择「API 模式」进行创建</li>
+                    <li>在机器人设置页面找到「API配置」</li>
+                    <li>将上方的回调地址、Token 和 AES Key (即 EncodingAESKey) 填入对应表单项</li>
+                    <li>保存配置并启用机器人后，即可在企业微信中享受知识库对话能力</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>
@@ -645,7 +666,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       placeholder="cli_xxxxxxxxxxxxxxxxxx"
                       value={feishuBot?.appId || ""}
                       onChange={(e) => onChange("feishuBot", "appId", e.target.value)}
-                      autoComplete="off"
+                      autoComplete="new-password"
+                      name="feishu_appid_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-16 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -678,6 +700,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       value={feishuBot?.appSecret || ""}
                       onChange={(e) => onChange("feishuBot", "appSecret", e.target.value)}
                       autoComplete="new-password"
+                      name="feishu_appsecret_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -781,7 +804,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       placeholder="dingxxxxxxxxxx"
                       value={dingtalkBot?.clientId || ""}
                       onChange={(e) => onChange("dingtalkBot", "clientId", e.target.value)}
-                      autoComplete="off"
+                      autoComplete="new-password"
+                      name="dingtalk_clientid_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-16 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -814,6 +838,7 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       value={dingtalkBot?.clientSecret || ""}
                       onChange={(e) => onChange("dingtalkBot", "clientSecret", e.target.value)}
                       autoComplete="new-password"
+                      name="dingtalk_secret_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -854,7 +879,8 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                       placeholder="钉钉机器人模板 ID"
                       value={dingtalkBot?.templateId || ""}
                       onChange={(e) => onChange("dingtalkBot", "templateId", e.target.value)}
-                      autoComplete="off"
+                      autoComplete="new-password"
+                      name="dingtalk_templateid_disable_autofill"
                       className="rounded-xl border-slate-200 h-11 pr-16 font-mono"
                     />
                     <div className="absolute right-1 top-1.5 flex gap-1">
@@ -889,7 +915,262 @@ export function SiteBotSettings({ siteId, config, onChange }: SiteBotSettingsPro
                     <li>在机器人配置中创建或绑定消息模板并获取模板 ID</li>
                     <li>在「事件与回调」中配置 Stream 模式</li>
                     <li>添加消息接收相关权限</li>
-                    <li>发布应用后，将 Client ID、Client Secret、模板 ID 填入上方输入框</li>
+                    <li>发布应用后，将 Client ID、Client Secret、Template ID 填入上方输入框</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* 企业微信客服 */}
+      <Card className="border-slate-200/60 shadow-sm rounded-2xl overflow-hidden mt-6">
+        <CardHeader className="border-b border-slate-50 pb-4">
+          <div className="flex items-center justify-between">
+            <div
+              className="flex items-center gap-3 cursor-pointer flex-1"
+              onClick={() => toggleExpand("wecomKefu")}
+            >
+              <div className="p-1.5 rounded-lg border border-slate-100">
+                <Image src="/icons/wecom.svg" alt="企业微信" width={28} height={28} className="rounded" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-xl font-bold">企业微信客服</CardTitle>
+                  {expandedCards.wecomKefu ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                </div>
+                <CardDescription>
+                  对接企业微信客服，使用知识库自动回复客户咨询
+                </CardDescription>
+              </div>
+            </div>
+            <label
+              className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={wecomKefu?.enabled ?? false}
+                onChange={(e) => {
+                  onChange("wecomKefu", "enabled", e.target.checked)
+                  if (e.target.checked) setExpandedCards(prev => ({ ...prev, wecomKefu: true }))
+                }}
+                className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-slate-700">启用</span>
+            </label>
+          </div>
+        </CardHeader>
+        {expandedCards.wecomKefu && (
+          <CardContent className="space-y-6 pt-6 animate-in fade-in duration-300">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-4">
+                  <div className="min-w-[120px] pt-3 flex flex-col items-start justify-start">
+                    <label className="text-sm font-semibold text-slate-700">回调地址</label>
+                    <Badge variant="outline" className="text-[9px] mt-1 bg-slate-50 text-slate-500 border-slate-200 font-bold px-1.5 h-4">
+                      系统预设
+                    </Badge>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="relative group">
+                      <Input
+                        value={`${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-kefu?site_id=${siteId}`}
+                        readOnly
+                        className="bg-slate-50 font-mono text-xs pr-20 border-slate-200 rounded-xl h-11"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1.5 h-8 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg px-2"
+                        onClick={() => {
+                          const endpoint = `${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-kefu?site_id=${siteId}`
+                          navigator.clipboard.writeText(endpoint)
+                          toast.success("回调地址已复制")
+                        }}
+                      >
+                        复制
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      请在微信客服管理后台“事件和消息接收”配置中填写此地址
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    企业 ID (CorpID) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      placeholder="企业微信 CorpID"
+                      value={wecomKefu?.corpId || ""}
+                      onChange={(e) => onChange("wecomKefu", "corpId", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_kefu_corpid_disable_autofill"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = wecomKefu?.corpId || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("CorpID 已复制")
+                        }}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    客服 Secret <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      type={showWecomKefuSecret ? "text" : "password"}
+                      placeholder="微信客服 Secret"
+                      value={wecomKefu?.secret || ""}
+                      onChange={(e) => onChange("wecomKefu", "secret", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_kefu_secret_disable_autofill"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg"
+                        onClick={() => setShowWecomKefuSecret(!showWecomKefuSecret)}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        {showWecomKefuSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = wecomKefu?.secret || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("Secret 已复制")
+                        }}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    Token <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      type={showWecomKefuToken ? "text" : "password"}
+                      placeholder="WeCom Kefu Token"
+                      value={wecomKefu?.token || ""}
+                      onChange={(e) => onChange("wecomKefu", "token", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_kefu_token_disable_autofill"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg"
+                        onClick={() => setShowWecomKefuToken(!showWecomKefuToken)}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        {showWecomKefuToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = wecomKefu?.token || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("Token 已复制")
+                        }}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-semibold text-slate-700 min-w-[120px]">
+                    AES Key <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex-1 relative group">
+                    <Input
+                      type={showWecomKefuAESKey ? "text" : "password"}
+                      placeholder="EncodingAESKey"
+                      value={wecomKefu?.encodingAesKey || ""}
+                      onChange={(e) => onChange("wecomKefu", "encodingAesKey", e.target.value)}
+                      autoComplete="new-password"
+                      name="wecom_kefu_aes_disable_autofill"
+                      className="rounded-xl border-slate-200 h-11 pr-28 font-mono"
+                    />
+                    <div className="absolute right-1 top-1.5 flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg"
+                        onClick={() => setShowWecomKefuAESKey(!showWecomKefuAESKey)}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        {showWecomKefuAESKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-[10px] hover:bg-slate-200 rounded-lg font-semibold px-2 text-slate-500"
+                        onClick={() => {
+                          const val = wecomKefu?.encodingAesKey || ""
+                          navigator.clipboard.writeText(val)
+                          toast.success("AES Key 已复制")
+                        }}
+                        disabled={!wecomKefu?.enabled}
+                        type="button"
+                      >
+                        复制
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {wecomKefu?.enabled && (
+              <div className="flex gap-4 mt-2">
+                <div className="min-w-[120px]" />
+                <div className="flex-1 p-4 bg-teal-50 border border-teal-100 rounded-xl">
+                  <p className="text-xs font-semibold text-teal-900 mb-2">配置说明：</p>
+                  <ol className="text-[11px] text-teal-700 space-y-1.5 list-decimal list-inside">
+                    <li>在企业微信管理后台进入「应用管理」-「微信客服」</li>
+                    <li>在「开发配置」中获取企业 ID 和 Secret</li>
+                    <li>在「事件和消息接收」中开启事件接收，将回调地址、Token 和 AES Key 填入相应位置，并保存配置</li>
                   </ol>
                 </div>
               </div>

@@ -44,6 +44,6 @@ api_router.include_router(
     chat_sessions.router, prefix="/chat", tags=["chat-sessions"], dependencies=client_deps
 )
 api_router.include_router(
-    health.router, prefix="/health", tags=["health"], dependencies=client_deps
+    health.router, prefix="/health", tags=["health"]
 )
 api_router.include_router(bots.router, prefix="/bot", tags=["bot"], dependencies=client_deps)

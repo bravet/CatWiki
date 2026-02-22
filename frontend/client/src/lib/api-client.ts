@@ -20,6 +20,9 @@ import type { ApiRequestOptions } from './sdk/core/ApiRequestOptions'
 import { CancelablePromise } from './sdk/core/CancelablePromise'
 import { FetchHttpRequest } from './sdk/core/FetchHttpRequest'
 
+// ==================== SDK 类型统一导出 ====================
+export * from './sdk/models'
+
 // ==================== 配置 ====================
 
 const BASE_URL = env.NEXT_PUBLIC_API_URL
@@ -257,5 +260,4 @@ export const api = {
 
 export default api
 
-// ==================== SDK 类型统一导出 ====================
-export * from './sdk/models'
+

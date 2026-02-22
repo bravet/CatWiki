@@ -45,5 +45,6 @@ export function mergeSiteBotConfig(raw: unknown): BotConfig {
     wecomSmartRobot: mergeSection<"wecomSmartRobot">(base.wecomSmartRobot, raw.wecomSmartRobot),
     feishuBot: mergeSection<"feishuBot">(base.feishuBot, raw.feishuBot),
     dingtalkBot: mergeSection<"dingtalkBot">(base.dingtalkBot, raw.dingtalkBot),
+    wecomKefu: mergeSection<"wecomKefu">(base.wecomKefu, raw.wecomKefu),
   }
 }

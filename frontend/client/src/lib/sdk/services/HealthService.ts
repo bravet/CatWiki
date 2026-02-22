@@ -13,20 +13,10 @@ export class HealthService {
      * @returns ApiResponse_HealthResponse_ Successful Response
      * @throws ApiError
      */
-    public getClientHealth({
-        xTenantSlug,
-    }: {
-        xTenantSlug?: (string | null),
-    }): CancelablePromise<ApiResponse_HealthResponse_> {
+    public getClientHealth(): CancelablePromise<ApiResponse_HealthResponse_> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/v1/health/',
-            headers: {
-                'X-Tenant-Slug': xTenantSlug,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
         });
     }
 }

@@ -80,6 +80,7 @@ import {
   useRemoveVector,
   VectorStatus
 } from "@/hooks"
+import { useCurrentTenant } from "@/hooks/useHealth"
 import { env } from "@/lib/env"
 import { CollectionTree } from "@/components/features/documents/CollectionTree"
 import { VectorRetrieveModal } from "@/components/features/documents/VectorRetrieveModal"
@@ -139,6 +140,8 @@ export default function DocumentsPage() {
   const currentSite = useSiteData()
   const siteId = currentSite.id
   const queryClient = useQueryClient()
+  const { data: currentTenant } = useCurrentTenant()
+  const tenantSlug = currentTenant?.slug || 'default'
 
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 500)
@@ -769,7 +772,7 @@ export default function DocumentsPage() {
             size="sm"
             onClick={() => {
               const clientUrl = env.NEXT_PUBLIC_CLIENT_URL
-              window.open(`${clientUrl}/${currentSite.slug}`, '_blank')
+              window.open(`${clientUrl}/${tenantSlug}/${currentSite.slug}`, '_blank')
             }}
             className="flex items-center gap-1.5 md:gap-2 border-purple-200 text-purple-600 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300 transition-all shadow-sm"
           >
@@ -1120,7 +1123,7 @@ export default function DocumentsPage() {
                                     onClick={() => {
                                       const clientUrl = env.NEXT_PUBLIC_CLIENT_URL
                                       const slug = routeContext.slug || currentSite.slug || 'demo'
-                                      window.open(`${clientUrl}/${slug}?documentId=${doc.id}`, '_blank')
+                                      window.open(`${clientUrl}/${tenantSlug}/${slug}?documentId=${doc.id}`, '_blank')
                                     }}
                                   >
                                     {doc.title}
@@ -1240,9 +1243,9 @@ export default function DocumentsPage() {
                           <div
                             className="relative w-full aspect-[3/2] overflow-hidden bg-slate-50 cursor-pointer shrink-0"
                             onClick={() => {
-                              const clientUrl = process.env.NEXT_PUBLIC_CLIENT_URL || 'http://localhost:8002'
+                              const clientUrl = env.NEXT_PUBLIC_CLIENT_URL
                               const slug = routeContext.slug || currentSite.slug || 'demo'
-                              window.open(`${clientUrl}/${slug}?documentId=${doc.id}`, '_blank')
+                              window.open(`${clientUrl}/${tenantSlug}/${slug}?documentId=${doc.id}`, '_blank')
                             }}
                           >
                             <OptimizedImage
@@ -1275,9 +1278,9 @@ export default function DocumentsPage() {
                             <h3
                               className="text-sm font-bold text-slate-900 mb-1.5 line-clamp-2 leading-snug cursor-pointer hover:text-primary transition-colors shrink-0"
                               onClick={() => {
-                                const clientUrl = process.env.NEXT_PUBLIC_CLIENT_URL || 'http://localhost:8002'
+                                const clientUrl = env.NEXT_PUBLIC_CLIENT_URL
                                 const slug = routeContext.slug || currentSite.slug || 'demo'
-                                window.open(`${clientUrl}/${slug}?documentId=${doc.id}`, '_blank')
+                                window.open(`${clientUrl}/${tenantSlug}/${slug}?documentId=${doc.id}`, '_blank')
                               }}
                             >
                               {doc.title}

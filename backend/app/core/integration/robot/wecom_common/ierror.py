@@ -1,13 +1,10 @@
 #!/usr/bin/env python
-#########################################################################
-# Author: jonyqin
-# Created Time: Thu 11 Sep 2014 01:53:58 PM CST
-# File Name: ierror.py
-# Description:定义错误码含义
-#########################################################################
+# Copyright 2026 CatWiki Authors
+
 WXBizMsgCrypt_OK = 0
 WXBizMsgCrypt_ValidateSignature_Error = -40001
 WXBizMsgCrypt_ParseJson_Error = -40002
+WXBizMsgCrypt_ParseXml_Error = -40002
 WXBizMsgCrypt_ComputeSignature_Error = -40003
 WXBizMsgCrypt_IllegalAesKey = -40004
 WXBizMsgCrypt_ValidateCorpid_Error = -40005

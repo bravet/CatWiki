@@ -1,7 +1,8 @@
 from app.core.integration.robot.base import BaseRobotAdapter
 from app.core.integration.robot.dingtalk.adapter import DingTalkAdapter
 from app.core.integration.robot.feishu.adapter import FeishuAdapter
-from app.core.integration.robot.wecom.adapter import WeComAdapter
+from app.core.integration.robot.wecom_robot.adapter import WeComAdapter
+from app.core.integration.robot.wecom_kefu.adapter import WeComKefuAdapter
 
 
 class RobotFactory:
@@ -22,5 +23,7 @@ class RobotFactory:
             return DingTalkAdapter()
         elif platform == "wecom":
             return WeComAdapter()
+        elif platform == "wecom_kefu":
+            return WeComKefuAdapter()
         else:
             raise ValueError(f"暂不支持的机器人平台: {platform}")

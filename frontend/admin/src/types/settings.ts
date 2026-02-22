@@ -51,7 +51,6 @@ export type BotConfig = {
   }
   wecomSmartRobot: {
     enabled: boolean
-    callbackUrl: string
     token: string
     encodingAesKey: string
   }
@@ -65,6 +64,13 @@ export type BotConfig = {
     clientId: string
     clientSecret: string
     templateId: string
+  }
+  wecomKefu: {
+    enabled: boolean
+    corpId: string
+    secret: string
+    token: string
+    encodingAesKey: string
   }
 }
 
@@ -125,7 +131,6 @@ export const initialConfigs: AIConfigs = {
     },
     wecomSmartRobot: {
       enabled: false,
-      callbackUrl: "",
       token: "",
       encodingAesKey: ""
     },
@@ -139,6 +144,13 @@ export const initialConfigs: AIConfigs = {
       clientId: "",
       clientSecret: "",
       templateId: ""
+    },
+    wecomKefu: {
+      enabled: false,
+      corpId: "",
+      secret: "",
+      token: "",
+      encodingAesKey: ""
     }
   }
 }

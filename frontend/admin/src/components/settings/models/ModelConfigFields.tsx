@@ -74,6 +74,8 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
             value={config.model} 
             onChange={(e) => onUpdate("model", e.target.value)}
             placeholder="例如: gpt-4, claude-3-opus..."
+            autoComplete="new-password"
+            name="model_name_disable_autofill"
             className="bg-white"
           />
         </div>
@@ -86,6 +88,8 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
           value={config.apiKey} 
           onChange={(e) => onUpdate("apiKey", e.target.value)}
           placeholder="sk-..."
+          autoComplete="new-password"
+          name="model_apiKey_disable_autofill"
           className="bg-white font-mono"
         />
       </div>

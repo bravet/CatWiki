@@ -75,6 +75,18 @@ def mask_bot_config_inplace(config_value: dict) -> None:
         if "clientSecret" in dingtalk:
             dingtalk["clientSecret"] = mask_variable(dingtalk["clientSecret"])
 
+    # 5. WeCom Customer Service
+    wecom_kefu = config_value.get("wecomKefu", {})
+    if wecom_kefu:
+        if "corpId" in wecom_kefu:
+            wecom_kefu["corpId"] = mask_variable(wecom_kefu["corpId"])
+        if "secret" in wecom_kefu:
+            wecom_kefu["secret"] = mask_variable(wecom_kefu["secret"])
+        if "token" in wecom_kefu:
+            wecom_kefu["token"] = mask_variable(wecom_kefu["token"])
+        if "encodingAesKey" in wecom_kefu:
+            wecom_kefu["encodingAesKey"] = mask_variable(wecom_kefu["encodingAesKey"])
+
 
 def filter_client_site_data(site: Any) -> Any:
     """过滤客户端站点数据中的敏感信息"""

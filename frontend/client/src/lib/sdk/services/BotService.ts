@@ -84,6 +84,81 @@ export class BotService {
         });
     }
     /**
+     * Verify Kefu Url
+     * 验证回调 URL (企业微信客服设置时触发)
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public verifyKefuUrlV1BotWecomKefuGet({
+        msgSignature,
+        timestamp,
+        nonce,
+        echostr,
+        siteId,
+        xTenantSlug,
+    }: {
+        msgSignature: string,
+        timestamp: string,
+        nonce: string,
+        echostr: string,
+        siteId: number,
+        xTenantSlug?: (string | null),
+    }): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/v1/bot/wecom-kefu',
+            headers: {
+                'X-Tenant-Slug': xTenantSlug,
+            },
+            query: {
+                'msg_signature': msgSignature,
+                'timestamp': timestamp,
+                'nonce': nonce,
+                'echostr': echostr,
+                'site_id': siteId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Handle Kefu Message
+     * 处理企业微信客服消息回调 (XML 协议)
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public handleKefuMessageV1BotWecomKefuPost({
+        msgSignature,
+        timestamp,
+        nonce,
+        siteId,
+        xTenantSlug,
+    }: {
+        msgSignature: string,
+        timestamp: string,
+        nonce: string,
+        siteId: number,
+        xTenantSlug?: (string | null),
+    }): CancelablePromise<any> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/v1/bot/wecom-kefu',
+            headers: {
+                'X-Tenant-Slug': xTenantSlug,
+            },
+            query: {
+                'msg_signature': msgSignature,
+                'timestamp': timestamp,
+                'nonce': nonce,
+                'site_id': siteId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Create Site Chat Completion
      * 创建聊天补全 (专用接口，兼容 OpenAI 格式)
      * [企业版专属功能]

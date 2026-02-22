@@ -68,7 +68,8 @@ export function CustomConfigForm({ type, config, onUpdate }: CustomConfigFormPro
             onChange={(e) => onUpdate(type, "model", e.target.value)}
             placeholder="例如: gpt-4, claude-3-opus..."
             className="bg-white"
-            autoComplete="off"
+            autoComplete="new-password"
+            name="custom_model_disable_autofill"
           />
         </div>
       </div>
@@ -82,6 +83,7 @@ export function CustomConfigForm({ type, config, onUpdate }: CustomConfigFormPro
           placeholder="sk-..."
           className="bg-white font-mono"
           autoComplete="new-password"
+          name="custom_apiKey_disable_autofill"
         />
       </div>
 

@@ -199,6 +199,11 @@ class ChatService:
             site = await crud_site.get(db, id=site_id)
             tenant_id = site.tenant_id if site else None
 
+        # [Important] 设置当前线程的租户上下文，确保后续所有的 RAG/工具调用能正确识别租户
+        from app.core.infra.tenant import set_current_tenant
+
+        set_current_tenant(tenant_id)
+
         # 2. 初始化 LLM
         llm = await llm_manager.get_model(
             tenant_id=tenant_id,

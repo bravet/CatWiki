@@ -50,6 +50,7 @@ export default withMermaid(
             items: [
               { text: '网页挂件机器人', link: '/development/tech/widget-integration' },
               { text: '企业微信智能机器人', link: '/development/tech/wecom-robot' },
+              { text: '企业微信客服', link: '/development/tech/wecom-kefu' },
               { text: '飞书机器人', link: '/development/tech/feishu-robot' },
               { text: '钉钉机器人', link: '/development/tech/dingtalk-robot' },
             ]

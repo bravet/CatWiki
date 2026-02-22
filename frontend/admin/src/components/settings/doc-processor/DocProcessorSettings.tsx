@@ -307,6 +307,8 @@ export function DocProcessorSettings({ scope = 'tenant' }: { scope?: 'platform' 
               placeholder={formData.type === 'Docling' ? "请输入 X-Api-Key" : "如果需要认证，请输入密钥"}
               value={formData.apiKey}
               onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+              autoComplete="new-password"
+              name="doc_processor_apiKey_disable_autofill"
             />
           </div>
 

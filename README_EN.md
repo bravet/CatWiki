@@ -32,12 +32,17 @@ English | [简体中文](./README.md)
 > **Official Brand Domain is Live!**
 > We have officially launched our flagship portal **[catwiki.ai](https://catwiki.ai)**. All demo, documentation, and management services are now accessible via the new domain. Please update your bookmarks!
 
-### 2026-02-09 🛠️ Multi-turn Autonomous Knowledge Base Retrieval
-- ⚙️ **ReAct Loop Architecture**: Supports ReAct loop architecture, enabling AI to autonomously invoke knowledge base for multi-turn retrieval.
-- 🎨 **Tool Call Display**: Frontend AI chat now displays the complete multi-turn retrieval history, showing users all search attempts.
+### 2026-02-23 🤖 Enterprise Bot Integration
+- 🔗 **DingTalk Bot**: Deep integration with DingTalk Stream mode, supporting AI card streaming output for intelligent knowledge base Q&A bot.
+- 💬 **WeCom Bot**: Integrated WeCom callback interface with encrypted message parsing and auto-reply.
+- 🦅 **Feishu (Lark) Bot**: Connected to Feishu Open Platform with event subscription and message card interaction.
+- ⚙️ **Unified Bot Architecture**: Factory-pattern-based extensible bot adapter layer for easy integration of additional platforms.
 
-### 2026-02-06 🔍 Full PaddleOCR Integration
-- 🚀 **PaddleOCR Integration**: Deeply integrated Baidu's PaddleOCR engine, providing industry-leading recognition accuracy, especially for multi-language and complex documents.
+### 2026-02-09 🤖 LangGraph Agentic RAG & Multi-turn Autonomous Retrieval
+- 🔧 **LangGraph Integration**: Refactored chat functionality using LangGraph 1.x with tool-calling support.
+- 🛠️ **RAG as Tool**: Encapsulated knowledge base retrieval into the `search_knowledge_base` tool, with AI autonomously determining when to invoke it.
+- ⚙️ **ReAct Loop Architecture**: AI can autonomously perform multi-turn knowledge base retrieval, continuously refining answer quality.
+- 🎨 **Tool Call Display**: Frontend AI chat now displays the complete multi-turn retrieval history, showing users all search attempts.
 
 ### 2026-02-05 🎨 Branding & Visual Standardization
 - 🚀 **Official Brand Domain**: Launched [catwiki.ai](https://catwiki.ai) official website and brand domain family.
@@ -47,12 +52,8 @@ English | [简体中文](./README.md)
 ### 2026-02-04 📄 Document Parsing Engine Integration
 - 🚀 **MinerU Integration**: Deep integration with MinerU (Magic-PDF) high-quality parser.
 - 📦 **Docling Integration**: Integrated IBM Docling parsing engine.
+- 🔍 **PaddleOCR Integration**: Deeply integrated Baidu's PaddleOCR engine, providing industry-leading recognition accuracy, especially for multi-language and complex documents.
 - 🔧 **Dynamic OCR Config**: Admin dashboard supports enabling/disabling OCR recognition per parser.
-
-### 2026-02-01 🤖 LangGraph Agentic AI Transformation
-- 🔧 **LangGraph Integration**: Refactored chat functionality using LangGraph 1.x.
-- 🛠️ **RAG as Tool**: Encapsulated knowledge base retrieval into the `search_knowledge_base` tool.
-- 🚦 **Intelligent Routing**: AI autonomously determines whether knowledge base lookup is required.
 
 > [!TIP]
 > **View Full Changelog**: Visit [CatWiki Changelog](https://docs.catwiki.ai/about/project/changelog) for the complete version history.

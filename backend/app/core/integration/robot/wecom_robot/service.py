@@ -10,7 +10,7 @@ from Crypto.Cipher import AES
 
 from app.core.integration.robot.base import RobotInboundEvent, RobotSession
 from app.core.integration.robot.factory import RobotFactory
-from app.core.integration.robot.wecom.adapter import WeComBufferManager
+from app.core.integration.robot.wecom_robot.adapter import WeComBufferManager
 from app.models.site import Site
 from app.services.robot import RobotOrchestrator
 

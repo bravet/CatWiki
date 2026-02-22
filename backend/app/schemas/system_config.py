@@ -129,7 +129,16 @@ class WecomSmartRobotConfig(BaseModel):
     """企业微信智能机器人配置"""
 
     enabled: bool = Field(default=False, description="是否启用")
-    callbackUrl: str = Field(default="", description="回调地址")
+    token: str = Field(default="", description="Token")
+    encodingAesKey: str = Field(default="", description="Encoding AES Key")
+
+
+class WecomKefuConfig(BaseModel):
+    """企业微信客服配置"""
+
+    enabled: bool = Field(default=False, description="是否启用")
+    corpId: str = Field(default="", description="企业ID")
+    secret: str = Field(default="", description="客服 Secret")
     token: str = Field(default="", description="Token")
     encodingAesKey: str = Field(default="", description="Encoding AES Key")
 
@@ -142,6 +151,9 @@ class BotConfig(BaseModel):
     wecomSmartRobot: WecomSmartRobotConfig = Field(
         default_factory=WecomSmartRobotConfig, description="企业微信智能机器人配置"
     )
+    wecomKefu: WecomKefuConfig = Field(
+        default_factory=WecomKefuConfig, description="企业微信客服配置"
+    )
 
 
 class BotConfigUpdate(BaseModel):
@@ -150,6 +162,7 @@ class BotConfigUpdate(BaseModel):
     webWidget: WebWidgetConfig = Field(..., description="网页挂件配置")
     apiBot: ApiBotConfig = Field(..., description="API 机器人配置")
     wecomSmartRobot: WecomSmartRobotConfig = Field(..., description="企业微信智能机器人配置")
+    wecomKefu: WecomKefuConfig = Field(..., description="企业微信客服配置")
 
 
 # ============ 文档处理服务配置相关 Schema ============
