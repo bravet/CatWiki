@@ -83,21 +83,16 @@ class VectorStoreManager:
                 mode = embedding_conf.get("_mode", "platform")
 
                 if not api_key:
-                    source = embedding_conf.get("_source", "unknown")
-                    error_msg = (
-                        f"❌ [VectorStore] 未找到有效的 Embedding 配置 (租户: {tenant_id}, 模式: {mode})。 "
-                        f"请在管理后台检查 AI 模型配置。"
-                    )
-                    logger.error(error_msg)
-
                     if mode == "custom":
                         from app.core.web.exceptions import BadRequestException
 
                         raise BadRequestException(
-                            f"租户 {tenant_id} 已开启自定义向量化模式，但未配置 API Key。"
+                            f"已开启自定义向量化模式，但未配置 API Key。"
                         )
 
-                    raise ValueError(error_msg)
+                    raise ValueError(
+                        f"未找到有效的 Embedding 配置 (租户: {tenant_id}, 模式: {mode})，请检查 AI 模型配置。"
+                    )
 
                 dimension = int(embedding_conf.get("dimension") or 1024)
                 source = embedding_conf.get("_source", "platform")
@@ -218,8 +213,7 @@ class VectorStoreManager:
                     f"✅ [VectorStore] 实例初始化完成 (哈希: {conf_hash[:8]}, 租户: {tenant_id}, 来源: {source})"
                 )
 
-            except Exception as e:
-                logger.error(f"向量存储初始化失败: {e}", exc_info=True)
+            except Exception:
                 raise
 
     async def reload_credentials(self) -> None:
@@ -246,13 +240,7 @@ class VectorStoreManager:
                     cls._instance = cls()
 
         # 由于管理器内部通过 _current_store 代理了多实例，每次获取时需刷新指向
-        # 注意：这里我们捕获初始化错误，防止因配置暂不可用导致整个应用崩溃
-        try:
-            await cls._instance._ensure_initialized()
-        except Exception as e:
-            logger.warning(
-                f"⚠️ [VectorStore] get_instance initialized with errors (possibly waiting for config): {e}"
-            )
+        await cls._instance._ensure_initialized()
 
         return cls._instance
 

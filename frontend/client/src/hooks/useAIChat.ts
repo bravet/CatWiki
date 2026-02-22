@@ -132,7 +132,9 @@ export function useAIChat(options: UseAIChatOptions = {}): UseAIChatReturn {
       })
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`)
+        const errorData = await response.json().catch(() => null)
+        const errorMsg = errorData?.msg || response.statusText
+        throw new Error(errorMsg)
       }
 
       if (!response.body) {
@@ -313,11 +315,12 @@ export function useAIChat(options: UseAIChatOptions = {}): UseAIChatReturn {
       if (error instanceof DOMException && error.name === "AbortError") {
         console.log("Chat aborted")
       } else {
-        console.error("Chat error:", error)
+        console.warn("Chat error:", error)
+        const errorMessage = error instanceof Error ? error.message : "未知错误"
         setMessages(prev =>
           prev.map(msg =>
             msg.id === assistantMsgId
-              ? { ...msg, content: msg.content + "\n\n[发生错误，请重试]" }
+              ? { ...msg, content: msg.content || `⚠️ ${errorMessage}` }
               : msg
           )
         )

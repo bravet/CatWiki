@@ -240,17 +240,43 @@ class ChatService:
         cls, request: ChatCompletionRequest, background_tasks: BackgroundTasks
     ) -> ChatCompletionResponse | StreamingResponse:
         """核心聊天处理逻辑 (ReAct Agent)"""
+        from app.core.web.exceptions import CatWikiError
 
         # 使用统一初始化逻辑
         site_id = request.filter.site_id if (request.filter and request.filter.site_id) else 0
-        llm, initial_state, config, tenant_id = await cls.initialize_chat_context(
-            thread_id=request.thread_id,
-            site_id=site_id,
-            user_id=request.user,
-            message=request.message,
-            model_name=request.model,
-            temperature=request.temperature or 0.7,
-        )
+        try:
+            llm, initial_state, config, tenant_id = await cls.initialize_chat_context(
+                thread_id=request.thread_id,
+                site_id=site_id,
+                user_id=request.user,
+                message=request.message,
+                model_name=request.model,
+                temperature=request.temperature or 0.7,
+            )
+        except CatWikiError as e:
+            # 流式模式下，将业务异常作为 SSE 错误事件返回，前端可在对话气泡中自然展示
+            if request.stream:
+                # 必须在 except 块内捕获值，因为 Python 3.12 会在块结束后清除 e
+                error_detail = e.detail
+
+                async def error_generator():
+                    error_chunk = ChatCompletionChunk(
+                        id=f"error-{uuid.uuid4()}",
+                        model=request.model or "unknown",
+                        choices=[
+                            ChatCompletionChunkChoice(
+                                index=0,
+                                delta=ChatCompletionChunkDelta(content=f"⚠️ {error_detail}"),
+                                finish_reason="stop",
+                            )
+                        ],
+                    )
+                    yield f"data: {error_chunk.model_dump_json()}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(error_generator(), media_type="text/event-stream")
+            else:
+                raise
 
         try:
             # 7. 执行推理

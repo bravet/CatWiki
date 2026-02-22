@@ -96,6 +96,8 @@ def setup_exception_handlers(app: FastAPI):
     @app.exception_handler(CatWikiError)
     async def catwiki_exception_handler(request: Request, exc: CatWikiError):
         """CatWiki 自定义异常处理器"""
+        logger = logging.getLogger("app.core.web.exceptions")
+        logger.warning(f"[CatWikiError] {request.method} {request.url.path} → {exc.status_code}: {exc.detail}")
         return JSONResponse(
             status_code=exc.status_code,
             content={

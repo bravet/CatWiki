@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -23,8 +22,6 @@ from app.api.admin.api import api_router as admin_router
 from app.api.client.api import api_router as client_router
 from app.core.common.logger import setup_logging
 from app.core.infra.config import settings
-from app.core.integration.robot.dingtalk.service import DingTalkRobotService
-from app.core.integration.robot.feishu.service import FeishuRobotService
 from app.core.lifecycle.manager import LifecycleManager
 from app.core.web.exceptions import setup_exception_handlers
 from app.core.web.middleware import setup_middleware
@@ -57,22 +54,10 @@ async def lifespan(app: FastAPI):
 
     logger.info("数据库由 Alembic 管理")
 
-    # 1. 启动核心生命周期 (配置同步、管理器初始化、RustFS 等)
+    # 1. 启动核心生命周期 (配置同步、RustFS、Checkpointer、VectorStore、集成服务等)
     await LifecycleManager.startup()
 
-    # 启动飞书长连接服务（如启用）
-    try:
-        await FeishuRobotService.get_instance().startup(asyncio.get_running_loop())
-    except Exception as e:
-        logger.warning(f"飞书长连接启动失败: {e}")
-
-    # 启动钉钉 Stream 服务（如启用）
-    try:
-        await DingTalkRobotService.get_instance().startup(asyncio.get_running_loop())
-    except Exception as e:
-        logger.warning(f"钉钉 Stream 启动失败: {e}")
-
-    # 初始化 EE 功能 (如果存在)
+    # 2. 初始化 EE 功能 (需要 app 实例，故保留在此)
     try:
         from app.ee.loader import init_ee_features
 
@@ -88,27 +73,10 @@ async def lifespan(app: FastAPI):
     # 关闭时执行
     logger.info(f"正在关闭 {settings.PROJECT_NAME}...")
 
-    # 关闭 VectorStoreManager 连接池
-    try:
-        from app.core.vector.vector_store import VectorStoreManager
+    # 1. 关闭所有核心组件 (LLM、VectorStore、Checkpointer、集成服务)
+    await LifecycleManager.shutdown()
 
-        # 注意: get_instance 本身是 async 的，但这里我们不需要它重新初始化，只需要获取实例
-        # 但既然是单例，我们直接访问类属性可能更安全，或者直接调用
-        if VectorStoreManager._instance:
-            await VectorStoreManager._instance.close()
-    except Exception as e:
-        logger.warning(f"关闭向量存储连接失败: {e}")
-
-    try:
-        await FeishuRobotService.get_instance().shutdown()
-    except Exception as e:
-        logger.warning(f"关闭飞书长连接服务失败: {e}")
-
-    try:
-        await DingTalkRobotService.get_instance().shutdown()
-    except Exception as e:
-        logger.warning(f"关闭钉钉 Stream 服务失败: {e}")
-
+    # 2. 关闭数据库引擎
     await engine.dispose()
     logger.info(f"{settings.PROJECT_NAME} 已关闭")
 

@@ -583,7 +583,7 @@ async def _dispatch_vectorization_tasks(
 
     except (ValueError, Exception) as e:
         error_msg = str(e)
-        logger.error(f"Vector store check failed: {e}")
+        logger.debug(f"Vector store check failed: {e}")
         # 回滚状态为 FAILED
         await crud_document.batch_update_vector_status(
             db,

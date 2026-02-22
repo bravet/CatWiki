@@ -61,7 +61,7 @@ class LLMManager:
 
         if mode == "custom" and not api_key:
             raise BadRequestException(
-                f"租户 {tenant_id} 已开启自定义模型模式，但未在管理后台配置 API Key。"
+                f"已开启自定义模型模式，但未在管理后台配置 API Key。"
             )
 
         # 处理模型覆盖

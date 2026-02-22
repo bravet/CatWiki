@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 from typing import Any
 
 from app.core.ai.providers.llm_manager import llm_manager
 from app.core.infra.rustfs import init_rustfs
+from app.core.integration.robot.dingtalk.service import DingTalkRobotService
+from app.core.integration.robot.feishu.service import FeishuRobotService
 from app.core.lifecycle.config import init_system_configs
 from app.core.vector.vector_store import VectorStoreManager
 
@@ -41,13 +44,31 @@ class LifecycleManager:
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] RustFS initialization failed: {e}")
 
-        # 3. 初始化核心管理器 (预热平台实例)
-        # 注意：这里我们只初始化默认实例/平台实例
+        # 3. 初始化 Checkpointer 数据库表（仅启动时创建一次）
+        try:
+            from app.core.ai.graph.checkpointer import setup_checkpointer_tables
+
+            await setup_checkpointer_tables()
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] Checkpointer table setup failed: {e}")
+
+        # 4. 初始化核心管理器 (预热平台实例)
         try:
             await VectorStoreManager.get_instance()
             logger.info("✅ [Lifecycle] VectorStoreManager pre-warmed.")
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] VectorStoreManager pre-warm failed: {e}")
+
+        # 5. 启动集成服务
+        try:
+            await FeishuRobotService.get_instance().startup(asyncio.get_running_loop())
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] Feishu startup failed: {e}")
+
+        try:
+            await DingTalkRobotService.get_instance().startup(asyncio.get_running_loop())
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] DingTalk Stream startup failed: {e}")
 
         logger.info("✨ [Lifecycle] All core components started.")
 
@@ -60,8 +81,27 @@ class LifecycleManager:
         await llm_manager.close()
 
         # 2. 关闭向量存储管理器
-        vs_manager = await VectorStoreManager.get_instance()
-        await vs_manager.close()
+        if VectorStoreManager._instance:
+            await VectorStoreManager._instance.close()
+
+        # 3. 关闭 Checkpointer 连接池
+        try:
+            from app.core.ai.graph.checkpointer import close_checkpointer_pool
+
+            await close_checkpointer_pool()
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] Checkpointer pool close failed: {e}")
+
+        # 4. 关闭集成服务
+        try:
+            await FeishuRobotService.get_instance().shutdown()
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] Feishu shutdown failed: {e}")
+
+        try:
+            await DingTalkRobotService.get_instance().shutdown()
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] DingTalk shutdown failed: {e}")
 
         logger.info("🏁 [Lifecycle] All core components stopped.")
 
@@ -91,7 +131,6 @@ class LifecycleManager:
         # 2. Vector Store 检查
         try:
             vs_manager = await VectorStoreManager.get_instance()
-            # 尝试获取一次 site_id=0 的实例 (平台实例)
             await vs_manager._ensure_initialized(tenant_id=None)
             results["vector_store"] = "healthy"
         except Exception as e:

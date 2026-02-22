@@ -89,15 +89,7 @@ async def get_checkpointer() -> AsyncGenerator[AsyncPostgresSaver, None]:
     pool = await init_checkpointer_pool()
 
     async with pool.connection() as conn:
-        # 设置 autocommit 模式，因为 setup() 会执行 CREATE INDEX CONCURRENTLY
-        # 该语句不能在事务块内运行
-        await conn.set_autocommit(True)
-
         checkpointer = AsyncPostgresSaver(conn)
-
-        # 确保表已创建
-        await checkpointer.setup()
-
         yield checkpointer
 
 
@@ -106,5 +98,12 @@ async def setup_checkpointer_tables() -> None:
 
     在应用启动时调用，确保表结构存在。
     """
-    async with get_checkpointer():
-        logger.info("📦 [Checkpointer] Database tables ready")
+    pool = await init_checkpointer_pool()
+
+    async with pool.connection() as conn:
+        # setup() 会执行 CREATE INDEX CONCURRENTLY，需要 autocommit 模式
+        await conn.set_autocommit(True)
+        checkpointer = AsyncPostgresSaver(conn)
+        await checkpointer.setup()
+
+    logger.info("📦 [Checkpointer] Database tables ready")
