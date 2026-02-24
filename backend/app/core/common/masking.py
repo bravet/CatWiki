@@ -46,8 +46,6 @@ def mask_bot_config_inplace(config_value: dict) -> None:
     # 1. API Bot
     api_bot = config_value.get("apiBot", {})
     if api_bot:
-        if "apiEndpoint" in api_bot:
-            api_bot["apiEndpoint"] = mask_variable(api_bot["apiEndpoint"])
         if "apiKey" in api_bot:
             api_bot["apiKey"] = mask_variable(api_bot["apiKey"])
 

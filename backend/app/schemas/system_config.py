@@ -120,7 +120,6 @@ class ApiBotConfig(BaseModel):
     """API 机器人配置"""
 
     enabled: bool = Field(default=False, description="是否启用")
-    apiEndpoint: str = Field(default="", description="API 端点 (只读)")
     apiKey: str = Field(default="", description="API Key")
     timeout: int = Field(default=30, description="超时时间(秒)")
 

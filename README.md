@@ -109,8 +109,16 @@
       <p align="center"><b>文档解析器</b><br>深度集成 MinerU/Docling 等引擎</p>
     </td>
     <td width="50%">
+      <img src="./frontend/docs/docs/public/images/screenshots/8.png" alt="AI机器人集成">
+      <p align="center"><b>AI机器人集成</b><br>统一配置网页挂件、API、各平台机器人</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
       <img src="./frontend/docs/docs/public/images/screenshots/7.png" alt="站点管理">
       <p align="center"><b>站点管理</b><br>多站点独立化运营与配置</p>
+    </td>
+    <td width="50%">
     </td>
   </tr>
 </table>

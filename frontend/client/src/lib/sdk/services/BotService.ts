@@ -168,18 +168,23 @@ export class BotService {
     public createSiteChatCompletion({
         authorization,
         requestBody,
+        siteId,
     }: {
         /**
          * Bearer <api_key>
          */
         authorization: string,
         requestBody: ChatCompletionRequest,
+        siteId?: (number | null),
     }): CancelablePromise<ChatCompletionResponse> {
         return this.httpRequest.request({
             method: 'POST',
             url: '/v1/bot/site-completions',
             headers: {
                 'authorization': authorization,
+            },
+            query: {
+                'site_id': siteId,
             },
             body: requestBody,
             mediaType: 'application/json',

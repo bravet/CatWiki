@@ -41,6 +41,7 @@ import { SiteUsers } from "@/components/sites/SiteUsers"
 import { initialConfigs, type BotConfig } from "@/types/settings"
 import { env } from "@/lib/env"
 import { mergeSiteBotConfig } from "@/lib/site-bot-config"
+import { useAIConfig } from "@/hooks/useSystemConfig"
 
 // 主题色配置
 const THEME_COLORS = [
@@ -88,6 +89,13 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
   // 使用 React Query hooks
   const { data: siteData, isLoading: loading } = useSiteById(siteId)
   const updateSiteMutation = useUpdateSite()
+  const { data: aiConfigData } = useAIConfig('tenant')
+  
+  // 模型显示逻辑：优先使用租户自定义模型，如果是平台模式则取平台默认模型
+  const chatConfig = aiConfigData?.config_value?.chat
+  const chatModel = (chatConfig?.mode === 'platform' 
+    ? aiConfigData?.platform_defaults?.chat?.model 
+    : chatConfig?.model) || ''
 
   // 加载站点数据
   useEffect(() => {
@@ -420,6 +428,7 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
                 siteId={siteId}
                 config={botConfig}
                 onChange={handleBotConfigChange}
+                chatModel={chatModel}
               />
             </TabsContent>
 

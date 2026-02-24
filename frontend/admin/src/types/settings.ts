@@ -45,7 +45,6 @@ export type BotConfig = {
   }
   apiBot: {
     enabled: boolean
-    apiEndpoint: string
     apiKey: string
     timeout: number
   }
@@ -125,7 +124,6 @@ export const initialConfigs: AIConfigs = {
     },
     apiBot: {
       enabled: false,
-      apiEndpoint: "",
       apiKey: "",
       timeout: 30
     },

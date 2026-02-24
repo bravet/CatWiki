@@ -39,7 +39,8 @@
 
 ## 2. CatWiki 后台配置
 
-1. 进入 CatWiki 后台 **“站点设置” -> “机器人配置”**。
+1. 进入 CatWiki 后台 **“站点设置” -> “AI机器人”**。
+   ![AI机器人集成](/images/screenshots/8.png)
 2. 选中 **“钉钉机器人”**，开启开关。
 3. 填入：
    - **Client ID**

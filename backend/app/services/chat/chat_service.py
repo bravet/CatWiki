@@ -182,56 +182,93 @@ class ChatService:
     @classmethod
     async def initialize_chat_context(
         cls,
-        thread_id: str,
+        thread_id: str | None,
         site_id: int,
-        user_id: str,
-        message: str,
+        user_id: str | None,
+        message: str | None = None,
+        messages: list[ChatMessage] | None = None,
         model_name: str | None = None,
         temperature: float = 0.7,
     ) -> tuple[ChatOpenAI, dict, dict, int | None]:
         """
         初始化聊天上下文：解析租户、构建 LLM、持久化首条消息并准备 Graph 状态。
-        供 process_chat_request 和 RobotOrchestrator 复用。
         """
-        # 1. 解析 site_id 和 tenant_id
+        # 1. 确定 thread_id (会话识别)
+        # 如果没有显式传 thread_id，尝试将 user 字段映射为线索，否则生成 UUID
+        if not thread_id:
+            thread_id = (
+                user_id if (user_id and len(user_id) > 5) else f"auto-{uuid.uuid4().hex[:12]}"
+            )
+
+        from langchain_core.messages import (
+            AIMessage,
+            HumanMessage,
+            SystemMessage,
+            ToolMessage,
+        )
+
+        # 2. 识别用户输入
+        input_message = ""
+        context_messages = []
+
+        if messages:
+            # 转换 OpenAI 消息到 LangChain 格式
+            for m in messages:
+                if m.role == "user":
+                    context_messages.append(HumanMessage(content=m.content or ""))
+                elif m.role == "assistant":
+                    context_messages.append(AIMessage(content=m.content or ""))
+                elif m.role == "system":
+                    context_messages.append(SystemMessage(content=m.content or ""))
+
+            # 取最后一条 user 消息的内容作为 trigger
+            for m in reversed(messages):
+                if m.role == "user":
+                    input_message = m.content or ""
+                    break
+        else:
+            input_message = message or ""
+            context_messages = [HumanMessage(content=input_message)]
+
+        # 3. 解析 site_id 和 tenant_id
         tenant_id = None
         async with AsyncSessionLocal() as db:
             site = await crud_site.get(db, id=site_id)
             tenant_id = site.tenant_id if site else None
 
-        # [Important] 设置当前线程的租户上下文，确保后续所有的 RAG/工具调用能正确识别租户
+        # [Important] 设置当前租户上下文
         from app.core.infra.tenant import set_current_tenant
 
         set_current_tenant(tenant_id)
 
-        # 2. 初始化 LLM
+        # 4. 初始化 LLM
         llm = await llm_manager.get_model(
             tenant_id=tenant_id,
             model_name=model_name,
             temperature=temperature,
         )
 
-        # 3. 创建/更新数据库会话记录
+        # 5. 持久化 (如果这是该 thread 的新消息)
         async with AsyncSessionLocal() as db:
             try:
                 await ChatSessionService.create_or_update(
                     db=db,
                     thread_id=thread_id,
                     site_id=site_id,
-                    user_message=message,
+                    user_message=input_message,
                     member_id=user_id,
                     tenant_id=tenant_id,
                 )
+                # 仅保存最后一条用户输入到我们的历史表
                 await ChatHistoryService.save_message(
-                    db=db, thread_id=thread_id, role="user", content=message
+                    db=db, thread_id=thread_id, role="user", content=input_message
                 )
             except Exception as e:
                 logger.error(f"❌ [ChatService] Failed to persist chat session: {e}")
-                # 为了保证响应不中断，记录错误但继续
 
-        # 4. 准备 Graph 初始状态
+        # 6. 准备 Graph 初始状态
         initial_state = {
-            "messages": [HumanMessage(content=message)],
+            "messages": context_messages,
             "site_id": site_id,
             "iteration_count": 0,
             "consecutive_empty_count": 0,
@@ -247,17 +284,21 @@ class ChatService:
         """核心聊天处理逻辑 (ReAct Agent)"""
         from app.core.web.exceptions import CatWikiError
 
-        # 使用统一初始化逻辑
+        # 确定 site_id (从 filter 或 默认)
         site_id = request.filter.site_id if (request.filter and request.filter.site_id) else 0
+
         try:
             llm, initial_state, config, tenant_id = await cls.initialize_chat_context(
                 thread_id=request.thread_id,
                 site_id=site_id,
                 user_id=request.user,
                 message=request.message,
+                messages=request.messages,
                 model_name=request.model,
                 temperature=request.temperature or 0.7,
             )
+            # 更新 request 中的 thread_id 以便后续逻辑一致
+            current_thread_id = config["configurable"]["thread_id"]
         except CatWikiError as e:
             # 流式模式下，将业务异常作为 SSE 错误事件返回，前端可在对话气泡中自然展示
             if request.stream:
@@ -296,7 +337,7 @@ class ChatService:
                             initial_state,
                             config,
                             llm.model_name,
-                            request.thread_id,
+                            current_thread_id,
                             background_tasks,
                         ):
                             yield sse_chunk
@@ -319,10 +360,10 @@ class ChatService:
                     async def save_history_bg():
                         async with AsyncSessionLocal() as db:
                             await ChatSessionService.update_assistant_response(
-                                db=db, thread_id=request.thread_id, assistant_message=content
+                                db=db, thread_id=current_thread_id, assistant_message=content
                             )
                             await ChatHistoryService.save_history_from_messages(
-                                db=db, thread_id=request.thread_id, messages=messages
+                                db=db, thread_id=current_thread_id, messages=messages
                             )
 
                     background_tasks.add_task(save_history_bg)

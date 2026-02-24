@@ -6,7 +6,7 @@ import sys
 COPYRIGHT_HOLDER = "CatWiki Authors"
 LICENSE_URL = "https://github.com/CatWiki/CatWiki/blob/main/LICENSE"
 
-HEADER_TEMPLATE = """Copyright 2024 {holder}
+HEADER_TEMPLATE = """Copyright 2026 {holder}
 
 Licensed under the CatWiki Open Source License (Modified Apache 2.0);
 you may not use this file except in compliance with the License.

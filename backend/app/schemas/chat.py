@@ -73,8 +73,9 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     model: str | None = None
-    message: str  # 单条消息（必填）
-    thread_id: str  # 会话ID（必填），用于持久化
+    messages: list[ChatMessage] | None = None  # 标准 OpenAI 格式：消息列表
+    message: str | None = None  # legacy：单条消息
+    thread_id: str | None = None  # legacy：会话ID
     temperature: float | None = 0.7
     top_p: float | None = 1.0
     n: int | None = 1
@@ -134,3 +135,20 @@ class ChatCompletionChunk(BaseModel):
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: list[ChatCompletionChunkChoice]
+
+
+# =============================================================================
+# Models List Models
+# =============================================================================
+
+
+class ModelObject(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: str = "catwiki"
+
+
+class ModelList(BaseModel):
+    object: str = "list"
+    data: list[ModelObject]

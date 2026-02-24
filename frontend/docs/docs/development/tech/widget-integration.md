@@ -21,6 +21,7 @@ CatWiki 提供了一种极其简便的方式，通过一行脚本即可将智能
 
 > [!TIP]
 > **YOUR_SITE_ID** 可以在 CatWiki 管理后台的“站点设置”中找到。
+> ![AI机器人集成](/images/screenshots/8.png)
 
 ---
 

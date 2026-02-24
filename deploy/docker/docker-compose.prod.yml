@@ -275,6 +275,7 @@ services:
 
   # 官网服务
   website:
+    profiles: ["ee"]
     build:
       context: ../../frontend/website
       dockerfile: Dockerfile.prod

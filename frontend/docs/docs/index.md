@@ -172,6 +172,12 @@ make prod-up
   </figure>
   <figure>
     <div class="img-wrapper">
+      <img src="/images/screenshots/8.png" alt="AI机器人集成">
+    </div>
+    <figcaption>AI机器人集成</figcaption>
+  </figure>
+  <figure>
+    <div class="img-wrapper">
       <img src="/images/screenshots/7.png" alt="站点管理">
     </div>
     <figcaption>站点管理</figcaption>

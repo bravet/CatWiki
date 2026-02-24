@@ -357,7 +357,7 @@ export function GlobalUsers() {
               <Users className="h-6 w-6" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight text-slate-900">用户管理</h2>
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">用户权限</h2>
               <p className="text-sm text-slate-500 font-medium">管理用户账户及权限。</p>
             </div>
           </div>
@@ -365,7 +365,7 @@ export function GlobalUsers() {
           <Button
             className="flex items-center gap-2"
             size="sm"
-            onClick={() => router.push(pathname + '?action=create')}
+            onClick={handleStartCreate}
           >
             <Plus className="mr-2 h-4 w-4" />
             添加成员

@@ -96,4 +96,5 @@ export * from './VectorStatus';
 export * from './VectorizeRequest';
 export * from './VectorizeResponse';
 export * from './app__schemas__chat__ChatMessage';
+export * from './app__schemas__chat__ChatMessage_Output';
 export * from './app__schemas__chat_session__ChatMessage';
