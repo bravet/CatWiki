@@ -33,10 +33,6 @@
 
 ## 🚀 最近更新
 
-> **官网：[catwiki.ai](https://catwiki.ai)**  
-> **文档中心：[docs.catwiki.cn](https://docs.catwiki.cn)**  
-> **业务系统：[catwiki.cn](https://catwiki.cn)**
-
 ### 2026-02-23 🤖 AI 机器人集成
 - 🔗 **钉钉机器人**: 深度对接钉钉 Stream 模式，支持 AI 卡片流式输出，实现知识库智能问答机器人。
 - 💬 **企业微信智能机器人**: 集成企业微信回调接口，支持加密消息解析与自动回复。
