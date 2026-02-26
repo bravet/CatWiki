@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Bot, Code, Eye, EyeOff, RefreshCw, Copy, ChevronDown, ChevronUp, Crown } from "lucide-react"
+import { Bot, Code, Eye, EyeOff, RefreshCw, Copy, ChevronDown, ChevronUp, Crown, MessageSquare, Send } from "lucide-react"
 import { useState } from "react"
 import { ChatWidgetPreview } from "@/components/features/ChatWidgetPreview"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -255,6 +255,7 @@ function CopyableInput({
 interface InstructionBoxProps {
   title: string
   items: string[]
+  footer?: React.ReactNode
   bgColor?: string
   borderColor?: string
   textColor?: string
@@ -263,6 +264,7 @@ interface InstructionBoxProps {
 function InstructionBox({
   title,
   items,
+  footer,
   bgColor = "bg-blue-50",
   borderColor = "border-blue-100",
   textColor = "text-blue-700"
@@ -275,9 +277,14 @@ function InstructionBox({
         <p className={cn("text-xs font-semibold mb-2", titleColor)}>{title}：</p>
         <ol className={cn("text-[11px] space-y-1.5 list-decimal list-inside", textColor)}>
           {items.map((item, index) => (
-            <li key={index}>{item}</li>
+            <li key={index} dangerouslySetInnerHTML={{ __html: item }} />
           ))}
         </ol>
+        {footer && (
+          <div className="mt-3 pt-2 border-t border-black/5 flex items-center gap-2">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -305,7 +312,9 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
     wecomSmartRobot: wecomSmartRobot?.enabled || false,
     feishuBot: feishuBot?.enabled || false,
     dingtalkBot: dingtalkBot?.enabled || false,
-    wecomKefu: wecomKefu?.enabled || false
+    wecomKefu: wecomKefu?.enabled || false,
+    discord: false,
+    telegram: false
   })
 
   const toggleExpand = (card: string) => {
@@ -314,8 +323,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
 
   return (
-    <ScrollArea className="h-full pr-4 -mr-4">
-      <div className="space-y-4 pb-8">
+    <div className="space-y-4 pb-8">
         {/* 网页挂件机器人 */}
         <BotCard
           title="网页挂件机器人"
@@ -427,9 +435,9 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
           )}
         </BotCard>
 
-        {/* 问答机器人 API */}
+        {/* 问答机器人 (OpenAI 兼容) */}
         <BotCard
-          title="问答机器人 API"
+          title="问答机器人 (OpenAI 兼容)"
           description="支持 OpenAI 兼容接口，对接各类 AI 客户端"
           icon={<Code className="h-4 w-4" />}
           iconBgColor={isCommunity ? "bg-slate-50" : "bg-emerald-50"}
@@ -454,7 +462,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
           {isCommunity && (
             <div className="flex items-center gap-3 px-3 py-2 bg-violet-50 text-violet-700 rounded-lg border border-violet-200 shadow-sm animate-in fade-in slide-in-from-top-2 duration-500">
               <Crown className="h-5 w-5 shrink-0" />
-              <p className="text-[13px] font-medium">此功能为企业版专属，升级到企业版以启用问答机器人 API 对接第三方系统。</p>
+              <p className="text-[13px] font-medium">此功能为企业版专属，升级到企业版以启用 问答机器人 (OpenAI 兼容) 对接第三方系统。</p>
             </div>
           )}
 
@@ -611,12 +619,18 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
               borderColor="border-indigo-100"
               textColor="text-indigo-700"
               items={[
-                "在飞书开放平台创建「企业自建应用」并开启机器人能力",
-                "在「凭证与基础信息」页获取 App ID 和 App Secret",
-                "在「事件与回调」中选择「使用长连接接收事件」",
-                "添加「接收消息 (im.message.receive_v1)」事件并配置权限",
-                "发布应用版本后，将 App ID 和 App Secret 填入上方输入框"
+                "在飞书开放平台 「创建自定义应用」",
+                "在应用详情页 「应用能力」-「机器人」 中开启机器人能力",
+                "在 「开发配置」-「权限管理」 中搜索并开启所需的 4 项关键权限",
+                "在 「事件与回调」 中开启 「长连接」 模式并添加 「接收消息 v2.0」 事件",
+                "在 「凭证与基础信息」 获取 App ID / Secret 并填入本卡片",
+                "在 「版本管理与发布」 创建版本并申请线上发布，审核通过后即可生效"
               ]}
+              footer={
+                <p className="text-[11px] text-indigo-800/80">
+                  详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/feishu-robot`} target="_blank" className="underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900 transition-colors">飞书机器人配置文档</a>
+                </p>
+              }
             />
           )}
         </BotCard>
@@ -673,13 +687,16 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
               borderColor="border-orange-100"
               textColor="text-orange-700"
               items={[
-                "在钉钉开放平台创建「企业内部应用」并开启机器人能力",
-                "在「凭证与基础信息」页获取 Client ID 和 Client Secret",
-                "在机器人配置中创建或绑定消息模板并获取模板 ID",
-                "在「事件与回调」中配置 Stream 模式",
-                "添加消息接收相关权限",
-                "发布应用后，将 Client ID、Client Secret、Template ID 填入上方输入框"
+                "在钉钉开放平台创建「企业内部应用」，并在 <b>「应用能力」</b> 中开启 <b>「机器人」</b>",
+                "在 <b>「凭证与基础信息」</b> 获取 <b>Client ID</b> 和 <b>Client Secret</b> 并填入对应字段",
+                "在机器人配置中创建或绑定消息模板并获取 <b>Template ID</b>",
+                "在 <b>「事件与回调」</b> 中开启 <b>Stream</b> 模式以接收消息"
               ]}
+              footer={
+                <p className="text-[11px] text-orange-800/80">
+                  详细指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/dingtalk-robot`} target="_blank" className="underline decoration-orange-300 underline-offset-2 hover:text-orange-900 transition-colors">钉钉机器人配置文档</a>
+                </p>
+              }
             />
           )}
         </BotCard>
@@ -759,10 +776,15 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
               borderColor="border-teal-100"
               textColor="text-teal-700"
               items={[
-                "在企业微信管理后台进入「应用管理」-「微信客服」",
-                "在「开发配置」中获取企业 ID 和 Secret",
-                "在「事件和消息接收」中开启事件接收，将回调地址、Token 和 AES Key 填入相应位置，并保存配置"
+                "在企业微信管理后台进入 <b>「应用管理」-「微信客服」</b>",
+                "从 <b>「开发配置」</b> 模块获取企业 ID 和 Secret",
+                "在 <b>「事件和消息接收」</b> 中开启并填入本卡片提供的回调参数"
               ]}
+              footer={
+                <p className="text-[11px] text-teal-800/80">
+                  详细指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/wecom-kefu`} target="_blank" className="underline decoration-teal-300 underline-offset-2 hover:text-teal-900 transition-colors">企业微信客服配置文档</a>
+                </p>
+              }
             />
           )}
         </BotCard>
@@ -821,14 +843,51 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
               borderColor="border-sky-100"
               textColor="text-sky-700"
               items={[
-                "登录企业微信管理后台并进入「安全与管理」-「管理工具」-「智能机器人」",
-                "点击「添加机器人」，选择「API 模式」进行创建",
-                "在机器人设置页面找到「API配置」",
-                "将上方的回调地址、Token 和 AES Key (即 EncodingAESKey) 填入对应表单项",
-                "保存配置并启用机器人后，即可在企业微信中享受知识库对话能力"
+                "登录企业微信管理后台并进入 <b>「应用管理」-「机器人」</b> (或管理工具-智能机器人)",
+                "点击 <b>「添加机器人」</b> 并选择 <b>「开启 API 模式」</b>",
+                "将本卡片提供的回调参数填入企业微信后台，并保存"
               ]}
+              footer={
+                <p className="text-[11px] text-sky-800/80">
+                  详细指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/wecom-robot`} target="_blank" className="underline decoration-sky-300 underline-offset-2 hover:text-sky-900 transition-colors">企业微信机器人配置文档</a>
+                </p>
+              }
             />
           )}
+        </BotCard>
+
+        {/* Discord 机器人 */}
+        <BotCard
+          title="Discord 机器人"
+          description="在 Discord 中与您的知识库对话"
+          icon={<MessageSquare className="h-4 w-4" />}
+          isEnabled={false}
+          isExpanded={expandedCards.discord}
+          onToggleExpand={() => toggleExpand("discord")}
+          onToggleEnable={() => {}}
+          disabled={true}
+          badge={<Badge variant="outline" className="text-[9px] font-bold px-1.5 h-4 bg-slate-50 text-slate-400">敬请期待</Badge>}
+        >
+          <div className="flex items-center justify-center py-8 text-slate-400 text-sm italic">
+            Discord 机器人功能开发中，敬请期待...
+          </div>
+        </BotCard>
+
+        {/* Telegram 机器人 */}
+        <BotCard
+          title="Telegram 机器人"
+          description="在 Telegram 中与您的知识库对话"
+          icon={<Send className="h-4 w-4" />}
+          isEnabled={false}
+          isExpanded={expandedCards.telegram}
+          onToggleExpand={() => toggleExpand("telegram")}
+          onToggleEnable={() => {}}
+          disabled={true}
+          badge={<Badge variant="outline" className="text-[9px] font-bold px-1.5 h-4 bg-slate-50 text-slate-400">敬请期待</Badge>}
+        >
+          <div className="flex items-center justify-center py-8 text-slate-400 text-sm italic">
+            Telegram 机器人功能开发中，敬请期待...
+          </div>
         </BotCard>
 
         {/* 预览挂件 */}
@@ -842,6 +901,5 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
           />
         )}
       </div>
-    </ScrollArea>
   )
 }

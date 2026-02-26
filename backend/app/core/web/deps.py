@@ -192,6 +192,15 @@ async def set_client_tenant_context(
     if tenant_id is not None:
         set_current_tenant(tenant_id)
 
+    # 企业版强制校验：防止在多租户环境下出现未指定租户的“空挂”请求
+    if settings.CATWIKI_EDITION == "enterprise":
+        try:
+            from app.ee.loader import enforce_tenant_context
+
+            enforce_tenant_context(tenant_id, request.url.path)
+        except (ImportError, AttributeError):
+            pass
+
     return tenant_id
 
 

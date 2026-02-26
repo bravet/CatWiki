@@ -66,7 +66,8 @@ async def lifespan(app: FastAPI):
         logger.info("🏠 Running in Community Edition mode (Single-Tenant)")
 
     logger.info(f"{settings.PROJECT_NAME} 启动成功!")
-    logger.info("API 文档: http://localhost:3000/docs")
+    if app.docs_url:
+        logger.info(f"API 文档: http://localhost:3000{app.docs_url}")
 
     yield
 
@@ -83,13 +84,18 @@ async def lifespan(app: FastAPI):
 
 def create_application() -> FastAPI:
     """创建 FastAPI 应用实例"""
+    # 生产环境禁用 Swagger UI 和 ReDoc
+    docs_url = "/docs" if settings.ENVIRONMENT != "prod" else None
+    redoc_url = "/redoc" if settings.ENVIRONMENT != "prod" else None
+    openapi_url = "/openapi.json" if settings.ENVIRONMENT != "prod" else None
+
     application = FastAPI(
         title=settings.PROJECT_NAME,
         description=settings.DESCRIPTION,
         version=settings.VERSION,
-        openapi_url="/openapi.json",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        openapi_url=openapi_url,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
         lifespan=lifespan,
         debug=settings.DEBUG,
     )

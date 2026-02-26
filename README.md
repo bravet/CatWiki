@@ -7,14 +7,14 @@
 企业级全栈 AI 知识库平台，集成了现代化的内容管理、深度 AI 智能问答与极致的用户交互体验。
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-14.0+-000000?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.1+-000000?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql)](https://www.postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791?logo=postgresql)](https://www.postgresql.org/)
 
 
 [English](./README_EN.md) | 简体中文
 
-[演示站点](https://demo.catwiki.ai) | [管理后台](https://admin.catwiki.ai) | [文档中心](https://docs.catwiki.ai)
+[官网](https://catwiki.ai) | [演示站点](https://catwiki.cn/default/health) | [管理后台](https://admin.catwiki.cn) | [文档中心](https://docs.catwiki.cn)
 
 <p>
   <a href="https://github.com/bulolo/CatWiki">
@@ -32,10 +32,6 @@
 ---
 
 ## 🚀 最近更新
-
-> [!IMPORTANT]
-> **全新品牌域名正式启用！**
-> 我们已正式上线官方门户网站 **[catwiki.ai](https://catwiki.ai)**。所有的演示、文档以及管理服务均已迁移至新域名下。请更新您的书签！
 
 ### 2026-02-23 🤖 AI 机器人集成
 - 🔗 **钉钉机器人**: 深度对接钉钉 Stream 模式，支持 AI 卡片流式输出，实现知识库智能问答机器人。
@@ -61,7 +57,7 @@
 - 🔧 **OCR 动态配置**: 管理后台支持按解析器配置开启/关闭 OCR 识别。
 
 > [!TIP]
-> **查看完整更新日志**: 访问 [CatWiki 更新日志](https://docs.catwiki.ai/about/project/changelog) 了解完整版本历史。
+> **查看完整更新日志**: 访问 [CatWiki 更新日志](https://docs.catwiki.cn/about/project/changelog) 了解完整版本历史。
 
 ---
 
@@ -70,7 +66,7 @@
 - ✅ **开箱即用**: Docker Compose 一键启动，自动初始化数据库和演示数据
 - ✅ **双端架构**: 独立的管理后台和客户端，职责清晰
 - ✅ **类型安全**: 前后端全面使用 TypeScript 和 Pydantic，类型安全有保障
-- ✅ **现代技术栈**: FastAPI + Next.js 14 + SQLAlchemy 2.0，使用最新技术
+- ✅ **现代技术栈**: FastAPI + Next.js 16 + SQLAlchemy 2.0，使用最新技术
 - ✅ **AI 集成**: 内置 AI 智能问答，基于 LangGraph 构建 Agentic RAG 流程
 - ✅ **热更新**: 开发环境支持前后端代码热更新
 - ✅ **自动生成 SDK**: 后端 API 变更后自动生成 TypeScript SDK
@@ -159,10 +155,10 @@
 - **迁移工具**: Alembic
 - **包管理**: uv (高性能 Python 包管理器)
 - **身份认证**: JWT + PassLib
-- **Python 版本**: >= 3.10
+- **Python 版本**: >= 3.12
 
 ### 前端技术栈
-- **框架**: Next.js 14 (App Router)
+- **框架**: Next.js 16 (App Router)
 - **语言**: TypeScript 5.3+
 - **样式**: Tailwind CSS
 - **组件库**: shadcn/ui (基于 Radix UI)
@@ -209,8 +205,8 @@ catWiki/
 | 目录 | 说明 | 技术栈 |
 |------|------|--------|
 | `backend/` | 后端 API 服务 | FastAPI + PostgreSQL + SQLAlchemy |
-| `frontend/admin/` | 管理后台（内部使用） | Next.js 14 + shadcn/ui + Tailwind |
-| `frontend/client/` | 客户端（对外展示） | Next.js 14 + AI 问答 + 搜索 |
+| `frontend/admin/` | 管理后台（内部使用） | Next.js 16 + shadcn/ui + Tailwind |
+| `frontend/client/` | 客户端（对外展示） | Next.js 16 + AI 问答 + 搜索 |
 | `frontend/docs/` | 文档站点（项目说明） | VitePress + Markdown |
 
 ---
@@ -254,7 +250,7 @@ make dev-up
 > **关于 `make dev-init`**: 它会重新从模板复制 `.env` 文件，这会覆盖您已有的配置。如果是后续启动，请直接跳过此步使用 `make dev-up`。
 访问：
 - 🎯 **管理后台**: http://localhost:8001 (admin@example.com / admin123)
-- 💬 **客户端**: http://localhost:8002/medical
+- 💬 **客户端**: http://localhost:8002/default/health
 - 📚 **文档站点**: http://localhost:8003
 - 🛡️ **API 文档**: http://localhost:3000/docs
 

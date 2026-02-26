@@ -77,3 +77,4 @@ class Site(SiteBase, BaseSchemaWithTimestamps):
     """站点详情"""
 
     article_count: int = Field(default=0, description="文章数量")
+    tenant_slug: str | None = Field(None, description="所属租户标识")

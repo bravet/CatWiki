@@ -14,8 +14,8 @@ class FeishuAdapter(BaseRobotAdapter):
         return "飞书"
 
     def get_sync_interval(self) -> float:
-        """飞书接口响应较快，建议 0.5s 同步一次以保证流畅度。"""
-        return 0.5
+        """飞书接口响应较快，但过频更新会阻塞 AI 推理循环，建议 1.0s 同步一次以平衡流畅度与性能。"""
+        return 1.0
 
     def parse_inbound_text_event(self, data: Any, site_id: int) -> RobotInboundEvent | None:
         import json

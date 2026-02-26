@@ -7,14 +7,14 @@
 **Enterprise-grade full-stack AI knowledge base platform, integrating modern content management, deep AI-powered Q&A, and an ultimate user interaction experience.**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-14.0+-000000?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.1+-000000?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?logo=postgresql)](https://www.postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791?logo=postgresql)](https://www.postgresql.org/)
 
 
 English | [简体中文](./README.md)
 
-[Demo Site](https://demo.catwiki.ai) | [Admin Dashboard](https://admin.catwiki.ai) | [Documentation](https://docs.catwiki.ai)
+[Official Site](https://catwiki.ai) | [Demo Site](https://catwiki.cn/default/health) | [Admin Dashboard](https://admin.catwiki.cn) | [Documentation](https://docs.catwiki.cn)
 
 <p>
   <a href="https://github.com/bulolo/CatWiki">
@@ -29,8 +29,9 @@ English | [简体中文](./README.md)
 ## 🚀 Recent Updates
 
 > [!IMPORTANT]
-> **Official Brand Domain is Live!**
-> We have officially launched our flagship portal **[catwiki.ai](https://catwiki.ai)**. All demo, documentation, and management services are now accessible via the new domain. Please update your bookmarks!
+> **Official Site: [catwiki.ai](https://catwiki.ai)**  
+> **Documentation: [docs.catwiki.cn](https://docs.catwiki.cn)**  
+> **App & Admin: [catwiki.cn](https://catwiki.cn)**
 
 ### 2026-02-23 🤖 Enterprise Bot Integration
 - 🔗 **DingTalk Bot**: Deep integration with DingTalk Stream mode, supporting AI card streaming output for intelligent knowledge base Q&A bot.
@@ -56,7 +57,7 @@ English | [简体中文](./README.md)
 - 🔧 **Dynamic OCR Config**: Admin dashboard supports enabling/disabling OCR recognition per parser.
 
 > [!TIP]
-> **View Full Changelog**: Visit [CatWiki Changelog](https://docs.catwiki.ai/about/project/changelog) for the complete version history.
+> **View Full Changelog**: Visit [CatWiki Changelog](https://docs.catwiki.cn/about/project/changelog) for the complete version history.
 
 ---
 
@@ -65,7 +66,7 @@ English | [简体中文](./README.md)
 - ✅ **Out-of-the-box**: One-click startup with Docker Compose, automatic database initialization and demo data loading.
 - ✅ **Dual-end Architecture**: Independent Admin Dashboard and Client Side with clear responsibilities.
 - ✅ **Type Safety**: Full use of TypeScript and Pydantic for robust type safety across frontend and backend.
-- ✅ **Modern Tech Stack**: FastAPI + Next.js 14 + SQLAlchemy 2.0, utilizing the latest technologies.
+- ✅ **Modern Tech Stack**: FastAPI + Next.js 16 + SQLAlchemy 2.0, utilizing the latest technologies.
 - ✅ **AI Integration**: Built-in intelligent AI Q&A, Agentic RAG flow based on **LangGraph**.
 - ✅ **Hot Reload**: Supports hot reloading for both frontend and backend in the development environment.
 - ✅ **Auto-generated SDK**: Backend API changes automatically trigger TypeScript SDK generation.
@@ -104,8 +105,16 @@ English | [简体中文](./README.md)
       <p align="center"><b>Document Parser</b><br>Deep integration with MinerU/Docling engines</p>
     </td>
     <td width="50%">
+      <img src="./frontend/docs/docs/public/images/screenshots/8.png" alt="AI Bot Integration">
+      <p align="center"><b>AI Bot Integration</b><br>Unified configuration for web widgets, APIs, and various bots</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
       <img src="./frontend/docs/docs/public/images/screenshots/7.png" alt="Site Management">
       <p align="center"><b>Site Management</b><br>Multi-site independent operation and configuration</p>
+    </td>
+    <td width="50%">
     </td>
   </tr>
 </table>
@@ -146,10 +155,10 @@ English | [简体中文](./README.md)
 - **Migration**: Alembic
 - **Package Manager**: uv (High-performance Python package manager)
 - **Auth**: JWT + PassLib
-- **Python Version**: >= 3.10
+- **Python Version**: >= 3.12
 
 ### Frontend Stack
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript 5.3+
 - **Styling**: Tailwind CSS
 - **Component Library**: shadcn/ui (based on Radix UI)
@@ -196,8 +205,8 @@ catWiki/
 | Directory | Description | Tech Stack |
 |------|------|--------|
 | `backend/` | Backend API Service | FastAPI + PostgreSQL + SQLAlchemy |
-| `frontend/admin/` | Admin Dashboard (Internal) | Next.js 14 + shadcn/ui + Tailwind |
-| `frontend/client/` | Client Side (Public) | Next.js 14 + AI Q&A + Search |
+| `frontend/admin/` | Admin Dashboard (Internal) | Next.js 16 + shadcn/ui + Tailwind |
+| `frontend/client/` | Client Side (Public) | Next.js 16 + AI Q&A + Search |
 | `frontend/docs/` | Documentation Site (Internal) | VitePress + Markdown |
 
 ---
@@ -241,7 +250,7 @@ make dev-up
 > **About `make dev-init`**: It will recopy `.env` files from templates, which will overwrite your existing configuration. For subsequent starts, skip this step and use `make dev-up` directly.
 Visit:
 - 🎯 **Admin Dashboard**: http://localhost:8001 (admin@example.com / admin123)
-- 💬 **Client Side**: http://localhost:8002/medical
+- 💬 **Client Side**: http://localhost:8002/default/health
 - 📚 **Docs Site**: http://localhost:8003
 - 🛡️ **API Docs**: http://localhost:3000/docs
 

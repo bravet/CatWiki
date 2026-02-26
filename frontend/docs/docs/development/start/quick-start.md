@@ -42,7 +42,7 @@ make dev-up
 | 服务 | 地址 | 说明 |
 |------|------|------|
 | 🎯 管理后台 | http://localhost:8001 | 账号: `admin@example.com` / `admin123` |
-| 💬 客户端 | http://localhost:8002/medical | 默认医疗 Demo 站点 |
+| 💬 客户端 | http://localhost:8002/default/health | 默认医疗 Demo 站点 |
 | 📚 API 文档 | http://localhost:3000/docs | Swagger UI 交互式文档 |
 | 📖 文档中心 | http://localhost:8003 | 您现在正在阅读的文档 |
 
@@ -82,13 +82,13 @@ POSTGRES_PASSWORD=your_secure_password
 SECRET_KEY=your_random_secret_key_at_least_32_chars
 
 # CORS 允许的域名
-BACKEND_CORS_ORIGINS=["https://admin.catwiki.ai","https://demo.catwiki.ai","https://docs.catwiki.ai","https://catwiki.ai"]
+BACKEND_CORS_ORIGINS=["https://admin.catwiki.cn","https://catwiki.cn","https://docs.catwiki.cn","https://catwiki.ai"]
 
 # RustFS 对象存储配置
 RUSTFS_ENDPOINT=rustfs:9000                    # 内部访问地址
 RUSTFS_ACCESS_KEY=rustfsadmin                  # 访问密钥（建议修改）
 RUSTFS_SECRET_KEY=rustfsadmin                  # 密钥（建议修改）
-RUSTFS_PUBLIC_URL=https://files.catwiki.ai  # 公网访问地址
+RUSTFS_PUBLIC_URL=https://files.catwiki.cn  # 公网访问地址
 ```
 
 #### 前端配置
@@ -160,7 +160,7 @@ A:
 
 ### Q: 客户端 API 报 404？
 
-A: 确保访问路径包含站点域名后缀，例如：`http://localhost:8002/medical`。
+A: 确保访问路径包含站点域名后缀，例如：`http://localhost:8002/default/health`。
 
 ### Q: 修改配置后不生效？
 

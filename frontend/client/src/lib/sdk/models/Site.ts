@@ -54,5 +54,9 @@ export type Site = {
      * 文章数量
      */
     article_count?: number;
+    /**
+     * 所属租户标识
+     */
+    tenant_slug?: (string | null);
 };
 

@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation"
 import { api } from "@/lib/api-client"
 import { logError } from "@/lib/error-handler"
 import { PageLoading } from "@/components/ui/loading"
-import { BookOpen, ChevronDown, ExternalLink, Github, Star } from "lucide-react"
+import { BookOpen, ChevronDown, ExternalLink, Github, LayoutDashboard, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AIChatLanding } from "@/components/ai"
 import type { Site } from "@/lib/api-client"
@@ -107,6 +107,15 @@ export default function HomePage() {
               </div>
             </a>
             <a
+              href={process.env.NEXT_PUBLIC_ADMIN_URL || "http://localhost:8001"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 hover:border-primary/30 rounded-lg transition-all text-xs md:text-sm font-semibold shadow-sm"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">管理中心</span>
+            </a>
+            <a
               href={process.env.NEXT_PUBLIC_DOCS_URL || "http://localhost:8003"}
               target="_blank"
               rel="noopener noreferrer"
@@ -130,8 +139,13 @@ export default function HomePage() {
                 )}
               >
                 <div className="text-left flex-1 min-w-0 overflow-hidden">
-                  <div className="text-xs md:text-sm font-semibold text-slate-900 truncate">
+                  <div className="text-xs md:text-sm font-semibold text-slate-900 truncate flex items-center gap-1.5">
                     {selectedSite ? selectedSite.name : "全部站点"}
+                    {selectedSite && selectedSite.tenant_slug && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                        {selectedSite.tenant_slug}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] md:text-xs text-slate-500 hidden md:block truncate">
                     {selectedSite ? (selectedSite.description || "限定此站点") : "跨站点提问"}
@@ -192,8 +206,13 @@ export default function HomePage() {
                         )}
                       >
                         <div className="flex items-start justify-between mb-1">
-                          <div className="text-sm md:text-base font-semibold text-slate-900">
+                          <div className="text-sm md:text-base font-semibold text-slate-900 flex items-center gap-2">
                             {site.name}
+                            {site.tenant_slug && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                                {site.tenant_slug}
+                              </span>
+                            )}
                           </div>
                           {selectedSite?.id === site.id && (
                             <div className="w-2 h-2 bg-primary rounded-full mt-1.5 shrink-0" />
@@ -206,12 +225,12 @@ export default function HomePage() {
                         )}
                         <div className="flex items-center gap-2 mt-2">
                           <a
-                            href={`/${site.slug}`}
+                            href={`/${site.tenant_slug || 'default'}/${site.slug}`}
                             onClick={(e) => {
                               e.stopPropagation()
                               if (site.slug) {
                                 e.preventDefault()
-                                router.push(`/${site.slug}`)
+                                router.push(`/${site.tenant_slug || 'default'}/${site.slug}`)
                               }
                             }}
                             className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"

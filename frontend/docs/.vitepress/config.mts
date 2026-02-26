@@ -53,6 +53,9 @@ export default withMermaid(
               { text: '企业微信客服', link: '/development/tech/wecom-kefu' },
               { text: '飞书机器人', link: '/development/tech/feishu-robot' },
               { text: '钉钉机器人', link: '/development/tech/dingtalk-robot' },
+              { text: '问答机器人 (OpenAI 兼容)', link: '/development/tech/chat-api' },
+              { text: 'Discord 机器人', link: '/development/tech/discord-robot' },
+              { text: 'Telegram 机器人', link: '/development/tech/telegram-robot' },
             ]
           },
           {

@@ -24,7 +24,7 @@ interface CustomConfigFormProps {
     apiKey: string
     baseUrl: string
     dimension?: number | null
-    extra_body?: Record<string, any>
+    extra_body?: Record<string, any> | null
   }
   onUpdate: (type: "chat" | "embedding" | "rerank" | "vl", field: string, value: any) => void
 }
