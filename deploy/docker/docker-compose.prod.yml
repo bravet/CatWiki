@@ -113,8 +113,6 @@ services:
         echo ''
       "
     restart: "no"
-    profiles:
-      - init
 
   # FastAPI 后端服务
   backend:
@@ -275,7 +273,7 @@ services:
 
   # 官网服务
   website:
-    profiles: ["ee"]
+    profiles: ["website"]
     build:
       context: ../../frontend/website
       dockerfile: Dockerfile.prod
