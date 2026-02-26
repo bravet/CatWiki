@@ -13,7 +13,10 @@
 // limitations under the License.
 
 import { Input } from "@/components/ui/input"
-import { ShieldCheck } from "lucide-react"
+import { ShieldCheck, BrainCircuit } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+
 interface CustomConfigFormProps {
   type: "chat" | "embedding" | "rerank" | "vl"
   config: {
@@ -21,11 +24,26 @@ interface CustomConfigFormProps {
     apiKey: string
     baseUrl: string
     dimension?: number | null
+    extra_body?: Record<string, any> | null
   }
-  onUpdate: (type: "chat" | "embedding" | "rerank" | "vl", field: string, value: string | number | boolean) => void
+  onUpdate: (type: "chat" | "embedding" | "rerank" | "vl", field: string, value: any) => void
 }
 
 export function CustomConfigForm({ type, config, onUpdate }: CustomConfigFormProps) {
+  const isThinkingEnabled = config.extra_body?.chat_template_kwargs?.enable_thinking ?? false;
+
+  const handleThinkingChange = (checked: boolean) => {
+    const currentExtraBody = config.extra_body || {};
+    const currentKwargs = currentExtraBody.chat_template_kwargs || {};
+    onUpdate(type, "extra_body", {
+      ...currentExtraBody,
+      chat_template_kwargs: {
+        ...currentKwargs,
+        enable_thinking: checked
+      }
+    });
+  };
+
   return (
     <>
       {type === "embedding" && (
@@ -112,6 +130,27 @@ export function CustomConfigForm({ type, config, onUpdate }: CustomConfigFormPro
           <p className="text-xs text-slate-500">
             该值将在保存配置时自动从模型提供商探测。
           </p>
+        </div>
+      )}
+      {type === "chat" && (
+        <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex items-center justify-between transition-all hover:bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600 shadow-sm">
+              <BrainCircuit className="h-5 w-5" />
+            </div>
+            <div className="space-y-0.5">
+              <Label htmlFor="thinking-mode" className="text-sm font-bold text-slate-800 cursor-pointer">
+                是否开启思考
+              </Label>
+              <p className="text-[11px] text-slate-500">调用模型时是否请求思考/推理过程 (extra_body)</p>
+            </div>
+          </div>
+          <Switch
+            id="thinking-mode"
+            checked={isThinkingEnabled}
+            onCheckedChange={handleThinkingChange}
+            className="data-[state=checked]:bg-violet-600"
+          />
         </div>
       )}
     </>

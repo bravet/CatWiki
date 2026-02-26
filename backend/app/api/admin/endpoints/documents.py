@@ -577,9 +577,8 @@ async def _dispatch_vectorization_tasks(
     try:
         from app.core.vector.vector_store import VectorStoreManager
 
-        # 获取实例并强制检查初始化状态
-        vector_store = await VectorStoreManager.get_instance()
-        await vector_store._ensure_initialized(force=True)
+        # 获取实例（get_instance 内部已完成初始化和配置校验）
+        await VectorStoreManager.get_instance()
 
     except (ValueError, Exception) as e:
         error_msg = str(e)

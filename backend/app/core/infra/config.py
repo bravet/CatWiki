@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     AI_CHAT_API_KEY: str | None = Field(default=None)
     AI_CHAT_API_BASE: str | None = Field(default=None)
     AI_CHAT_MODEL: str | None = Field(default=None)
+    AI_CHAT_EXTRA_BODY: str | None = Field(
+        default=None, description="Chat 模型的额外 JSON 配置字符串"
+    )
 
     AI_EMBEDDING_API_KEY: str | None = Field(default=None)
     AI_EMBEDDING_API_BASE: str | None = Field(default=None)
@@ -273,6 +276,10 @@ def get_env_files() -> list[str]:
 settings = Settings(_env_file=get_env_files())
 
 # 系统配置键常量 (Core Layer)
-AI_CONFIG_KEY = "ai_config"
+AI_CHAT_CONFIG_KEY = "ai_chat"
+AI_EMBEDDING_CONFIG_KEY = "ai_embedding"
+AI_RERANK_CONFIG_KEY = "ai_rerank"
+AI_VL_CONFIG_KEY = "ai_vl"
+
 DOC_PROCESSOR_CONFIG_KEY = "doc_processor_config"
 SYSTEM_INTEGRITY_KEY = "system_integrity"

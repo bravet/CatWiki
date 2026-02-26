@@ -16,6 +16,7 @@
 系统配置 API 端点
 """
 
+import asyncio
 import copy
 import logging
 from datetime import datetime
@@ -26,7 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.masking import mask_sensitive_data
 from app.core.infra.config import (
-    AI_CONFIG_KEY,
+    AI_CHAT_CONFIG_KEY,
+    AI_EMBEDDING_CONFIG_KEY,
+    AI_RERANK_CONFIG_KEY,
+    AI_VL_CONFIG_KEY,
     DOC_PROCESSOR_CONFIG_KEY,
 )
 from app.core.infra.tenant import get_current_tenant, temporary_tenant_context
@@ -34,6 +38,7 @@ from app.core.web.deps import get_current_user_with_tenant
 from app.core.web.exceptions import BadRequestException, NotFoundException
 from app.crud.system_config import crud_system_config
 from app.db.database import get_db
+from app.models.system_config import SystemConfig
 from app.models.user import User
 from app.schemas.response import ApiResponse
 from app.schemas.system_config import (
@@ -118,41 +123,56 @@ async def get_ai_config(
         if tenant and "models" in (tenant.platform_resources_allowed or []):
             platform_fallback_allowed = True
 
-    # 1. 获取租户自身配置
+    # 1. 获取所有相关的配置 Row
     with temporary_tenant_context(target_tenant_id):
-        config = await crud_system_config.get_by_key(
-            db, config_key=AI_CONFIG_KEY, tenant_id=target_tenant_id
+        # 获取 4 个独立模型 Key
+        chat_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_CHAT_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        embed_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_EMBEDDING_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        rerank_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_RERANK_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        vl_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_VL_CONFIG_KEY, tenant_id=target_tenant_id
         )
 
-    # 2. 如果允许且租户没配置或配置不全，获取平台配置作为补充 (仅作为参考值返回，不合并)
+        # 聚合最终显示的配置
+        tenant_config_value = {
+            "chat": chat_cfg.config_value if chat_cfg else {},
+            "embedding": embed_cfg.config_value if embed_cfg else {},
+            "rerank": rerank_cfg.config_value if rerank_cfg else {},
+            "vl": vl_cfg.config_value if vl_cfg else {},
+        }
+
+    # 2. 如果允许且租户配置不全，获取平台配置作为补充
     platform_defaults = {}
     if platform_fallback_allowed:
-        with temporary_tenant_context(None):
-            platform_config = await crud_system_config.get_by_key(
-                db, config_key=AI_CONFIG_KEY, tenant_id=None
-            )
-            if platform_config:
-                platform_defaults = platform_config.config_value
+        from app.core.infra.config_resolver import ConfigResolver
 
-    if not config and not platform_defaults:
+        platform_defaults = {
+            "chat": await ConfigResolver.resolve_section("chat", None),
+            "embedding": await ConfigResolver.resolve_section("embedding", None),
+            "rerank": await ConfigResolver.resolve_section("rerank", None),
+            "vl": await ConfigResolver.resolve_section("vl", None),
+        }
+
+    if not any(tenant_config_value.values()) and not platform_defaults:
         # 返回默认配置
         return ApiResponse.ok(data=None, msg="暂无配置，将返回默认值")
 
     # 构造返回数据
-    tenant_config_value = config.config_value if config else {}
 
-    config_response = (
-        SystemConfigResponse.model_validate(config)
-        if config
-        else SystemConfigResponse(
-            id=0,
-            tenant_id=target_tenant_id,
-            config_key=AI_CONFIG_KEY,
-            config_value=tenant_config_value,
-            is_active=True,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-        )
+    config_response = SystemConfigResponse(
+        id=0,
+        tenant_id=target_tenant_id,
+        config_key="ai_config",  # 仅作为响应 Key，物理不存储全量 ai_config
+        config_value=tenant_config_value,
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
     )
 
     # 显式设置 platform_defaults
@@ -186,9 +206,9 @@ async def update_ai_config(
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[SystemConfigResponse]:
     """
-    更新 AI 模型配置 (扁平结构)
+    更新 AI 模型配置 (支持局部更新)
     """
-    config_value = config_in.model_dump(mode="json")
+    new_values = config_in.model_dump(exclude_unset=True, mode="json")
     target_tenant_id = _resolve_target_tenant_id(scope)
     logger.info(
         "🧭 [SystemConfig] update_ai_config scope=%s target_tenant_id=%s",
@@ -199,7 +219,7 @@ async def update_ai_config(
     # 不需要在这里手写 demo 检查，已被 Depends(get_current_user_with_tenant) 拦截
 
     # 自动探测 Embedding Dimension
-    embedding_conf = config_value.get("embedding", {})
+    embedding_conf = new_values.get("embedding", {})
     # 如果有配置，且 apiKey/baseUrl 存在
     if embedding_conf and embedding_conf.get("apiKey") and embedding_conf.get("baseUrl"):
         # 如果 dimension 为空 (None or 0)，尝试探测
@@ -220,41 +240,93 @@ async def update_ai_config(
                 logger.warning(f"⚠️ Failed to auto-detect dimension: {e}")
 
     with temporary_tenant_context(target_tenant_id):
-        logger.info(f"💾 Saving AI Config to DB: {config_value}")
+        # 逐个保存到物理独立的 Key
+        section_to_key = {
+            "chat": AI_CHAT_CONFIG_KEY,
+            "embedding": AI_EMBEDDING_CONFIG_KEY,
+            "rerank": AI_RERANK_CONFIG_KEY,
+            "vl": AI_VL_CONFIG_KEY,
+        }
 
-        config = await crud_system_config.update_by_key(
-            db,
-            config_key=AI_CONFIG_KEY,
-            config_value=config_value,
-            tenant_id=target_tenant_id,
+        for section, section_val in new_values.items():
+            if section not in section_to_key:
+                continue
+
+            specific_key = section_to_key[section]
+            logger.info(f"💾 Saving independent AI section '{section}' to key: {specific_key}")
+
+            # 写入数据库 (update_by_key 会执行 upsert)
+            await crud_system_config.update_by_key(
+                db,
+                config_key=specific_key,
+                config_value=section_val,
+                tenant_id=target_tenant_id,
+            )
+
+        # 获取当前所有的独立配置，用于构造响应 (极致独立，不再读取遗留全量配置)
+        chat_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_CHAT_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        embed_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_EMBEDDING_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        rerank_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_RERANK_CONFIG_KEY, tenant_id=target_tenant_id
+        )
+        vl_cfg = await crud_system_config.get_by_key(
+            db, config_key=AI_VL_CONFIG_KEY, tenant_id=target_tenant_id
         )
 
-    # 强制清除配置缓存，确保所有的 Manager 都能读取到最新写入数据库的值
-    try:
-        from app.services.config import configuration_service
+        # 构造聚合后的配置作为响应返回
+        final_config_value = {
+            "chat": new_values.get("chat") or (chat_cfg.config_value if chat_cfg else {}),
+            "embedding": new_values.get("embedding")
+            or (embed_cfg.config_value if embed_cfg else {}),
+            "rerank": new_values.get("rerank") or (rerank_cfg.config_value if rerank_cfg else {}),
+            "vl": new_values.get("vl") or (vl_cfg.config_value if vl_cfg else {}),
+        }
 
-        configuration_service.clear_cache(tenant_id=target_tenant_id)
-        logger.info(f"🧹 Cleared AI config cache for tenant: {target_tenant_id}")
-    except Exception as e:
-        logger.error(f"❌ Failed to clear config cache: {e}")
-
-    # 触发 VectorStore 热更新
-    try:
-        from app.core.vector.vector_store import VectorStoreManager
-
-        # 注意：get_instance() 内部会尝试初始化。
-        # 如果当前配置有问题，可能会抛出异常。我们应该捕获它，但这不应阻断配置保存成功。
-        manager = await VectorStoreManager.get_instance()
-        await manager.reload_credentials()
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning(
-            f"⚠️ Vector store reload skipped or failed (safe to ignore if config is incomplete): {e}"
+        response_data = SystemConfigResponse(
+            id=0,
+            config_key="ai_config",
+            config_value=final_config_value,
+            is_active=True,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
         )
 
-    # 返回处理
-    response_data = SystemConfigResponse.model_validate(config)
+        # 3. 强制清除配置缓存，确保所有的 Manager 都能读取到最新写入数据库的值
+        try:
+            from app.services.config import configuration_service
+
+            configuration_service.clear_cache(tenant_id=target_tenant_id)
+            logger.info(f"🧹 Cleared AI config cache for tenant: {target_tenant_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to clear config cache: {e}")
+
+        # 4. 触发 VectorStore 热更新 (仅当更新了 embedding 配置时)
+        #    使用后台任务执行，避免阻塞 API 响应返回
+        if "embedding" in new_values:
+            _reload_tenant_id = target_tenant_id  # 闭包捕获
+
+            async def _reload_vector_store():
+                try:
+                    async with asyncio.timeout(10):
+                        from app.core.vector.vector_store import VectorStoreManager
+
+                        manager = await VectorStoreManager.get_instance()
+                        await manager.reload_credentials(tenant_id=_reload_tenant_id)
+                        logger.info("✅ VectorStore credentials reloaded in background")
+                except TimeoutError:
+                    logger.warning(
+                        "⚠️ VectorStore reload timed out after 10s (will reload on next use)"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Vector store reload skipped or failed (safe to ignore if config is incomplete): {e}"
+                    )
+
+            asyncio.create_task(_reload_vector_store())
 
     return ApiResponse.ok(data=response_data, msg="AI 配置更新成功")
 
@@ -457,7 +529,9 @@ async def get_doc_processor_config(
     else:
         # scope == "platform" 时返回原始数据
         merged_processors = tenant_processors + platform_processors
-        logger.info("📡 [SystemConfig] Platform scope view, displaying raw doc processor configuration")
+        logger.info(
+            "📡 [SystemConfig] Platform scope view, displaying raw doc processor configuration"
+        )
 
     return ApiResponse.ok(data={"processors": merged_processors}, msg="获取成功")
 

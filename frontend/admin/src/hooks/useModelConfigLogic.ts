@@ -55,14 +55,18 @@ export function useModelConfigLogic(type: RuntimeModelType, onSuccess?: () => vo
 
   const handleSaveWithCheck = async () => {
     if (mode === "platform") {
-      await handleSave()
-      onSuccess?.()
+      try {
+        await handleSave(type)
+        onSuccess?.()
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "保存失败")
+      }
       return
     }
 
     try {
       await testConnection.mutateAsync({ modelType: type, config })
-      await handleSave()
+      await handleSave(type)
       onSuccess?.()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "连接测试发生错误，无法保存")
@@ -75,7 +79,8 @@ export function useModelConfigLogic(type: RuntimeModelType, onSuccess?: () => vo
       model: config.model,
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
-      dimension: config.dimension
+      dimension: config.dimension,
+      extra_body: config.extra_body
     },
     mode,
     hasPlatformResource,

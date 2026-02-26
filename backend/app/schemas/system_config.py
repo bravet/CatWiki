@@ -34,6 +34,10 @@ class ModelConfig(BaseModel):
     mode: Literal["custom", "platform"] = Field(
         default="custom", description="配置模式: custom=自定义, platform=使用平台资源"
     )
+    extra_body: dict[str, Any] | None = Field(
+        default=None,
+        description='额外请求体参数 (例如: {"chat_template_kwargs": {"enable_thinking": false}})',
+    )
 
 
 class AIModelConfig(BaseModel):
@@ -90,10 +94,10 @@ class SystemConfigResponse(SystemConfigBase):
 class AIConfigUpdate(BaseModel):
     """更新 AI 配置"""
 
-    chat: ModelConfig = Field(..., description="对话模型配置")
-    embedding: ModelConfig = Field(..., description="向量模型配置")
-    rerank: ModelConfig = Field(..., description="重排序模型配置")
-    vl: ModelConfig = Field(..., description="视觉模型配置")
+    chat: ModelConfig | None = Field(default=None, description="对话模型配置")
+    embedding: ModelConfig | None = Field(default=None, description="向量模型配置")
+    rerank: ModelConfig | None = Field(default=None, description="重排序模型配置")
+    vl: ModelConfig | None = Field(default=None, description="视觉模型配置")
 
 
 class TestConnectionRequest(BaseModel):

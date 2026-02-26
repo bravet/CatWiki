@@ -27,13 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Save, ShieldCheck } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Save, ShieldCheck, BrainCircuit } from "lucide-react"
 import type { ModelConfig } from "@/lib/api-client"
 
 interface ModelConfigFieldsProps {
   type: "chat" | "embedding" | "rerank" | "vl"
   config: ModelConfig
-  onUpdate: (field: string, value: string) => void
+  onUpdate: (field: string, value: any) => void
   onSave: () => void
 }
 
@@ -45,13 +47,29 @@ const MODEL_TYPE_LABELS = {
 }
 
 export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfigFieldsProps) {
+  const isThinkingEnabled = config.extra_body?.chat_template_kwargs?.enable_thinking ?? false;
+
+  const handleThinkingChange = (checked: boolean) => {
+    const currentExtraBody = config.extra_body || {};
+    const currentKwargs = currentExtraBody.chat_template_kwargs || {};
+    onUpdate("extra_body", {
+      ...currentExtraBody,
+      chat_template_kwargs: {
+        ...currentKwargs,
+        enable_thinking: checked
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 pt-4">
+      {/* ... (rest of the component) */}
+      {/* Search for line 129 and fix it below */}
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">模型提供商</label>
-          <Select 
-            value={config.provider} 
+          <Select
+            value={config.provider}
             onValueChange={(val) => onUpdate("provider", val)}
           >
             <SelectTrigger className="w-full bg-white">
@@ -70,8 +88,8 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
         </div>
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">模型名称</label>
-          <Input 
-            value={config.model} 
+          <Input
+            value={config.model}
             onChange={(e) => onUpdate("model", e.target.value)}
             placeholder="例如: gpt-4, claude-3-opus..."
             autoComplete="new-password"
@@ -83,9 +101,9 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
 
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700">API Key</label>
-        <Input 
+        <Input
           type="password"
-          value={config.apiKey} 
+          value={config.apiKey}
           onChange={(e) => onUpdate("apiKey", e.target.value)}
           placeholder="sk-..."
           autoComplete="new-password"
@@ -96,13 +114,35 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
 
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700">API Base URL</label>
-        <Input 
-          value={config.baseUrl} 
+        <Input
+          value={config.baseUrl}
           onChange={(e) => onUpdate("baseUrl", e.target.value)}
           placeholder="https://api.openai.com/v1"
           className="bg-white font-mono"
         />
       </div>
+
+      {type === "chat" && (
+        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between transition-all hover:bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 shadow-sm">
+              <BrainCircuit className="h-5 w-5" />
+            </div>
+            <div className="space-y-0.5">
+              <Label htmlFor="thinking-mode" className="text-sm font-bold text-slate-800 cursor-pointer">
+                是否开启思考
+              </Label>
+              <p className="text-[11px] text-slate-500">调用模型时是否请求思考/推理过程 (extra_body)</p>
+            </div>
+          </div>
+          <Switch
+            id="thinking-mode"
+            checked={isThinkingEnabled}
+            onCheckedChange={handleThinkingChange}
+            className="data-[state=checked]:bg-violet-600"
+          />
+        </div>
+      )}
 
       <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
         <div className="bg-slate-50 px-4 py-2 rounded-xl flex items-center gap-3">
@@ -111,8 +151,8 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
             API Key 已加密存储。请确保该供应商余额充足。
           </p>
         </div>
-        <Button 
-          onClick={onSave} 
+        <Button
+          onClick={onSave}
           className="flex items-center gap-2 h-10 px-6 rounded-xl shadow-md"
         >
           <Save className="h-4 w-4" />

@@ -52,12 +52,9 @@ class LifecycleManager:
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] Checkpointer table setup failed: {e}")
 
-        # 4. 初始化核心管理器 (预热平台实例)
-        try:
-            await VectorStoreManager.get_instance()
-            logger.info("✅ [Lifecycle] VectorStoreManager pre-warmed.")
-        except Exception as e:
-            logger.warning(f"⚠️ [Lifecycle] VectorStoreManager pre-warm failed: {e}")
+        # 4. 初始化核心管理器
+        # VectorStore 现在采用懒加载策略，首次检索时自动初始化
+        pass
 
         # 5. 启动集成服务
         try:
@@ -130,8 +127,8 @@ class LifecycleManager:
 
         # 2. Vector Store 检查
         try:
-            vs_manager = await VectorStoreManager.get_instance()
-            await vs_manager._ensure_initialized(tenant_id=None)
+            vs_manager = await VectorStoreManager.get_instance(purpose="健康检查：向量检索服务")
+            await vs_manager._ensure_initialized(tenant_id=None, purpose="健康检查：初始化向量引擎")
             results["vector_store"] = "healthy"
         except Exception as e:
             results["vector_store"] = f"unhealthy: {str(e)}"
@@ -148,7 +145,7 @@ class LifecycleManager:
         try:
             from app.core.ai.providers.llm_manager import llm_manager
 
-            await llm_manager.get_model(tenant_id=None)
+            await llm_manager.get_model(tenant_id=None, purpose="健康检查：模型连通性测试")
             results["llm"] = "healthy"
         except Exception as e:
             results["llm"] = f"unhealthy: {str(e)}"

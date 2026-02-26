@@ -57,6 +57,8 @@ export * from './FunctionCall';
 export * from './HTTPValidationError';
 export * from './HealthResponse';
 export * from './ModelConfig';
+export * from './ModelList';
+export * from './ModelObject';
 export * from './MoveCollectionRequest';
 export * from './PaginatedResponse_Document_';
 export * from './PaginatedResponse_Site_';

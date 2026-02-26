@@ -18,6 +18,7 @@
 """
 
 import asyncio
+from typing import Any
 
 from langchain_core.embeddings import Embeddings
 from openai import AsyncOpenAI
@@ -37,9 +38,11 @@ class OpenAICompatibleEmbeddings(Embeddings):
         max_retries: int = 3,
         timeout: float = 60.0,
         embedding_batch_size: int = 10,
+        extra_body: dict[str, Any] | None = None,
     ):
         self.model = model
         self.embedding_batch_size = embedding_batch_size
+        self.extra_body = extra_body
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -48,7 +51,12 @@ class OpenAICompatibleEmbeddings(Embeddings):
         )
 
     def update_credentials(
-        self, api_key: str, base_url: str, model: str, embedding_batch_size: int | None = None
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        embedding_batch_size: int | None = None,
+        extra_body: dict[str, Any] | None = None,
     ):
         """更新客户端凭证
 
@@ -58,6 +66,8 @@ class OpenAICompatibleEmbeddings(Embeddings):
         self.model = model
         if embedding_batch_size is not None:
             self.embedding_batch_size = embedding_batch_size
+        if extra_body is not None:
+            self.extra_body = extra_body
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -74,7 +84,9 @@ class OpenAICompatibleEmbeddings(Embeddings):
 
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
-                response = await self.client.embeddings.create(model=self.model, input=batch)
+                response = await self.client.embeddings.create(
+                    model=self.model, input=batch, extra_body=self.extra_body
+                )
                 all_embeddings.extend([item.embedding for item in response.data])
 
             return all_embeddings

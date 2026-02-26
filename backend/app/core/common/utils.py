@@ -25,8 +25,12 @@ import hashlib
 import re
 import secrets
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from typing import Any
+
+# 用于跨层级收集 RAG 统计信息以便在回合结束时进行汇总打印
+rag_stats_var: ContextVar[dict | None] = ContextVar("rag_stats", default=None)
 
 from app.core.infra.config import settings  # noqa: F401 (部分调用方通过 utils 间接依赖)
 
@@ -130,3 +134,101 @@ class Paginator:
             size=self.size,
             total=self.total,
         )
+
+
+def log_ai_config_card(section: str, config: dict[str, Any], title: str = "Active Config"):
+    """[✨ 亮点] 统一打印 AI 配置可视化卡片"""
+    import json
+    import logging
+
+    from app.core.common.masking import mask_sensitive_data
+
+    logger = logging.getLogger(f"app.core.ai.config.{section}")
+    masked = mask_sensitive_data(config)
+
+    model = masked.get("model", "N/A")
+    provider = masked.get("provider", "N/A")
+    extra_body = masked.get("extra_body")
+    h = config.get("_hash", "N/A")
+
+    try:
+        pretty_json = json.dumps(masked, indent=4, ensure_ascii=False)
+    except Exception:
+        pretty_json = str(masked)
+
+    log_msg = (
+        f"\n{'=' * 60}\n"
+        f"🔍 [{section.upper()}] -> {title}\n"
+        f"   - 哈希指纹: {h}\n"
+        f"   - 核心模型: {provider} | {model}\n"
+        f"   - 扩展参数 (extra_body): {json.dumps(extra_body, ensure_ascii=False) if extra_body else 'None'}\n"
+        f"   - 配置快照:\n{pretty_json}\n"
+        f"{'=' * 60}"
+    )
+    logger.debug(log_msg)
+
+
+def log_ai_usage_signal(
+    section: str,
+    model: str,
+    h: str,
+    is_hit: bool = True,
+    tenant_id: Any = None,
+    extra: dict[str, Any] | None = None,
+    purpose: str | None = None,
+):
+    """[✨ 亮点] 统一打印 AI 模型使用/复用信号 (采用 Mini-Card 格式，极高辨识度)"""
+    import logging
+
+    logger = logging.getLogger(f"app.core.ai.usage.{section}")
+
+    icon = "♻️ " if is_hit else "🚀"
+    status_text = "CACHE HIT (Reusing)" if is_hit else "NEW LOAD (Initializing)"
+    h_brief = h[:8] if h else "N/A"
+    tenant_info = f" | Tenant: {tenant_id}" if tenant_id is not None else ""
+
+    # 构建扩展信息行
+    extra_lines = ""
+    if extra:
+        for key, value in extra.items():
+            if value is not None and value != "":
+                # 💡 [优化] 缓存命中时，隐藏一些冗余的静态配置信息，保持日志清爽
+                if is_hit and key in ["Base URL", "Source", "Dimension", "Provider", "Fingerprint"]:
+                    continue
+                extra_lines += f"   - {key}: {value}\n"
+
+    purpose_str = f"   - Purpose: {purpose}\n" if purpose else ""
+
+    line_color = "-" * 80 if not is_hit else "-" * 40
+    msg = (
+        f"\n{line_color}\n"
+        f"{icon} [{section.upper():9}] {status_text}\n"
+        f"   - Model: {model}\n"
+        f"{purpose_str}"
+        f"   - Fingerprint: {h_brief}{tenant_info}\n"
+        f"{extra_lines}"
+        f"{line_color}"
+    )
+    logger.debug(msg)
+
+
+def log_process_step_card(
+    section: str, title: str, step: int, total: int, details: str | None = None
+):
+    """[✨ 亮点] 统一打印过程/进度卡片 (如 Graph 迭代)"""
+    import logging
+
+    logger = logging.getLogger(f"app.core.process.{section}")
+
+    progress_bar = "■" * step + "□" * (total - step)
+    line = "═" * 80
+    detail_line = f"   - Context: {details}\n" if details else ""
+
+    msg = (
+        f"\n{line}\n"
+        f"🔄 [{section.upper():9}] {title}\n"
+        f"   - Progress: {step}/{total} [{progress_bar}]\n"
+        f"{detail_line}"
+        f"{line}"
+    )
+    logger.debug(msg)

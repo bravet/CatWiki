@@ -30,6 +30,10 @@ export type ModelConfig = {
      * 配置模式: custom=自定义, platform=使用平台资源
      */
     mode?: ModelConfig.mode;
+    /**
+     * 额外请求体参数 (例如: {"chat_template_kwargs": {"enable_thinking": false}})
+     */
+    extra_body?: (Record<string, any> | null);
 };
 export namespace ModelConfig {
     /**

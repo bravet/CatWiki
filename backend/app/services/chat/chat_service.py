@@ -26,6 +26,7 @@ from langchain_openai import ChatOpenAI
 from app.core.ai.graph import create_agent_graph
 from app.core.ai.graph.checkpointer import get_checkpointer
 from app.core.ai.providers.llm_manager import llm_manager
+from app.core.common.utils import rag_stats_var
 from app.core.vector.rag_utils import (
     convert_tool_call_chunk_to_openai,
     extract_sources_from_messages,
@@ -59,6 +60,10 @@ class ChatService:
         background_tasks: BackgroundTasks,
     ) -> AsyncGenerator[ChatCompletionChunk | dict, None]:
         """核心流式响应生成器 - 产出原始 Chunk 对象或状态 dict"""
+        # 💡 [亮点] 预初始化 ContextVar 统计字典，确保跨 Task 的数据能够注入
+        rag_stats_var.set({})
+
+        turn_start_time = time.time()
         full_response = ""
         sources = []
         chunk_id_prefix = f"chatcmpl-{uuid.uuid4()}"
@@ -144,6 +149,46 @@ class ChatService:
                     )
 
             background_tasks.add_task(save_history)
+
+            # 💡 [亮点] 在一次对话回合的所有事件结束后，打印最终的 Pipeline 汇总卡片
+            # 这符合用户“在最后面”的预期，且能提供更完整的数据视角
+            stats = rag_stats_var.get()
+            if stats:
+                total_duration = time.time() - turn_start_time
+                # 💡 [优化] 标注检索轮次
+                steps_count = stats.get("steps", 1)
+                steps_info = f" ({steps_count} turns)" if steps_count > 1 else ""
+
+                # 处理多查询展示 (避免过长)
+                queries = stats.get("queries", [])
+                if not queries and "query" in stats:  # 兼容单次记录
+                    queries = [stats["query"]]
+
+                if len(queries) > 1:
+                    query_display = f"{queries[0][:60]}... (+{len(queries) - 1} searches)"
+                elif queries:
+                    query_display = f"{queries[0][:80]}{'...' if len(queries[0]) > 80 else ''}"
+                else:
+                    query_display = "N/A"
+
+                summary_card = (
+                    f"\n{'=' * 72}\n"
+                    f"📋 [RAG Pipeline Summary]{steps_info}\n"
+                    f"   Query    : {query_display}\n"
+                    f"   Site     : {stats['site']}\n"
+                    f"{'─' * 72}\n"
+                    f"   1️⃣  Embedding : {stats['embedding_model']} ({stats['embedding_hash'][:8] if stats['embedding_hash'] else 'N/A'})\n"
+                    f"      Recalled  : {stats['recalled_count']} chunks → {stats['filtered_count']} after threshold ({stats['threshold']})\n"
+                    f"   2️⃣  Reranker  : {stats['rerank_model']}\n"
+                    f"      Output    : {stats['output_count']} results (top_k={stats['top_k']})\n"
+                    f"   3️⃣  Chat      : {model_name}\n"
+                    f"{'─' * 72}\n"
+                    f"   ⏱️  Total Dur : {total_duration:.3f}s (Retrieval: {stats['retrieval_duration']:.3f}s)\n"
+                    f"{'=' * 72}"
+                )
+                logger.info(summary_card)
+                # 清除 ContextVar，保持环境洁净
+                rag_stats_var.set(None)
 
         except Exception as e:
             logger.error(f"❌ [ChatService] Stream generator error: {e}", exc_info=True)
@@ -241,14 +286,20 @@ class ChatService:
 
         set_current_tenant(tenant_id)
 
-        # 4. 初始化 LLM
+        # 4. [✨ 亮点] 打印全量 AI 栈配置快照 (Session 级别一次性打印，放在模型初始化前)
+        from app.core.infra.config_resolver import ConfigResolver
+
+        await ConfigResolver.log_ai_stack(tenant_id=tenant_id)
+
+        # 5. 初始化 LLM (可能会触发详细的 Config Card 日志)
         llm = await llm_manager.get_model(
             tenant_id=tenant_id,
             model_name=model_name,
             temperature=temperature,
+            purpose="初始化推理引擎",
         )
 
-        # 5. 持久化 (如果这是该 thread 的新消息)
+        # 6. 持久化 (如果这是该 thread 的新消息)
         async with AsyncSessionLocal() as db:
             try:
                 await ChatSessionService.create_or_update(

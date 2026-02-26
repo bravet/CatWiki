@@ -1,105 +1,119 @@
-# AI对话与知识库检索
+# AI 对话与知识库检索核心架构
 
-本文档详细介绍了 CatWiki AI 对话系统的核心架构、处理流程以及针对 RAG（检索增强生成）质量与效率所做的深度设计。
+本文档详细介绍了 CatWiki AI 对话系统的底层架构与处理机制。系统基于检索增强生成 (RAG) 和多轮推理逻辑构建，旨在提供高精确度、强上下文感知的智能问答服务。
 
-## 1. 核心架构：基于 LangGraph 的 ReAct 模式
+---
 
-系统采用了 **ReAct (Reasoning and Acting)** 范式，利用 [LangGraph](https://langchain-ai.github.io/langgraph/) 构建了一个有状态的循环工作流。
+## 1. 顶层架构地图 (Architecture Overview)
 
-### 1.1 状态机工作流 (Graph Workflow)
+系统采用 **ReAct (Reasoning and Acting)** 范式，核心引擎基于 [LangGraph](https://langchain-ai.github.io/langgraph/) 构建了一个支持外挂工具的有状态图工作流（StateGraph）。
 
-系统通过状态机管理对话逻辑，确保推理与行为的解耦。
+### 1.1 状态机工作流拓扑
+整个会话服务是一条由状态驱动的管线，其中 `Agent` 扮演大脑，`Router` 负责调度，`Tools` (如 RAG) 提供感官输入。
 
 ```mermaid
 graph TD
-    START((开始)) --> API[API 接收请求]
-    API --> DCM[获取动态配置]
-    DCM --> CSS_S[创建会话记录]
-    CSS_S --> Agent[Agent 思考节点]
+    %% 阶段一：准备工作
+    START((会话请求接入)) --> API[API 解析流式请求]
+    API --> DCM[解析租户动态配置] --> LOG_CTX["DEBUG: 打印 AI Context"]
+    DCM --> CSS_S[持久化拦截：创建/更新 Session]
+    CSS_S --> Agent[Agent 大脑节点]
     
-    Agent --> Router{决策路由}
-    Router -- 调用工具 --> Tools[工具执行节点]
-    Tools --> KB[知识库检索]
-    KB --> Agent
+    %% 阶段二：推理循环 (ReAct Loop)
+    subgraph Reasoning_Engine["智能引擎核心"]
+        Agent --> Intent[分析意图 & 搜索词改写]
+        Intent --> Router{"决策路由"}
+        
+        Router -- "发现知识盲区 -> 调用工具" --> Tools[Tools 包装节点]
+        
+        subgraph RAG_Pipeline["知识检索执行流"]
+            Tools --> RAG_Q["INFO: RAG Query"]
+            RAG_Q --> Recall[向量数据库：语义召回]
+            Recall --> RRK_C{"需要高精度精排?"}
+            RRK_C -- "是 (Reranker 激活)" --> RRK[重排序打分]
+            RRK_C -- "否" --> TD
+            RRK --> TD["INFO: Turn Done (召回 -> 精排反馈)"]
+        end
+        
+        TD --> Agent
+    end
     
-    Router -- 生成回答 --> CheckSum{触发摘要?}
-    CheckSum -- 是 --> Summarize[摘要剪枝节点]
-    Summarize --> Stream[流式输出结束]
-    CheckSum -- 否 --> Stream
+    %% 阶段三：输出与善后
+    Router -- "得出最终结论 -> 停止调用" --> CheckSum{"判断: 记忆超载?"}
+    CheckSum -- "是" --> Summarize[长期记忆管理：摘要与剪枝]
+    Summarize --> Stream[SSE 流式响应结束]
+    CheckSum -- "否" --> Stream
     
-    Stream --> Save[异步持久化历史]
-    Save --> END((结束))
+    Stream --> LOG_SUM["INFO: Pipeline Summary 性能结算"]
+    LOG_SUM --> Save[后台任务：异步存储原始对话]
+    Save --> END((管线结束))
 ```
 
-### 1.2 核心节点说明
-- **Agent 节点**: 负责决策。LLM 根据 `SystemPrompt` 和历史上下文，决定是直接回答用户，还是通过调工具获取信息。
-- **Tools 包装节点**: 包含防护逻辑。监测 `iteration_count` 和 `consecutive_empty_count`，防止 Agent 陷入无限搜索循环。
-- **Summarize 节点**: 长期记忆管理。当对话长度触及阈值时，自动提取关键点并剪枝历史（RemoveMessage），在保证上下文连续性的同时节省 Token。
+---
+
+## 2. 核心工作机制解析
+
+### 2.1 ReAct 推理引擎
+- **意图识别与改写 (Query Rewriting)**: 当用户输入诸如“上面提到的那步力气要多大”这样口语化或代词模糊的问题时，Agent 首先会结合全量对话历史进行**意图对齐**。它并非直接拿原话去搜，而是通过内部逻辑将问题改写为高信息熵的检索词（如：“心肺复苏 胸外按压 深度 厘米”），这极大地提升了下游向量检索的命中率。
+- **循环机制 (Reasoning Loop)**:
+  - 若需要查资料，则携带改写后的 Keywords 进入 `Tools` 分支；
+  - 查得资料后，图谱会重新回到 `Agent` 节点，由 LLM 综合现有资料继续判断（是否还需要追问别的细节）。
+- **保险措施**: 为防止模型死循环产生“幻觉抽搐”，`Tools` 层加入了硬编码的 `iteration_count` 监控拦截器。
+
+### 2.2 知识检索管道 (RAG Pipeline)
+当 Agent 决定求助于外部知识时，检索动作分为两级：
+1. **语义海选 (Recall)**
+   - 依赖底层的 VectorStore。
+   - 策略：系统通过 `site_id` 进行租户数据硬隔离。为了保证精度，召回池（`recall_k`）设定得更深。
+2. **重排细选 (Rerank)**
+   - 针对第一层筛选出的大量候选者进行深度重算。
+   - 策略：系统在下发任务给 Reranker 之前，会先做租户级可用性校验；最终只吐出高得分的 Top K 片段（默认 5），极大地保护了 LLM 对有效信息的聚焦力。
 
 ---
 
-## 2. RAG 检索深度优化 (Vector Service)
+## 3. 引用的“加工厂”机制 (Citation Synthesis)
 
-系统通过多阶段处理确保召回的精准度。
+为什么日志里查出了 6 个知识片段，到了前端展示为什么却变成了“引用来源（3）”？这是由于系统进行了专业的数据清洗。
 
-### 2.1 请求生命周期中的检索流程
-1. **语义召回 (Recall)**: 
-   - 过滤条件：支持基于 `site_id` 的多租户隔离。
-   - 深度：初始召回 `recall_k` 设置为 50-100 个分片。
-2. **精排重测 (Rerank)**: 
-   - 调用 Reranker 模型对候选集进行二次打分。
-   - 动态调整：如果开启重排序，则仅返回得分最高的 Top K 个分片。
-3. **上下文注入**: 
-   - 检索结果以 JSON 格式注入 `ToolMessage`，包含分片的 `content` 和 `source_index`。
+### 3.1 碎片缝合 (Content Merging)
+向量切片（Chunking）机制会导致同一篇文章被切成多块。如果直接将这些块喂给大模型，答案会显得啰嗦且引用重复。
+> **内部处理**：工具执行层会通过 `document_id` 将属于**同一篇文章**的散落片段拼缝在一起，形成连贯段落。系统将这几个片段作为一个统一体喂给模型。
 
----
-
-## 3. 消息持久化与状态恢复
-
-系统采用“双轨制”存储，兼顾运行效率与审计需求。
-
-### 3.1 运行态：SQL Checkpointer
-- 基于 `LangGraph` 的 `SqliteSaver/PostgresSaver`。
-- **作用**: 记录图的原子状态，支持跨请求的断点续连和 ReAct 循环的中断恢复。
-- **Thread ID**: 每个用户会话拥有独立的线索 ID。
-
-### 3.2 审计态：全量消息表 (`ChatMessage`)
-- **作用**: 存储 OpenAI 兼容格式的原始消息流。
-- **包含内容**: 人类问题、AI 思考、中间工具调用参数、工具返回结果以及 Token 消耗统计。
-- **异步保存**: 每一轮对话结束后，通过 FastAPI `BackgroundTasks` 异步同步到 SQL，零延迟影响用户体验。
+### 3.2 全局递增坐标 (Global Indexing Offset)
+在支持多次查询（多轮检索）的复杂场景中，如果每轮给片段的编号都从 1 开始，AI 会逻辑瘫痪（产生多重引用混淆）。
+> **内部处理**：系统每次下发检索结果前，都会回溯这个 Thread 以前的所有搜索记录，计算出一个 `offset`。
+> 例如：上一轮搜了 2 个文献（已标号 1、2），这一轮新查的文献强制从 3 开始编号。这就保证了多层推理的“刻度线”绝对不会错乱。
 
 ---
 
-## 4. 引用来源提取策略 (Sources Strategy)
+## 4. 日志追踪与性能监测
 
-系统确保回答中标记的 `[n]` 与展示的引用列表严格对齐，支持多轮对话中的引用稳定性与历史回溯。
+为了将黑盒系统“白盒化”，系统构建了四层协同的日志观测网。
 
-### 4.1 索引与一致性 (Indexing & Consistency)
-- **全局唯一索引**: CatWiki 采用 **全量会话全局递增索引**。工具侧计算当前 Thread 中已用的最大索引值，确保每条消息的 `source_index` 唯一且单调递增。这解决了历史记录恢复时序号重复的问题。
-- **内容合并 (Content Merging)**: 为了提升 AI 理解质量，系统对同一份文档（相同 `document_id`）的多个片段进行拼接。UI 上的“引用来源”针对每个文档仅展示一个卡片。
-
-### 4.2 历史恢复机制 (History Restoration)
-- **Sources 字段**: 引用项统一通过消息对象的 `sources` 字段进行传递和存储。系统已废弃顶层全局引用列表，由每一条消息独立保障其参考资料。
-- **按需动态提取**: 加载历史时，系统动态扫描该 Thread 下的 `ToolMessage` 输出，解析出 `sources` 并绑定到对应的 AI 回复消息中。
+1. **AI Context (DEBUG)**：请求进来的第一秒，展现当前用户的全量模型配置快照。
+2. **RAG Query (INFO)**：暴露模型每次调用工具的“原始搜索词”，让你看见它到底想查什么。
+3. **Turn Done (INFO)**：单次检索结束的战报（比如：从 20 个片段中精挑出了 3 个有用信息）。
+4. **Pipeline Summary (INFO)**：回合完美收官时打印。它能**聚合**上面多次（如 3 turns）的零散操作，给出一份完整的耗时、调度量成绩单。
 
 ---
 
-## 5. 性能优化 (Performance)
+## 5. 状态持久化双轨制
 
-- **DynamicConfig 缓存**: 配置管理器对 AI 模型参数进行 5 分钟 TTL 缓存，避免了每秒高频查询数据库导致的 TTFT（首包延迟）增加。
-- **原子更新**: 使用 SQL `update(ChatSession).values(message_count=ChatSession.message_count + 1)` 确保并发状态下计数器的准确性。
+AI 的高并发对状态存储有着挑战。CatWiki 选用了业务与流水分开存的“双轨制”：
+1. **运行态 (Checkpointer)**:
+   使用 LangGraph 原生的 SQLite/Postgres 保存图的原子二进制切片。负责支持上下文记忆与网络异常后的断点重做。
+2. **审计态 (History Database)**:
+   保留 OpenAI 标准格式明文流水。利用 `BackgroundTasks` 在主线程结束 **后** 偷偷存库，哪怕存库卡顿，也不会阻塞前端一个像素的绘制。
 
 ---
 
-## 6. 配置与调优 (Environment Variables)
+## 6. 环境微调参数表
 
-系统支持通过环境变量动态调整 RAG 质量与性能。
+开发者可通过以下环境变量干预核心推理的保守程度与花销：
 
-### 6.1 RAG 核心参数项
-| 变量名 | 默认值 | 说明 |
+| 环境变量名 | 默认值 | 调整建议 |
 | :--- | :--- | :--- |
-| `RAG_RECALL_K` | 50 | 初始向量召回数量（海选池大小） |
-| `RAG_RECALL_THRESHOLD` | 0.3 | 向量检索相似度阈值 |
-| `RAG_ENABLE_RERANK` | true | 显式开启/关闭重排序精排阶段 |
-| `RAG_RERANK_TOP_K` | 5 | 最终喂给 AI 的精选文档数量 |
-| `RAG_RECALL_MAX` | 100 | 全局召回硬上限，保护 Reranker 性能 |
+| `RAG_RECALL_K` | 50 | 大幅扩展初始海选池规模，推荐在高质量网络下提高 |
+| `RAG_RECALL_THRESHOLD` | 0.3 | 提高此值可滤除非相关废话，但也可能漏掉边缘线索 |
+| `RAG_ENABLE_RERANK` | true | Reranker 非常消耗显存/算力，小型设备上可关闭 |
+| `RAG_RERANK_TOP_K` | 5 | 决定了系统总结内容的“知识底盘边界” |

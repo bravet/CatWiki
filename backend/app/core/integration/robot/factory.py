@@ -27,3 +27,8 @@ class RobotFactory:
             return WeComKefuAdapter()
         else:
             raise ValueError(f"暂不支持的机器人平台: {platform}")
+
+    @classmethod
+    async def shutdown(cls):
+        """关闭工厂并清理相关资源 (预留接口)"""
+        pass

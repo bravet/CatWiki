@@ -27,7 +27,7 @@ import { ModelConfig } from "@/lib/api-client"
 import { type AIConfigs, initialConfigs, MODEL_TYPES } from "@/types/settings"
 
 type RuntimeModelType = typeof MODEL_TYPES[number]
-type PrimitiveConfigValue = string | number | boolean
+type PrimitiveConfigValue = string | number | boolean | Record<string, unknown>
 const EMPTY_RECORD: Record<string, unknown> = {}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,7 +55,7 @@ const deepMerge = (target: Record<string, unknown>, source: unknown): Record<str
 // 统一配置合并逻辑
 const mergeAIConfigs = (backendData: unknown, initial: AIConfigs): AIConfigs => {
   if (!isRecord(backendData)) return initial
-  
+
   const parseSection = <T extends Record<string, unknown>>(section: unknown, initialSection: T): T => {
     if (!isRecord(section)) return initialSection
     return deepMerge(initialSection, section) as T
@@ -77,6 +77,7 @@ function toApiModelConfig(config: AIConfigs[RuntimeModelType]): AIConfigUpdate["
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     dimension: typeof config.dimension === "number" ? config.dimension : null,
+    extra_body: config.extra_body as Record<string, any>,
     mode: config.mode === "platform"
       ? ModelConfig.mode.PLATFORM
       : config.mode === "custom"
@@ -95,7 +96,7 @@ interface SettingsContextType {
 
   // 更新函数
   handleUpdate: (type: RuntimeModelType, field: string, value: PrimitiveConfigValue) => void
-  handleSave: () => Promise<void>
+  handleSave: (modelType?: RuntimeModelType) => Promise<void>
   revertToSavedConfig: (modelType: RuntimeModelType) => void
 
   // 工具函数
@@ -164,13 +165,20 @@ export function SettingsProvider({ children, scope = 'tenant' }: { children: Rea
     })
   }
 
-  const handleSave = async () => {
-    // 构建完整的 AI 配置对象 (扁平结构)
-    const aiConfig: AIConfigUpdate = {
-      chat: toApiModelConfig(configs.chat),
-      embedding: toApiModelConfig(configs.embedding),
-      rerank: toApiModelConfig(configs.rerank),
-      vl: toApiModelConfig(configs.vl)
+  const handleSave = async (modelType?: RuntimeModelType) => {
+    // 根据是否传入 modelType 构建 Payload
+    // 如果传入则仅保存该项，否则全量保存
+    let aiConfig: AIConfigUpdate = {}
+
+    if (modelType) {
+      aiConfig[modelType] = toApiModelConfig(configs[modelType])
+    } else {
+      aiConfig = {
+        chat: toApiModelConfig(configs.chat),
+        embedding: toApiModelConfig(configs.embedding),
+        rerank: toApiModelConfig(configs.rerank),
+        vl: toApiModelConfig(configs.vl)
+      }
     }
 
     try {

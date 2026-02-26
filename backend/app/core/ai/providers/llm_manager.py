@@ -48,6 +48,7 @@ class LLMManager:
         model_name: str | None = None,
         temperature: float = 0.7,
         force: bool = False,
+        purpose: str | None = None,
     ) -> ChatOpenAI:
         """根据租户获取模型实例 (带缓存)"""
         from app.core.web.exceptions import BadRequestException
@@ -72,16 +73,53 @@ class LLMManager:
 
         # 2. 检查池化缓存
         if pool_key in self._models and not force:
-            logger.debug(
-                f"⚡ [LLMManager] Reusing Chat model instance (Model: {effective_model}, Temp: {temperature})"
+            from app.core.common.utils import log_ai_usage_signal
+
+            log_ai_usage_signal(
+                "chat",
+                effective_model,
+                conf_hash,
+                is_hit=True,
+                tenant_id=tenant_id,
+                extra={
+                    "Base URL": base_url,
+                    "Temperature": temperature,
+                    "Source": config.get("_source", "platform"),
+                },
+                purpose=purpose,
             )
-            return self._models[pool_key]
+            model_inst = self._models[pool_key]
+            # 即使命中缓存，也确保元数据是最新的
+            model_inst._usage_metadata = {
+                "model": effective_model,
+                "h": conf_hash,
+                "tenant_id": tenant_id,
+                "extra": {
+                    "Base URL": base_url,
+                    "Temperature": temperature,
+                    "Source": config.get("_source", "platform"),
+                },
+            }
+            return model_inst
 
         # 3. 初始化新实例
-        logger.info(
-            f"🔄 [LLMManager] Initializing new Chat model... "
-            f"(Tenant: {tenant_id}, Model: {effective_model}, Temp: {temperature}, Hash: {conf_hash[:8]})"
+        from app.core.common.utils import log_ai_usage_signal
+        log_ai_usage_signal(
+            "chat",
+            effective_model,
+            conf_hash,
+            is_hit=False,
+            tenant_id=tenant_id,
+            extra={
+                "Base URL": base_url,
+                "Temperature": temperature,
+                "Source": config.get("_source", "platform"),
+            },
+            purpose=purpose,
         )
+
+        # 提取额外参数，透传给底层 OpenAI SDK (如: chat_template_kwargs 等)
+        extra_body = config.get("extra_body")
 
         new_llm = ChatOpenAI(
             model=effective_model,
@@ -89,7 +127,19 @@ class LLMManager:
             base_url=base_url,
             temperature=temperature,
             streaming=True,
+            extra_body=extra_body if extra_body else None,
         )
+
+        new_llm._usage_metadata = {
+            "model": effective_model,
+            "h": conf_hash,
+            "tenant_id": tenant_id,
+            "extra": {
+                "Base URL": base_url,
+                "Temperature": temperature,
+                "Source": config.get("_source", "platform"),
+            },
+        }
 
         self._models[pool_key] = new_llm
         return new_llm

@@ -91,7 +91,8 @@ export const initialConfigs: AIConfigs = {
     model: "",
     apiKey: "",
     baseUrl: "",
-    mode: ModelConfigEnum.mode.CUSTOM
+    mode: ModelConfigEnum.mode.CUSTOM,
+    extra_body: {}
   },
   embedding: {
     provider: "openai",

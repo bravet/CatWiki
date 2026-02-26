@@ -38,7 +38,7 @@ export class AdminSystemConfigsService {
     }
     /**
      * Update Ai Config
-     * 更新 AI 模型配置 (扁平结构)
+     * 更新 AI 模型配置 (支持局部更新)
      * @returns ApiResponse_SystemConfigResponse_ Successful Response
      * @throws ApiError
      */

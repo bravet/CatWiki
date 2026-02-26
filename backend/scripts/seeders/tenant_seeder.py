@@ -26,7 +26,6 @@ from app.core.common.reading_time import calculate_reading_time
 from app.crud.collection import crud_collection
 from app.crud.document import crud_document
 from app.crud.site import crud_site
-from app.crud.system_config import crud_system_config
 from app.crud.tenant import crud_tenant
 from app.crud.user import crud_user
 from app.models.collection import Collection
@@ -71,7 +70,6 @@ class TenantSeeder(BaseSeeder):
         tenant = await self.create_tenant()
         site = await self.create_site(tenant.id)
         await self.create_admin(tenant.id, [site.id])
-        await self.init_model_config(tenant.id)
         await self.init_documents(tenant.id, site.id)
 
         await self.log(f"✨ {tenant_name} 数据初始化完成！")
@@ -141,25 +139,6 @@ class TenantSeeder(BaseSeeder):
         else:
             await self.log(f"✅ 站点已存在：{site.name}")
         return site
-
-    async def init_model_config(self, tenant_id: int):
-        """初始化模型配置"""
-        config_key = "ai_config"
-        model_config = self.data.get("model_config")
-
-        if model_config:
-            # 检查是否已经存在配置，如果已存在则跳过初始化，保护用户手动修改的内容
-            existing = await crud_system_config.get_by_key(
-                self.db, config_key=config_key, tenant_id=tenant_id
-            )
-            if existing:
-                await self.log(f"📡 [跳过] {config_key} 已存在，跳过初始化播种")
-                return
-
-            await crud_system_config.update_by_key(
-                self.db, config_key=config_key, config_value=model_config, tenant_id=tenant_id
-            )
-            await self.log("✅ 初始化模型配置完成")
 
     async def init_documents(self, tenant_id: int, site_id: int):
         """初始化文档 (支持多个合集)"""

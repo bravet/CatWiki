@@ -29,6 +29,10 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
+from app.core.common.utils import (
+    log_ai_usage_signal,
+    log_process_step_card,
+)
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -88,7 +92,7 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
                 except Exception:
                     continue
 
-    logger.info(
+    logger.debug(
         f"🔧 [Tool] search_knowledge_base: query='{query}', site_id={site_id}, offset={offset}"
     )
 
@@ -196,6 +200,30 @@ def create_agent_graph(checkpointer=None, model: ChatOpenAI = None):
     async def agent_node(state: ChatGraphState) -> dict:
         """Agent 决策节点"""
         logger.debug("🤖 [Agent] Thinking...")
+
+        # [优化] 如果模型实例携带了元数据，则在此处触发一次日志卡片，显示当前意图
+        if hasattr(model, "_usage_metadata"):
+            meta = model._usage_metadata
+            # 根据消息历史判断当前是“初次分析”还是“生成结果”
+            # 注意：langgraph 中 state["messages"] 包含历史，如果最后一条是 Human 则为初次分析
+            # 如果包含 ToolMessage，说明已经检索过
+            has_tool_output = any(isinstance(m, ToolMessage) for m in state["messages"])
+            purpose = (
+                "汇总检索结果并生成最终回复"
+                if has_tool_output
+                else "分析意图并拟定执行计划 (含检索词生成)"
+            )
+
+            log_ai_usage_signal(
+                "chat",
+                meta["model"],
+                meta["h"],
+                is_hit=True,
+                tenant_id=meta["tenant_id"],
+                extra=meta["extra"],
+                purpose=purpose,
+            )
+
         messages = list(state["messages"])
 
         # 注入/更新 System Prompt (包含摘要)
@@ -308,13 +336,19 @@ def create_agent_graph(checkpointer=None, model: ChatOpenAI = None):
 
         if is_empty_result:
             result["consecutive_empty_count"] = consecutive_empty + 1
-            logger.debug(
-                f"🔄 [Graph] Empty result, consecutive count: {result['consecutive_empty_count']}/{max_consecutive_empty}"
-            )
         else:
             result["consecutive_empty_count"] = 0
 
-        logger.debug(f"🔄 [Graph] Iteration count: {result['iteration_count']}/{MAX_ITERATIONS}")
+        # [优化] 使用显眼的进度卡片展示 Iteration 进度
+        log_process_step_card(
+            "graph",
+            "Reasoning Loop",
+            result["iteration_count"],
+            MAX_ITERATIONS,
+            details=f"Consecutive empty: {result['consecutive_empty_count']}/{max_consecutive_empty}"
+            if result["consecutive_empty_count"] > 0
+            else "Active discovery",
+        )
         return result
 
     # 条件路由函数：检查迭代次数限制 + 连续空结果

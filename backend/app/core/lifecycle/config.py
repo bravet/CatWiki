@@ -14,7 +14,14 @@
 
 import logging
 
-from app.core.infra.config import AI_CONFIG_KEY, DOC_PROCESSOR_CONFIG_KEY, settings
+from app.core.infra.config import (
+    AI_CHAT_CONFIG_KEY,
+    AI_EMBEDDING_CONFIG_KEY,
+    AI_RERANK_CONFIG_KEY,
+    AI_VL_CONFIG_KEY,
+    DOC_PROCESSOR_CONFIG_KEY,
+    settings,
+)
 from app.crud.system_config import crud_system_config
 from app.db.database import AsyncSessionLocal
 
@@ -29,14 +36,16 @@ async def sync_ai_config_to_db():
     # 根据版本决定初始配置的归属：EE版作为平台全局配置(None)，CE版作为单租户配置(1)
     tenant_id = None if settings.CATWIKI_EDITION == "enterprise" else 1
     async with AsyncSessionLocal() as db:
-        # 1. 检查数据库中是否已存在 AI 配置
+        # 1. 检查数据库中是否已存在 AI 配置 (检查 Chat 即可代表系统已初始化)
         existing_config = await crud_system_config.get_by_key(
-            db, config_key=AI_CONFIG_KEY, tenant_id=tenant_id
+            db, config_key=AI_CHAT_CONFIG_KEY, tenant_id=tenant_id
         )
 
         # 如果存在且未开启强制覆盖，则跳过
         if existing_config and not settings.FORCE_UPDATE_AI_CONFIG:
-            logger.info("📡 [跳过] 数据库中已存在 AI 配置，且 FORCE_UPDATE_AI_CONFIG=False")
+            logger.info(
+                "📡 [跳过] 数据库中已存在 AI 配置 (检测到 ai_chat)，且 FORCE_UPDATE_AI_CONFIG=False"
+            )
             return
 
         if settings.FORCE_UPDATE_AI_CONFIG:
@@ -46,12 +55,23 @@ async def sync_ai_config_to_db():
 
         # 2. 从环境变量构建初始配置
         # 只有在提供了 API Key 的情况下才认为是有意义的配置
+        # 解析额外参数
+        extra_body = {}
+        if settings.AI_CHAT_EXTRA_BODY:
+            import json
+
+            try:
+                extra_body = json.loads(settings.AI_CHAT_EXTRA_BODY)
+            except Exception as e:
+                logger.warning(f"⚠️ 无法解析 AI_CHAT_EXTRA_BODY: {e}")
+
         ai_config = {
             "chat": {
                 "provider": "openai",
                 "model": settings.AI_CHAT_MODEL or "",
                 "apiKey": settings.AI_CHAT_API_KEY or "",
                 "baseUrl": settings.AI_CHAT_API_BASE or "",
+                "extra_body": extra_body,
                 "mode": "custom",
             },
             "embedding": {
@@ -90,12 +110,23 @@ async def sync_ai_config_to_db():
             logger.info("📡 [跳过] 未检测到 AI 相关的环境变量配置。")
             return
 
-        # 3. 写入数据库
+        # 3. 写入数据库 (物理隔离 Key)
+
         try:
-            await crud_system_config.update_by_key(
-                db, config_key=AI_CONFIG_KEY, config_value=ai_config, tenant_id=tenant_id
-            )
-            logger.info("📡 [同步] 已成功将环境变量中的 AI 配置加载到数据库。")
+            # 分别写入 4 个 Key
+            configs_to_sync = {
+                AI_CHAT_CONFIG_KEY: ai_config["chat"],
+                AI_EMBEDDING_CONFIG_KEY: ai_config["embedding"],
+                AI_RERANK_CONFIG_KEY: ai_config["rerank"],
+                AI_VL_CONFIG_KEY: ai_config["vl"],
+            }
+
+            for key, value in configs_to_sync.items():
+                await crud_system_config.update_by_key(
+                    db, config_key=key, config_value=value, tenant_id=tenant_id
+                )
+
+            logger.info("📡 [同步] 已成功将环境变量中的 AI 配置加载到独立数据库 Key。")
         except Exception as e:
             logger.error(f"❌ [同步失败] 无法将 AI 配置同步到数据库: {e}")
 

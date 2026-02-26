@@ -35,9 +35,12 @@ class Reranker:
         # 实例池: { hash: { "api_key": ..., "base_url": ..., "model": ... } }
         self._instances: dict[str, dict[str, Any]] = {}
 
-    async def _get_instance_config(self, tenant_id: int | None = None) -> dict[str, Any]:
+    async def _get_instance_config(
+        self, tenant_id: int | None = None, purpose: str | None = None
+    ) -> dict[str, Any]:
         """获取并确认为当前上下文准备的配置实例"""
         from app.services.config.configuration_service import configuration_service
+        from app.core.common.utils import log_ai_usage_signal
 
         # 获取数据库或缓存中的动态配置
         rerank_conf = await configuration_service.get_rerank_config(tenant_id=tenant_id)
@@ -49,30 +52,60 @@ class Reranker:
             api_key = rerank_conf.get("apiKey") or settings.AI_RERANK_API_KEY
             base_url = rerank_conf.get("baseUrl") or settings.AI_RERANK_API_BASE
             model = rerank_conf.get("model") or settings.AI_RERANK_MODEL
+            extra_body = rerank_conf.get("extra_body")
 
             self._instances[conf_hash] = {
                 "api_key": api_key,
                 "base_url": base_url,
                 "model": model,
+                "extra_body": extra_body,
                 "enabled": bool(api_key and base_url),
+                "_hash": conf_hash,
             }
-            logger.info(f"✨ [Reranker] 已准备新配置实例 (Hash: {conf_hash[:8]}, Model: {model})")
 
+            log_ai_usage_signal(
+                "rerank",
+                model,
+                conf_hash,
+                is_hit=False,
+                tenant_id=tenant_id,
+                extra={"Base URL": base_url, "Source": rerank_conf.get("_source", "platform")},
+                purpose=purpose,
+            )
+        else:
+            inst = self._instances[conf_hash]
+            log_ai_usage_signal(
+                "rerank",
+                inst["model"],
+                conf_hash,
+                is_hit=True,
+                tenant_id=tenant_id,
+                extra={
+                    "Base URL": inst["base_url"],
+                    "Source": rerank_conf.get("_source", "platform"),
+                },
+                purpose=purpose,
+            )
         return self._instances[conf_hash]
 
-    async def is_enabled(self, tenant_id: int | None = None) -> bool:
+    async def is_enabled(self, tenant_id: int | None = None, purpose: str | None = None) -> bool:
         """检查特定上下文下的 Reranker 是否可用"""
-        inst = await self._get_instance_config(tenant_id=tenant_id)
+        inst = await self._get_instance_config(tenant_id=tenant_id, purpose=purpose)
         return inst["enabled"]
 
     async def rerank(
-        self, query: str, documents: list[dict], top_n: int = 5, tenant_id: int | None = None
+        self,
+        query: str,
+        documents: list[dict],
+        top_n: int = 5,
+        tenant_id: int | None = None,
+        purpose: str | None = None,
     ) -> list[dict]:
         """
         异步执行重排序
         """
         # 1. 获取对应租户/指纹的实例配置
-        inst = await self._get_instance_config(tenant_id=tenant_id)
+        inst = await self._get_instance_config(tenant_id=tenant_id, purpose=purpose)
 
         if not inst["enabled"] or not documents:
             return documents[:top_n]
@@ -92,6 +125,11 @@ class Reranker:
                 "top_n": top_n,
             }
 
+            # 合并额外参数
+            extra_body = inst.get("extra_body")
+            if extra_body:
+                payload.update(extra_body)
+
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -104,7 +142,7 @@ class Reranker:
                     url = f"{url}/rerank"
 
                 logger.debug(
-                    f"🚀 [Reranker] 发起请求: {url} | Model: {model} | Hash: {list(self._instances.keys())[0][:8]}..."
+                    f"♻️  [RERANK   ] Reranking | Model: {model} | Hash: {inst.get('_hash', 'N/A')[:8]} | Input: {len(documents)}"
                 )
 
                 response = await client.post(url, json=payload, headers=headers)
@@ -126,8 +164,8 @@ class Reranker:
                     reranked_docs.append(doc)
 
             duration = time.time() - start_time
-            logger.info(
-                f"✨ [Reranker] 重排序完成 | 耗时: {duration:.3f}s | 模型: {model} | 输入: {len(documents)} | 返回: {len(reranked_docs)}"
+            logger.debug(
+                f"✨ [RERANK   ] Done | Duration: {duration:.3f}s | Returned: {len(reranked_docs)}"
             )
 
             return reranked_docs

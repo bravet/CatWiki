@@ -10,18 +10,18 @@ export type AIConfigUpdate = {
     /**
      * 对话模型配置
      */
-    chat: ModelConfig;
+    chat?: (ModelConfig | null);
     /**
      * 向量模型配置
      */
-    embedding: ModelConfig;
+    embedding?: (ModelConfig | null);
     /**
      * 重排序模型配置
      */
-    rerank: ModelConfig;
+    rerank?: (ModelConfig | null);
     /**
      * 视觉模型配置
      */
-    vl: ModelConfig;
+    vl?: (ModelConfig | null);
 };
 
