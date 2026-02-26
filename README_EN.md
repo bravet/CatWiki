@@ -14,7 +14,7 @@
 
 English | [简体中文](./README.md)
 
-[Demo Site](https://catwiki.cn) | [Admin Dashboard](https://admin.catwiki.cn) | [Documentation](https://docs.catwiki.cn)
+[Demo Site](https://catwiki.cn/default/health) | [Admin Dashboard](https://admin.catwiki.cn) | [Documentation](https://docs.catwiki.cn)
 
 <p>
   <a href="https://github.com/bulolo/CatWiki">

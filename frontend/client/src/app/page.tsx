@@ -139,8 +139,13 @@ export default function HomePage() {
                 )}
               >
                 <div className="text-left flex-1 min-w-0 overflow-hidden">
-                  <div className="text-xs md:text-sm font-semibold text-slate-900 truncate">
+                  <div className="text-xs md:text-sm font-semibold text-slate-900 truncate flex items-center gap-1.5">
                     {selectedSite ? selectedSite.name : "全部站点"}
+                    {selectedSite && selectedSite.tenant_slug && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                        {selectedSite.tenant_slug}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] md:text-xs text-slate-500 hidden md:block truncate">
                     {selectedSite ? (selectedSite.description || "限定此站点") : "跨站点提问"}
@@ -201,8 +206,13 @@ export default function HomePage() {
                         )}
                       >
                         <div className="flex items-start justify-between mb-1">
-                          <div className="text-sm md:text-base font-semibold text-slate-900">
+                          <div className="text-sm md:text-base font-semibold text-slate-900 flex items-center gap-2">
                             {site.name}
+                            {site.tenant_slug && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                                {site.tenant_slug}
+                              </span>
+                            )}
                           </div>
                           {selectedSite?.id === site.id && (
                             <div className="w-2 h-2 bg-primary rounded-full mt-1.5 shrink-0" />
