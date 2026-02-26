@@ -117,6 +117,7 @@ services:
 
   # FastAPI 后端服务
   backend:
+    profiles: ["app"]
     build:
       context: ../../backend
       dockerfile: Dockerfile.prod
@@ -170,6 +171,7 @@ services:
 
   # 管理后台前端
   admin-frontend:
+    profiles: ["app"]
     build:
       context: ../../frontend/admin
       dockerfile: Dockerfile.prod
@@ -209,6 +211,7 @@ services:
 
   # 客户端前端
   client-frontend:
+    profiles: ["app"]
     build:
       context: ../../frontend/client
       dockerfile: Dockerfile.prod

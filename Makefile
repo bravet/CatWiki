@@ -145,35 +145,35 @@ prod-init:
 # 生产环境启动 (后台运行)
 prod-up:
 	set -a && . deploy/docker/.env.client && . deploy/docker/.env.admin && set +a && \
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init up -d --build
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init up -d --build
 
 # 生产环境无缓存重新构建
 prod-rebuild:
 	@echo "🔧 [CatWiki] 无缓存重新构建生产环境..."
 	set -a && . deploy/docker/.env.client && . deploy/docker/.env.admin && set +a && \
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init build --no-cache
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init build --no-cache
 	set -a && . deploy/docker/.env.client && . deploy/docker/.env.admin && set +a && \
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init up -d
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init up -d
 
 # 生产环境停止
 prod-down:
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init down
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init down
 	@docker rm -f catwiki-backend-init-prod >/dev/null 2>&1 || true
 
 # 生产环境日志
 prod-logs:
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init logs -f
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init logs -f
 
 # 重启生产环境后端服务
 prod-restart:
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init restart backend
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init restart backend
 
 # 深度清理生产环境 (警告：将删除所有生产数据卷！)
 prod-clean:
 	@echo "🛑 [危险] 正在尝试深度清理生产环境..."
 	@echo "⚠️  警告：此操作将删除所有生产容器相关的数据卷 and 数据！"
 	@read -p "您确定要继续吗？[y/N] " ans && [ $${ans:-N} = y ] || (echo "❌ 操作已取消"; exit 1)
-	docker compose -f deploy/docker/docker-compose.prod.yml --profile init down -v
+	docker compose -f deploy/docker/docker-compose.prod.yml --profile app --profile init down -v
 	@docker rm -f catwiki-backend-init-prod >/dev/null 2>&1 || true
 	@echo "✅ 生产环境深度清理完成"
 	@echo ""
