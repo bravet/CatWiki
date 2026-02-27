@@ -18,8 +18,8 @@ from typing import Any
 
 from app.core.ai.providers.llm_manager import llm_manager
 from app.core.infra.rustfs import init_rustfs
-from app.core.integration.robot.dingtalk.service import DingTalkRobotService
-from app.core.integration.robot.feishu.service import FeishuRobotService
+from app.core.integration.robot.dingtalk_app.service import DingTalkRobotService
+from app.core.integration.robot.feishu_app.service import FeishuRobotService
 from app.core.lifecycle.config import init_system_configs
 from app.core.vector.vector_store import VectorStoreManager
 

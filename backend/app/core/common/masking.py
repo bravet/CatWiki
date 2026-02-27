@@ -44,46 +44,58 @@ def mask_bot_config_inplace(config_value: dict) -> None:
         return
 
     # 1. API Bot
-    api_bot = config_value.get("apiBot", {})
+    api_bot = config_value.get("api_bot", {})
     if api_bot:
-        if "apiKey" in api_bot:
-            api_bot["apiKey"] = mask_variable(api_bot["apiKey"])
+        if "api_key" in api_bot:
+            api_bot["api_key"] = mask_variable(api_bot["api_key"])
 
     # 2. WeCom Smart Robot
-    wecom = config_value.get("wecomSmartRobot", {})
+    wecom = config_value.get("wecom_smart", {})
     if wecom:
         if "token" in wecom:
             wecom["token"] = mask_variable(wecom["token"])
-        if "encodingAesKey" in wecom:
-            wecom["encodingAesKey"] = mask_variable(wecom["encodingAesKey"])
+        if "encoding_aes_key" in wecom:
+            wecom["encoding_aes_key"] = mask_variable(wecom["encoding_aes_key"])
 
     # 3. Feishu Bot
-    feishu = config_value.get("feishuBot", {})
+    feishu = config_value.get("feishu_app", {})
     if feishu:
-        if "appId" in feishu:
-            feishu["appId"] = mask_variable(feishu["appId"])
-        if "appSecret" in feishu:
-            feishu["appSecret"] = mask_variable(feishu["appSecret"])
+        if "app_id" in feishu:
+            feishu["app_id"] = mask_variable(feishu["app_id"])
+        if "app_secret" in feishu:
+            feishu["app_secret"] = mask_variable(feishu["app_secret"])
 
     # 4. DingTalk Bot
-    dingtalk = config_value.get("dingtalkBot", {})
+    dingtalk = config_value.get("dingtalk_app", {})
     if dingtalk:
-        if "clientId" in dingtalk:
-            dingtalk["clientId"] = mask_variable(dingtalk["clientId"])
-        if "clientSecret" in dingtalk:
-            dingtalk["clientSecret"] = mask_variable(dingtalk["clientSecret"])
+        if "client_id" in dingtalk:
+            dingtalk["client_id"] = mask_variable(dingtalk["client_id"])
+        if "client_secret" in dingtalk:
+            dingtalk["client_secret"] = mask_variable(dingtalk["client_secret"])
 
     # 5. WeCom Customer Service
-    wecom_kefu = config_value.get("wecomKefu", {})
+    wecom_kefu = config_value.get("wecom_kefu", {})
     if wecom_kefu:
-        if "corpId" in wecom_kefu:
-            wecom_kefu["corpId"] = mask_variable(wecom_kefu["corpId"])
+        if "corp_id" in wecom_kefu:
+            wecom_kefu["corp_id"] = mask_variable(wecom_kefu["corp_id"])
         if "secret" in wecom_kefu:
             wecom_kefu["secret"] = mask_variable(wecom_kefu["secret"])
         if "token" in wecom_kefu:
             wecom_kefu["token"] = mask_variable(wecom_kefu["token"])
-        if "encodingAesKey" in wecom_kefu:
-            wecom_kefu["encodingAesKey"] = mask_variable(wecom_kefu["encodingAesKey"])
+        if "encoding_aes_key" in wecom_kefu:
+            wecom_kefu["encoding_aes_key"] = mask_variable(wecom_kefu["encoding_aes_key"])
+
+    # 6. WeCom App
+    wecom_app = config_value.get("wecom_app", {})
+    if wecom_app:
+        if "corp_id" in wecom_app:
+            wecom_app["corp_id"] = mask_variable(wecom_app["corp_id"])
+        if "secret" in wecom_app:
+            wecom_app["secret"] = mask_variable(wecom_app["secret"])
+        if "token" in wecom_app:
+            wecom_app["token"] = mask_variable(wecom_app["token"])
+        if "encoding_aes_key" in wecom_app:
+            wecom_app["encoding_aes_key"] = mask_variable(wecom_app["encoding_aes_key"])
 
 
 def filter_client_site_data(site: Any) -> Any:
@@ -97,10 +109,10 @@ def filter_client_site_data(site: Any) -> Any:
         bot_config = site.get("bot_config")
 
     if bot_config:
-        # 仅保留 webWidget 配置，彻底移除 apiBot 和 wecomSmartRobot 等包含密钥的配置
+        # 仅保留 web_widget 配置，彻底移除 api_bot 和 wecom_smart 等包含密钥的配置
         filtered_config = {}
-        if "webWidget" in bot_config:
-            filtered_config["webWidget"] = bot_config["webWidget"]
+        if "web_widget" in bot_config:
+            filtered_config["web_widget"] = bot_config["web_widget"]
 
         if hasattr(site, "bot_config"):
             site.bot_config = filtered_config

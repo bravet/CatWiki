@@ -10,6 +10,7 @@ services:
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       LANG: C.UTF-8
+      TZ: Asia/Shanghai
     ports:
       # 使用 5433 端口避免与本地 PostgreSQL 冲突
       # 如果需要使用 5432，请先停止本地 PostgreSQL 服务
@@ -228,6 +229,7 @@ services:
       - ./frontend/admin/.env
     environment:
       - NODE_ENV=development
+      - TZ=Asia/Shanghai
     ports:
       - "8001:8001"
     volumes:
@@ -270,6 +272,7 @@ services:
       - ./frontend/client/.env
     environment:
       - NODE_ENV=development
+      - TZ=Asia/Shanghai
     ports:
       - "8002:8002"
     volumes:
@@ -310,6 +313,7 @@ services:
     container_name: catwiki-docs-frontend-dev
     environment:
       - NODE_ENV=development
+      - TZ=Asia/Shanghai
     ports:
       - "8003:8003"
     volumes:

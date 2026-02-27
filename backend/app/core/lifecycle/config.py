@@ -69,31 +69,31 @@ async def sync_ai_config_to_db():
             "chat": {
                 "provider": "openai",
                 "model": settings.AI_CHAT_MODEL or "",
-                "apiKey": settings.AI_CHAT_API_KEY or "",
-                "baseUrl": settings.AI_CHAT_API_BASE or "",
+                "api_key": settings.AI_CHAT_API_KEY or "",
+                "base_url": settings.AI_CHAT_API_BASE or "",
                 "extra_body": extra_body,
                 "mode": "custom",
             },
             "embedding": {
                 "provider": "openai",
                 "model": settings.AI_EMBEDDING_MODEL or "",
-                "apiKey": settings.AI_EMBEDDING_API_KEY or "",
-                "baseUrl": settings.AI_EMBEDDING_API_BASE or "",
+                "api_key": settings.AI_EMBEDDING_API_KEY or "",
+                "base_url": settings.AI_EMBEDDING_API_BASE or "",
                 "dimension": settings.AI_EMBEDDING_DIMENSION,
                 "mode": "custom",
             },
             "rerank": {
                 "provider": "openai",
                 "model": settings.AI_RERANK_MODEL or "",
-                "apiKey": settings.AI_RERANK_API_KEY or "",
-                "baseUrl": settings.AI_RERANK_API_BASE or "",
+                "api_key": settings.AI_RERANK_API_KEY or "",
+                "base_url": settings.AI_RERANK_API_BASE or "",
                 "mode": "custom",
             },
             "vl": {
                 "provider": "openai",
                 "model": settings.AI_VL_MODEL or "",
-                "apiKey": settings.AI_VL_API_KEY or "",
-                "baseUrl": settings.AI_VL_API_BASE or "",
+                "api_key": settings.AI_VL_API_KEY or "",
+                "base_url": settings.AI_VL_API_BASE or "",
                 "mode": "custom",
             },
         }
@@ -162,8 +162,8 @@ async def sync_doc_processor_config_to_db():
                 {
                     "name": settings.DOCLING_NAME,
                     "type": "Docling",
-                    "baseUrl": settings.DOCLING_BASE_URL,
-                    "apiKey": settings.DOCLING_API_KEY or "",
+                    "base_url": settings.DOCLING_BASE_URL,
+                    "api_key": settings.DOCLING_API_KEY or "",
                     "enabled": settings.DOCLING_ENABLED,
                     "config": {"is_ocr": True, "extract_tables": True, "extract_images": False},
                 }
@@ -175,8 +175,8 @@ async def sync_doc_processor_config_to_db():
                 {
                     "name": settings.MINERU_NAME,
                     "type": "MinerU",
-                    "baseUrl": settings.MINERU_BASE_URL,
-                    "apiKey": settings.MINERU_API_KEY or "",
+                    "base_url": settings.MINERU_BASE_URL,
+                    "api_key": settings.MINERU_API_KEY or "",
                     "enabled": settings.MINERU_ENABLED,
                     "config": {"is_ocr": True, "extract_tables": True, "extract_images": False},
                 }
@@ -188,8 +188,8 @@ async def sync_doc_processor_config_to_db():
                 {
                     "name": settings.PADDLEOCR_NAME,
                     "type": "PaddleOCR",
-                    "baseUrl": settings.PADDLEOCR_BASE_URL,
-                    "apiKey": settings.PADDLEOCR_API_KEY or "",
+                    "base_url": settings.PADDLEOCR_BASE_URL,
+                    "api_key": settings.PADDLEOCR_API_KEY or "",
                     "enabled": settings.PADDLEOCR_ENABLED,
                     "config": {"is_ocr": True, "extract_tables": True, "extract_images": False},
                 }

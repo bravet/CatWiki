@@ -1,34 +1,49 @@
 from app.core.integration.robot.base import BaseRobotAdapter
-from app.core.integration.robot.dingtalk.adapter import DingTalkAdapter
-from app.core.integration.robot.feishu.adapter import FeishuAdapter
-from app.core.integration.robot.wecom_robot.adapter import WeComAdapter
+from app.core.integration.robot.dingtalk_app.adapter import DingTalkAdapter
+from app.core.integration.robot.feishu_app.adapter import FeishuAdapter
+from app.core.integration.robot.wecom_smart.adapter import WeComAdapter
+from app.core.integration.robot.wecom_app.adapter import WeComAppAdapter
 from app.core.integration.robot.wecom_kefu.adapter import WeComKefuAdapter
 
 
 class RobotFactory:
     """机器人适配器工厂。"""
 
+    _instances: dict[str, BaseRobotAdapter] = {}
+
     @classmethod
     def get_adapter(cls, platform: str) -> BaseRobotAdapter:
         """
-        根据平台标识获取适配器的新实例。
-        platform 取值建议和 site.bot_config 的 key 对应或约定：
-        - feishu
-        - dingtalk
-        - wecom
+        根据平台标识获取适配器实例（单例模式以支持 Token 缓存和连接池复用）。
         """
-        if platform == "feishu":
-            return FeishuAdapter()
-        elif platform == "dingtalk":
-            return DingTalkAdapter()
-        elif platform == "wecom":
-            return WeComAdapter()
+        if platform in cls._instances:
+            return cls._instances[platform]
+
+        adapter: BaseRobotAdapter
+        if platform == "feishu_app":
+            adapter = FeishuAdapter()
+        elif platform == "dingtalk_app":
+            adapter = DingTalkAdapter()
+        elif platform == "wecom_smart":
+            adapter = WeComAdapter()
+        elif platform == "wecom_app":
+            adapter = WeComAppAdapter()
         elif platform == "wecom_kefu":
-            return WeComKefuAdapter()
+            adapter = WeComKefuAdapter()
         else:
             raise ValueError(f"暂不支持的机器人平台: {platform}")
 
+        cls._instances[platform] = adapter
+        return adapter
+
     @classmethod
-    async def shutdown(cls):
-        """关闭工厂并清理相关资源 (预留接口)"""
-        pass
+    async def shutdown(cls) -> None:
+        """关闭工厂并触发适配器的资源清理。"""
+        for adapter in cls._instances.values():
+            try:
+                await adapter.close()
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning("适配器关闭异常: %s", e)
+        cls._instances.clear()

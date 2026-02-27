@@ -21,8 +21,8 @@ interface CustomConfigFormProps {
   type: "chat" | "embedding" | "rerank" | "vl"
   config: {
     model: string
-    apiKey: string
-    baseUrl: string
+    api_key: string
+    base_url: string
     dimension?: number | null
     extra_body?: Record<string, any> | null
   }
@@ -96,20 +96,20 @@ export function CustomConfigForm({ type, config, onUpdate }: CustomConfigFormPro
         <label className="text-sm font-semibold text-slate-700">API Key</label>
         <Input
           type="password"
-          value={config.apiKey}
-          onChange={(e) => onUpdate(type, "apiKey", e.target.value)}
+          value={config.api_key}
+          onChange={(e) => onUpdate(type, "api_key", e.target.value)}
           placeholder="sk-..."
           className="bg-white font-mono"
           autoComplete="new-password"
-          name="custom_apiKey_disable_autofill"
+          name="custom_api_key_disable_autofill"
         />
       </div>
 
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700">API Base URL</label>
         <Input
-          value={config.baseUrl}
-          onChange={(e) => onUpdate(type, "baseUrl", e.target.value)}
+          value={config.base_url}
+          onChange={(e) => onUpdate(type, "base_url", e.target.value)}
           placeholder="https://api.openai.com/v1"
           className="bg-white font-mono"
         />

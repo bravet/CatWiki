@@ -1,12 +1,15 @@
 import json
 import logging
+import threading
 import time
+from collections import OrderedDict
 from typing import Any, Optional
 
 import httpx
 import xml.etree.cElementTree as ET
 
-from app.core.integration.robot.base import RobotInboundEvent, RobotSession
+from app.core.integration.robot.base import MessageDeduplicator, RobotInboundEvent, RobotSession
+from app.core.integration.robot.wecom_common.utils import WeComTokenManager
 from app.models.site import Site
 from app.services.robot import RobotOrchestrator
 
@@ -14,35 +17,8 @@ from app.services.robot import RobotOrchestrator
 class WeComKefuService:
     """企业微信客服业务逻辑。"""
 
-    _access_token_cache: dict[str, dict[str, Any]] = {}
-
-    @classmethod
-    async def get_access_token(cls, corp_id: str, secret: str) -> str:
-        """获取微信 access_token (带缓存)"""
-        cache_key = f"{corp_id}:{secret}"
-        now = time.time()
-
-        if cache_key in cls._access_token_cache:
-            cache = cls._access_token_cache[cache_key]
-            if now < cache["expires_at"]:
-                return cache["token"]
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
-                params={"corpid": corp_id, "corpsecret": secret},
-                timeout=10,
-            )
-            data = resp.json()
-            if data.get("errcode") != 0:
-                logger.error(f"获取微信 Access Token 失败: {data}")
-                raise ValueError(f"获取 Access Token 失败: {data.get('errmsg')}")
-
-            token = data["access_token"]
-            # 提前 5 分钟过期
-            expires_at = now + data["expires_in"] - 300
-            cls._access_token_cache[cache_key] = {"token": token, "expires_at": expires_at}
-            return token
+    _token_manager = WeComTokenManager()
+    _deduplicator = MessageDeduplicator()
 
     @classmethod
     async def send_message(
@@ -50,7 +26,7 @@ class WeComKefuService:
     ) -> None:
         """调用微信客服 API 发送消息"""
         try:
-            token = await cls.get_access_token(corp_id, secret)
+            token = await cls._token_manager.get_access_token(corp_id, secret)
             async with httpx.AsyncClient() as client:
                 body = {
                     "touser": external_userid,
@@ -101,6 +77,12 @@ class WeComKefuService:
         try:
             xml_tree = ET.fromstring(msg_body)
             msg_type = xml_tree.find("MsgType").text
+            msg_id = xml_tree.find("MsgId").text if xml_tree.find("MsgId") is not None else None
+
+            # 1. 去重逻辑
+            if msg_id and cls._deduplicator.is_duplicate(msg_id):
+                logger.debug("微信客服忽略重复消息: msg_id=%s", msg_id)
+                return "success"
 
             # 微信客服消息事件类型
             if msg_type == "event":
@@ -148,19 +130,19 @@ class WeComKefuService:
         cls, site: Site, from_user: str, open_kfid: str, content: str, background_tasks: Any
     ) -> None:
         """处理文本消息：启动编排"""
-        bot_config = site.bot_config.get("wecomKefu", {})
+        bot_config = site.bot_config.get("wecom_kefu", {})
 
         inbound_event = RobotInboundEvent(
             site_id=site.id,
             message_id=None,
             from_user=from_user,
             content=content,
-            metadata={"open_kfid": open_kfid},
+            extra={"open_kfid": open_kfid},
         )
 
-        from .adapter import WeComKefuAdapter
+        from app.core.integration.robot.factory import RobotFactory
 
-        adapter = WeComKefuAdapter()
+        adapter = RobotFactory.get_adapter("wecom_kefu")
         session = RobotSession(
             event=inbound_event,
             context_id=f"kf_{from_user}",

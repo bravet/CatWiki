@@ -47,17 +47,17 @@ class FeishuClient:
             resp.raise_for_status()
             data = resp.json()
 
-        if data.get("code") != 0 or not data.get("tenant_access_token"):
-            msg = data.get("msg", "failed to fetch tenant_access_token")
-            raise RuntimeError(f"飞书鉴权失败: {msg}")
+            if data.get("code") != 0 or not data.get("tenant_access_token"):
+                msg = data.get("msg", "failed to fetch tenant_access_token")
+                raise RuntimeError(f"飞书鉴权失败: {msg}")
 
-        token = data["tenant_access_token"]
-        expire_seconds = int(data.get("expire", 7200) or 7200)
-        self._token_cache[cache_key] = {
-            "token": token,
-            "expires_at": now + max(expire_seconds, 120),
-        }
-        return token
+            token = data["tenant_access_token"]
+            expire_seconds = int(data.get("expire", 7200) or 7200)
+            self._token_cache[cache_key] = {
+                "token": token,
+                "expires_at": now + max(expire_seconds, 120),
+            }
+            return token
 
     async def send_card_message(
         self, tenant_access_token: str, receive_id_type: str, receive_id: str, card_content: dict

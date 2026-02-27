@@ -220,15 +220,15 @@ async def update_ai_config(
 
     # 自动探测 Embedding Dimension
     embedding_conf = new_values.get("embedding", {})
-    # 如果有配置，且 apiKey/baseUrl 存在
-    if embedding_conf and embedding_conf.get("apiKey") and embedding_conf.get("baseUrl"):
+    # 如果有配置，且 api_key/base_url 存在
+    if embedding_conf and embedding_conf.get("api_key") and embedding_conf.get("base_url"):
         # 如果 dimension 为空 (None or 0)，尝试探测
         if not embedding_conf.get("dimension"):
             try:
                 logger.info("🔍 Auto-detecting embedding dimension...")
 
                 client = _create_openai_client(
-                    api_key=embedding_conf["apiKey"], base_url=embedding_conf["baseUrl"]
+                    api_key=embedding_conf.get("api_key"), base_url=embedding_conf["base_url"]
                 )
                 resp = await client.embeddings.create(model=embedding_conf["model"], input="test")
                 if resp.data:
@@ -390,7 +390,7 @@ async def test_model_connection(
     # 1. 对话/多模态/视觉测试 (使用 OpenAI Chat API)
     if model_type in ["chat", "vl"]:
         try:
-            client = _create_openai_client(api_key=config.apiKey, base_url=config.baseUrl)
+            client = _create_openai_client(api_key=config.api_key, base_url=config.base_url)
             # 发送简单的 Hello 消息
             response = await client.chat.completions.create(
                 model=config.model, messages=[{"role": "user", "content": "Hello"}], max_tokens=5
@@ -406,7 +406,7 @@ async def test_model_connection(
     # 2. 向量测试 (使用 OpenAI Embedding API)
     elif model_type == "embedding":
         try:
-            client = _create_openai_client(api_key=config.apiKey, base_url=config.baseUrl)
+            client = _create_openai_client(api_key=config.api_key, base_url=config.base_url)
             # 发送简单的嵌入请求
             resp = await client.embeddings.create(model=config.model, input="test")
             dim = len(resp.data[0].embedding)
@@ -423,7 +423,7 @@ async def test_model_connection(
             import httpx
 
             # 构建 URL
-            url = config.baseUrl.rstrip("/")
+            url = config.base_url.rstrip("/")
             if not url.endswith("/rerank"):
                 url = f"{url}/rerank"
 
@@ -434,7 +434,7 @@ async def test_model_connection(
                 "top_n": 1,
             }
             headers = {
-                "Authorization": f"Bearer {config.apiKey}",
+                "Authorization": f"Bearer {config.api_key}",
                 "Content-Type": "application/json",
             }
 

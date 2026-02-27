@@ -45,11 +45,11 @@ class BaseDocProcessor(ABC):
 
     @property
     def base_url(self) -> str:
-        return self.config.baseUrl.rstrip("/")
+        return self.config.base_url.rstrip("/")
 
     @property
     def api_key(self) -> str:
-        return self.config.apiKey
+        return self.config.api_key
 
     @abstractmethod
     async def check_health(self) -> bool:

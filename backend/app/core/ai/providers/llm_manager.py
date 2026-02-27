@@ -57,7 +57,7 @@ class LLMManager:
         config = await ConfigResolver.resolve_section("chat", tenant_id=tenant_id)
 
         # 严格校验：如果处于 custom 模式，必须提供有效的配置，不回退到系统环境变量
-        api_key = config.get("apiKey")
+        api_key = config.get("api_key")
         mode = config.get("_mode", "platform")
 
         if mode == "custom" and not api_key:
@@ -65,7 +65,7 @@ class LLMManager:
 
         # 处理模型覆盖
         effective_model = model_name or config.get("model") or "gpt-3.5-turbo"
-        base_url = config.get("baseUrl")
+        base_url = config.get("base_url")
         conf_hash = config.get("_hash", "default")
 
         # 为了支持不同 Temperature 和 Model Override 的复用，将它们混入索引 Key

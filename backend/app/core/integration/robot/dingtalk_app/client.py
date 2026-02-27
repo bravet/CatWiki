@@ -1,7 +1,6 @@
-import html
+import asyncio
 import json
 import logging
-import re
 import time
 import uuid
 from typing import Any
@@ -18,6 +17,7 @@ class DingTalkClient:
 
     def __init__(self) -> None:
         self._token_cache: dict[str, dict[str, float | str]] = {}
+        self._token_lock = asyncio.Lock()
         # 持久化异步客户端，复用连接池
         self._http_client = httpx.AsyncClient(
             timeout=30.0, limits=httpx.Limits(max_connections=100, max_keepalive_connections=50)
@@ -26,113 +26,6 @@ class DingTalkClient:
     async def close(self) -> None:
         """释放底层 HTTP 客户端资源。"""
         await self._http_client.aclose()
-
-    @staticmethod
-    def _normalize_markdown(markdown: str) -> str:
-        text = html.unescape((markdown or "").replace("\r\n", "\n"))
-        text = text.replace("\u200b", "").replace("\ufeff", "")
-        text = re.sub(r"^\[\d+\].*$", "", text, flags=re.MULTILINE)
-        text = re.sub(r"^发送给.+$", "", text, flags=re.MULTILINE)
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        return text.strip()
-
-    @classmethod
-    def _markdown_to_plain_text(cls, text: str) -> str:
-        s = cls._normalize_markdown(text)
-        s = re.sub(r"[*_`~]+", "", s)
-        s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
-        s = re.sub(r"[ \t]+\n", "\n", s)
-        return re.sub(r"\n{3,}", "\n\n", s).strip()
-
-    async def send_markdown_with_fallback(
-        self,
-        *,
-        session_webhook: str,
-        at_user_ids: list[str] | None,
-        title: str,
-        markdown: str,
-    ) -> None:
-        safe_markdown = self._normalize_markdown(markdown) or " "
-        if len(safe_markdown) > 12000:
-            safe_markdown = safe_markdown[:12000] + "\n\n（内容过长，已截断）"
-
-        markdown_payload = {
-            "msgtype": "markdown",
-            "markdown": {"title": title, "text": safe_markdown},
-            "at": {"atUserIds": at_user_ids or []},
-        }
-        markdown_result = await self._post_webhook(session_webhook, markdown_payload)
-        if self._is_success_result(markdown_result):
-            return
-
-        plain_text = self._markdown_to_plain_text(safe_markdown) or " "
-        if len(plain_text) > 6000:
-            plain_text = plain_text[:6000] + "\n\n（内容过长，已截断）"
-        text_payload = {
-            "msgtype": "text",
-            "text": {"content": plain_text},
-            "at": {"atUserIds": at_user_ids or []},
-        }
-        text_result = await self._post_webhook(session_webhook, text_payload)
-        if self._is_success_result(text_result):
-            return
-
-        raise RuntimeError(
-            f"钉钉消息发送失败: markdown_result={markdown_result}, text_result={text_result}"
-        )
-
-    async def send_template_card(
-        self,
-        *,
-        client_id: str,
-        client_secret: str,
-        template_id: str,
-        event: Any,
-        title: str,
-        markdown: str,
-    ) -> None:
-        access_token = await self._get_access_token(
-            client_id=client_id, client_secret=client_secret
-        )
-        safe_markdown = self._normalize_markdown(markdown) or " "
-        if len(safe_markdown) > 12000:
-            safe_markdown = safe_markdown[:12000] + "\n\n（内容过长，已截断）"
-
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "*/*",
-            "x-acs-dingtalk-access-token": access_token,
-        }
-        card_instance_id = f"catwiki_{uuid.uuid4().hex}"
-        raw_param_map = self._build_template_card_param_map(
-            title=title,
-            markdown=safe_markdown,
-        )
-        # 接口要求所有 params value 都必须是 string
-        card_param_map = {k: str(v) for k, v in raw_param_map.items()}
-
-        json_body = self._build_create_and_deliver_body(
-            client_id=client_id,
-            template_id=template_id,
-            card_instance_id=card_instance_id,
-            card_param_map=card_param_map,
-            event=event,
-            title=title,
-        )
-
-        await self._request_openapi(
-            method="POST",
-            url=f"{self.DINGTALK_BASE_URL}/v1.0/card/instances/createAndDeliver",
-            headers=headers,
-            json_body=json_body,
-            action="创建并投放模板卡片",
-        )
-        logger.info(
-            "钉钉模板卡片发送成功: template_id=%s out_track_id=%s param_keys=%s",
-            template_id,
-            card_instance_id,
-            sorted(card_param_map.keys()),
-        )
 
     async def create_streaming_card(
         self,
@@ -326,31 +219,6 @@ class DingTalkClient:
 
         return body
 
-    @staticmethod
-    def _build_template_card_param_map(*, title: str, markdown: str) -> dict[str, Any]:
-        # 兼容常见自定义模板与 AI 模板字段，AI 模板默认置为完成态，避免一直“处理中”。
-        return {
-            "title": title,
-            "text": markdown,
-            "content": markdown,
-            "markdown": markdown,
-            "msgTitle": title,
-            "msgContent": markdown,
-            "staticMsgContent": markdown,
-            "flowStatus": "3",
-            "sys_full_json_obj": json.dumps(
-                {
-                    "order": [
-                        "msgTitle",
-                        "content",
-                        "msgContent",
-                        "staticMsgContent",
-                    ]
-                },
-                ensure_ascii=False,
-            ),
-        }
-
     async def _request_openapi(
         self,
         *,
@@ -405,46 +273,6 @@ class DingTalkClient:
                 )
         return data if isinstance(data, dict) else {"raw": str(data)}
 
-    async def _post_webhook(self, session_webhook: str, payload: dict[str, Any]) -> dict[str, Any]:
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "*/*",
-        }
-        try:
-            resp = await self._http_client.post(
-                session_webhook,
-                headers=headers,
-                content=json.dumps(payload, ensure_ascii=False),
-            )
-            resp_text = resp.text
-            resp.raise_for_status()
-        except Exception:
-            logger.exception("钉钉 webhook 请求失败: payload=%s", payload.get("msgtype"))
-            return {"ok": False, "error": "http_error"}
-
-        if not resp_text:
-            return {"ok": True}
-        try:
-            data = resp.json()
-            if isinstance(data, dict):
-                return data
-            return {"ok": True, "raw": str(data)}
-        except Exception:
-            return {"ok": True, "raw": resp_text[:500]}
-
-    @staticmethod
-    def _is_success_result(result: Any) -> bool:
-        if not result:
-            return False
-        if isinstance(result, dict):
-            if "ok" in result:
-                return bool(result.get("ok"))
-            errcode = result.get("errcode")
-            if errcode is None:
-                return True
-            return str(errcode) in {"0", "ok"}
-        return True
-
     async def _get_access_token(self, *, client_id: str, client_secret: str) -> str:
         now = time.time()
         cache_key = f"{client_id}:{client_secret}"
@@ -455,18 +283,27 @@ class DingTalkClient:
             if isinstance(token, str) and token and expires_at - now > 60:
                 return token
 
-        url = f"{self.DINGTALK_BASE_URL}/v1.0/oauth2/accessToken"
-        payload = {"appKey": client_id, "appSecret": client_secret}
-        resp = await self._http_client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        async with self._token_lock:
+            now = time.time()
+            cached = self._token_cache.get(cache_key)
+            if cached:
+                token = cached.get("token")
+                expires_at = float(cached.get("expires_at", 0))
+                if isinstance(token, str) and token and expires_at - now > 60:
+                    return token
 
-        token = data.get("accessToken")
-        if not token:
-            raise RuntimeError(f"钉钉获取 access_token 失败: {str(data)[:300]}")
-        expire_seconds = int(data.get("expireIn", 7200) or 7200)
-        self._token_cache[cache_key] = {
-            "token": token,
-            "expires_at": now + max(expire_seconds, 120),
-        }
-        return token
+            url = f"{self.DINGTALK_BASE_URL}/v1.0/oauth2/accessToken"
+            payload = {"appKey": client_id, "appSecret": client_secret}
+            resp = await self._http_client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+            token = data.get("accessToken")
+            if not token:
+                raise RuntimeError(f"钉钉获取 access_token 失败: {str(data)[:300]}")
+            expire_seconds = int(data.get("expireIn", 7200) or 7200)
+            self._token_cache[cache_key] = {
+                "token": token,
+                "expires_at": now + max(expire_seconds, 120),
+            }
+            return token

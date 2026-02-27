@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from app.core.integration.robot.dingtalk.types import DingTalkStreamConfig
+from app.core.integration.robot.dingtalk_app.types import DingTalkStreamConfig
 
 logger = logging.getLogger(__name__)
 

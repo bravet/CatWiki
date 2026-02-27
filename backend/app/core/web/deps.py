@@ -179,14 +179,35 @@ async def set_client_tenant_context(
     from app.core.infra.tenant import set_current_tenant
 
     tenant_id = None
+    request.state.site = None
+
     if x_tenant_slug:
         from app.crud.tenant import crud_tenant
 
         tenant = await crud_tenant.get_by_slug(db, slug=x_tenant_slug)
         if tenant:
             tenant_id = tenant.id
+            logger.debug(
+                f"🔑 [TenantResolve] Resolved tenant_id={tenant_id} from slug='{x_tenant_slug}'"
+            )
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    # [Compatibility] 如果 header 缺失，尝试从查询参数 site_id 中自动探知租户
+    if tenant_id is None:
+        site_id_str = request.query_params.get("site_id")
+        if site_id_str and site_id_str.isdigit():
+            from app.crud.site import crud_site
+
+            site = await crud_site.get(db, id=int(site_id_str))
+            if site:
+                tenant_id = site.tenant_id
+                request.state.site = (
+                    site  # 缓存此站点对象供后续依赖（如 get_wecom_smart_bot_context）复用
+                )
+                logger.debug(
+                    f"🔍 [TenantResolve] Resolved tenant_id={tenant_id} from site_id={site_id_str}"
+                )
 
     # 如果找到了特定的 tenant_id，则设置
     if tenant_id is not None:

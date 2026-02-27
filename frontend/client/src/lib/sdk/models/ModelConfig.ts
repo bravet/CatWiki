@@ -17,11 +17,11 @@ export type ModelConfig = {
     /**
      * API Key
      */
-    apiKey: string;
+    api_key: string;
     /**
      * API Base URL
      */
-    baseUrl: string;
+    base_url: string;
     /**
      * Embedding 维度 (自动探测)
      */

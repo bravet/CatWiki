@@ -22,12 +22,12 @@
 import { Badge } from "@/components/ui/badge"
 import { Settings, Globe } from "lucide-react"
 import { useSettings } from "@/contexts/SettingsContext"
-import { type ModelType } from "@/types/settings"
+import { type SettingsTabId } from "@/types/settings"
 import { MODEL_TYPES_LIST } from "@/constants/models"
 
 interface ManualModeConfigProps {
-  onSelectModel: (model: ModelType) => void
-  activeTab: ModelType
+  onSelectModel: (model: SettingsTabId) => void
+  activeTab: SettingsTabId
 }
 
 export function ManualModeConfig({ onSelectModel, activeTab }: ManualModeConfigProps) {
@@ -49,7 +49,7 @@ export function ManualModeConfig({ onSelectModel, activeTab }: ManualModeConfigP
             const conf = savedConfigs[item.id as "chat" | "embedding" | "rerank" | "vl"]
 
             // 使用 savedConfigs 判断配置状态 (避免未保存的修改影响列表显示)
-            const isConfigured = conf.mode === 'platform' || !!(conf.provider && conf.model && conf.apiKey && conf.baseUrl)
+            const isConfigured = conf.mode === 'platform' || !!(conf.provider && conf.model && conf.api_key && conf.base_url)
 
             return (
               <button

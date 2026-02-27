@@ -24,12 +24,12 @@ import type { Site } from "@/lib/api-client"
 interface WebWidgetConfig {
   title?: string
   position?: "left" | "right"
-  primaryColor?: string
-  welcomeMessage?: string
+  primary_color?: string
+  welcome_message?: string
 }
 
 interface BotConfig {
-  webWidget?: WebWidgetConfig
+  web_widget?: WebWidgetConfig
 }
 
 function WidgetContent() {
@@ -69,10 +69,10 @@ function WidgetContent() {
 
   // 合并配置：Query 参数优先级高于数据库配置
   // 注意：如果 query 参数存在但为空字符串，应该被视为没有提供，从而使用数据库配置
-  const title = queryTitle || siteConfig?.webWidget?.title || "AI 客服助手"
-  const position = ((queryPosition || siteConfig?.webWidget?.position) as "left" | "right") || "right"
-  const color = queryColor || siteConfig?.webWidget?.primaryColor || "#3b82f6"
-  const welcomeMessage = queryWelcomeMessage || siteConfig?.webWidget?.welcomeMessage || ""
+  const title = queryTitle || siteConfig?.web_widget?.title || "AI 客服助手"
+  const position = ((queryPosition || siteConfig?.web_widget?.position) as "left" | "right") || "right"
+  const color = queryColor || siteConfig?.web_widget?.primary_color || "#3b82f6"
+  const welcomeMessage = queryWelcomeMessage || siteConfig?.web_widget?.welcome_message || ""
 
   useEffect(() => {
     if (isReady) {

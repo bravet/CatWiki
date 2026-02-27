@@ -144,7 +144,7 @@ export function DocProcessorSettings({ scope = 'tenant' }: { scope?: 'platform' 
       toast.error("请输入服务名称")
       return
     }
-    if (!formData.baseUrl.trim()) {
+    if (!formData.base_url.trim()) {
       toast.error("请输入 API 端点")
       return
     }
@@ -277,12 +277,12 @@ export function DocProcessorSettings({ scope = 'tenant' }: { scope?: 'platform' 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="baseUrl">API 地址 (Base URL)</Label>
+            <Label htmlFor="base_url">API 地址 (Base URL)</Label>
             <Input
-              id="baseUrl"
+              id="base_url"
               placeholder="例如：http://localhost:8000"
-              value={formData.baseUrl}
-              onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+              value={formData.base_url}
+              onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
             />
             {(() => {
               const selectedType = DOC_PROCESSOR_TYPES.find(t => t.value === formData.type)
@@ -297,18 +297,18 @@ export function DocProcessorSettings({ scope = 'tenant' }: { scope?: 'platform' 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="apiKey">
+            <Label htmlFor="api_key">
               {formData.type === 'Docling' ? 'API 密钥 (X-Api-Key)' : 'API 密钥'}
               <span className="text-slate-400 font-normal ml-1">（可选）</span>
             </Label>
             <Input
-              id="apiKey"
+              id="api_key"
               type="password"
               placeholder={formData.type === 'Docling' ? "请输入 X-Api-Key" : "如果需要认证，请输入密钥"}
-              value={formData.apiKey}
-              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+              value={formData.api_key}
+              onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
               autoComplete="new-password"
-              name="doc_processor_apiKey_disable_autofill"
+              name="doc_processor_api_key_disable_autofill"
             />
           </div>
 
@@ -468,10 +468,10 @@ export function DocProcessorSettings({ scope = 'tenant' }: { scope?: 'platform' 
                           </div>
                           <CardDescription>
                             {DOC_PROCESSOR_TYPES.find(t => t.value === processor.type)?.label || processor.type}
-                            {processor.baseUrl !== "****" && (
+                            {processor.base_url !== "****" && (
                               <>
                                 {" · "}
-                                {processor.baseUrl}
+                                {processor.base_url}
                               </>
                             )}
                           </CardDescription>

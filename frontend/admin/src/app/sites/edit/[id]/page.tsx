@@ -65,7 +65,7 @@ export default function EditSitePage() {
   const [themeColor, setThemeColor] = useState<string>("blue")
   const [layoutMode, setLayoutMode] = useState<string>("sidebar")
   const [quickQuestions, setQuickQuestions] = useState<QuickQuestion[]>([])
-  const [botConfig, setBotConfig] = useState(initialConfigs.botConfig)
+  const [botConfig, setBotConfig] = useState(initialConfigs.bot_config)
   const [mounted, setMounted] = useState(false)
 
   const initialDataRef = useRef<{

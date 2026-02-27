@@ -90,7 +90,7 @@ class VectorStoreManager:
 
         embedding_conf = await ConfigResolver.resolve_section("embedding", tenant_id=tenant_id)
 
-        api_key = embedding_conf.get("apiKey")
+        api_key = embedding_conf.get("api_key")
         mode = embedding_conf.get("_mode", "platform")
 
         if not api_key:
@@ -120,7 +120,7 @@ class VectorStoreManager:
         if embedding_conf:
             extra = {
                 "Provider": embedding_conf.get("provider", "N/A"),
-                "Base URL": embedding_conf.get("baseUrl", "N/A"),
+                "Base URL": embedding_conf.get("base_url", "N/A"),
                 "Dimension": embedding_conf.get("dimension", "auto"),
                 "Source": embedding_conf.get("_source", "platform"),
             }
@@ -168,8 +168,8 @@ class VectorStoreManager:
     ):
         """执行实际的初始化逻辑（调用方必须持有 self._lock）"""
         model = embedding_conf.get("model")
-        api_key = embedding_conf.get("apiKey")
-        base_url = embedding_conf.get("baseUrl")
+        api_key = embedding_conf.get("api_key")
+        base_url = embedding_conf.get("base_url")
         dimension = int(embedding_conf.get("dimension") or 1024)
         source = embedding_conf.get("_source", "platform")
         conf_hash = embedding_conf.get("_hash")

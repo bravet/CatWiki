@@ -16,6 +16,10 @@ import logging
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from starlette.exceptions import HTTPException
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+from app.core.web.exceptions import CatWikiError
 
 from app.core.infra.config import settings
 from app.db.events import register_core_db_events
@@ -60,14 +64,17 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
             yield session
         except Exception as e:
             # 忽略业务和验证异常，避免不必要的数据库错误日志
-            from fastapi import HTTPException
-            from fastapi.exceptions import RequestValidationError
-            from pydantic import ValidationError
-
-            from app.core.web.exceptions import CatWikiError
+            from starlette.requests import ClientDisconnect
 
             if not isinstance(
-                e, (HTTPException, RequestValidationError, ValidationError, CatWikiError)
+                e,
+                (
+                    HTTPException,
+                    RequestValidationError,
+                    ValidationError,
+                    CatWikiError,
+                    ClientDisconnect,
+                ),
             ):
                 logger.error(f"数据库会话错误: {e}")
             await session.rollback()

@@ -36,40 +36,54 @@ export type DocProcessorConfig = SdkDocProcessorConfig & {
 }
 
 export type BotConfig = {
-  webWidget: {
+  web_widget: {
     enabled: boolean
     title: string
-    welcomeMessage: string
-    primaryColor: string
+    welcome_message: string
+    primary_color: string
     position: "left" | "right"
   }
-  apiBot: {
+  api_bot: {
     enabled: boolean
-    apiKey: string
+    api_key: string
     timeout: number
   }
-  wecomSmartRobot: {
+  wecom_smart: {
     enabled: boolean
     token: string
-    encodingAesKey: string
+    encoding_aes_key: string
   }
-  feishuBot: {
+  feishu_app: {
     enabled: boolean
-    appId: string
-    appSecret: string
+    app_id: string
+    app_secret: string
   }
-  dingtalkBot: {
+  dingtalk_app: {
     enabled: boolean
-    clientId: string
-    clientSecret: string
-    templateId: string
+    client_id: string
+    client_secret: string
+    template_id: string
   }
-  wecomKefu: {
+  wecom_kefu: {
     enabled: boolean
-    corpId: string
+    corp_id: string
     secret: string
     token: string
-    encodingAesKey: string
+    encoding_aes_key: string
+  }
+  wecom_app: {
+    enabled: boolean
+    corp_id: string
+    agent_id: string
+    secret: string
+    token: string
+    encoding_aes_key: string
+  }
+  discord_app?: {
+    enabled?: boolean
+  }
+  telegram_app?: {
+    enabled?: boolean
   }
 }
 
@@ -78,10 +92,10 @@ export type AIConfigs = {
   embedding: ModelConfig
   rerank: ModelConfig
   vl: ModelConfig
-  botConfig: BotConfig
+  bot_config: BotConfig
 }
 
-export type ModelType = "models" | "chat" | "embedding" | "rerank" | "vl" | "security" | "users" | "sites"
+export type SettingsTabId = "models" | "chat" | "embedding" | "rerank" | "vl" | "security" | "users" | "sites"
 
 export const MODEL_TYPES = ["chat", "embedding", "rerank", "vl"] as const
 
@@ -89,67 +103,81 @@ export const initialConfigs: AIConfigs = {
   chat: {
     provider: "openai",
     model: "",
-    apiKey: "",
-    baseUrl: "",
+    api_key: "",
+    base_url: "",
     mode: ModelConfigEnum.mode.CUSTOM,
     extra_body: {}
   },
   embedding: {
     provider: "openai",
     model: "",
-    apiKey: "",
-    baseUrl: "",
+    api_key: "",
+    base_url: "",
     mode: ModelConfigEnum.mode.CUSTOM
   },
   rerank: {
     provider: "openai",
     model: "",
-    apiKey: "",
-    baseUrl: "",
+    api_key: "",
+    base_url: "",
     mode: ModelConfigEnum.mode.CUSTOM
   },
   vl: {
     provider: "openai",
     model: "",
-    apiKey: "",
-    baseUrl: "",
+    api_key: "",
+    base_url: "",
     mode: ModelConfigEnum.mode.CUSTOM
   },
-  botConfig: {
-    webWidget: {
+  bot_config: {
+    web_widget: {
       enabled: false,
       title: "AI 客服助手",
-      welcomeMessage: "您好！我是 AI 助手，有什么可以帮您？",
-      primaryColor: "#3b82f6",
+      welcome_message: "您好！我是 AI 助手，有什么可以帮您？",
+      primary_color: "#3b82f6",
       position: "right"
     },
-    apiBot: {
+    api_bot: {
       enabled: false,
-      apiKey: "",
+      api_key: "",
       timeout: 30
     },
-    wecomSmartRobot: {
+    wecom_smart: {
       enabled: false,
       token: "",
-      encodingAesKey: ""
+      encoding_aes_key: ""
     },
-    feishuBot: {
+    feishu_app: {
       enabled: false,
-      appId: "",
-      appSecret: ""
+      app_id: "",
+      app_secret: ""
     },
-    dingtalkBot: {
+    dingtalk_app: {
       enabled: false,
-      clientId: "",
-      clientSecret: "",
-      templateId: ""
+      client_id: "",
+      client_secret: "",
+      template_id: ""
     },
-    wecomKefu: {
+    wecom_kefu: {
       enabled: false,
-      corpId: "",
+      corp_id: "",
       secret: "",
       token: "",
-      encodingAesKey: ""
+      encoding_aes_key: ""
+    },
+    wecom_app: {
+      enabled: false,
+      corp_id: "",
+      agent_id: "",
+      secret: "",
+      token: "",
+      encoding_aes_key: ""
+    },
+    discord_app: {
+      enabled: false
+    },
+    telegram_app: {
+      enabled: false
     }
   }
 }
@@ -157,7 +185,7 @@ export const initialConfigs: AIConfigs = {
 // 阿里云百炼基础配置
 export const BAILIAN_BASE = {
   provider: "bailian",
-  baseUrl: "https://dashscope.aliyuncs.com/api/v1"
+  base_url: "https://dashscope.aliyuncs.com/api/v1"
 }
 
 // ============ 文档处理服务配置 ============
@@ -171,8 +199,8 @@ export const DOC_PROCESSOR_TYPES: { value: DocProcessorType; label: string; desc
 export const initialDocProcessorConfig: DocProcessorConfig = {
   name: "",
   type: DocProcessorType.MINER_U,
-  baseUrl: "",
-  apiKey: "",
+  base_url: "",
+  api_key: "",
   enabled: true,
   config: {
     is_ocr: true,
@@ -180,3 +208,4 @@ export const initialDocProcessorConfig: DocProcessorConfig = {
     extract_tables: true
   }
 }
+

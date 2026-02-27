@@ -23,13 +23,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { CircuitBoard } from "lucide-react"
 import { ManualModeConfig } from "./ManualModeConfig"
 import { ShieldCheck } from "lucide-react"
-import { type ModelType } from "@/types/settings"
+import { type SettingsTabId } from "@/types/settings"
 import api from "@/lib/api-client"
 import { useState, useEffect } from "react"
 
 interface ModelSettingsCardProps {
-  onSelectModel: (model: ModelType) => void
-  activeTab: ModelType
+  onSelectModel: (model: SettingsTabId) => void
+  activeTab: SettingsTabId
 }
 
 export function ModelSettingsCard({ onSelectModel, activeTab }: ModelSettingsCardProps) {

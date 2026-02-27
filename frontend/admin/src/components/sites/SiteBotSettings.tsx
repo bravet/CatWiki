@@ -59,6 +59,7 @@ interface BotCardProps {
   onToggleEnable: (enabled: boolean) => void
   children: React.ReactNode
   badge?: React.ReactNode
+  typeBadge?: string
   headerAction?: React.ReactNode
   className?: string
   disabled?: boolean
@@ -77,6 +78,7 @@ function BotCard({
   onToggleEnable,
   children,
   badge,
+  typeBadge,
   headerAction,
   className,
   disabled,
@@ -96,6 +98,11 @@ function BotCard({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-base font-bold">{title}</CardTitle>
+                {typeBadge && (
+                  <Badge className="text-[9px] font-bold px-1.5 h-4 bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-50">
+                    {typeBadge}
+                  </Badge>
+                )}
                 {badge}
                 {isExpanded ? (
                   <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
@@ -302,19 +309,23 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
   const [showWecomKefuSecret, setShowWecomKefuSecret] = useState(false)
   const [showWecomKefuToken, setShowWecomKefuToken] = useState(false)
   const [showWecomKefuAESKey, setShowWecomKefuAESKey] = useState(false)
+  const [showWecomAppSecret, setShowWecomAppSecret] = useState(false)
+  const [showWecomAppToken, setShowWecomAppToken] = useState(false)
+  const [showWecomAppAESKey, setShowWecomAppAESKey] = useState(false)
   const { data: healthData } = useHealth()
   const isCommunity = healthData?.edition === 'community'
 
-  const { webWidget, apiBot, wecomSmartRobot, feishuBot, dingtalkBot, wecomKefu } = config
+  const { web_widget, api_bot, wecom_smart, feishu_app, dingtalk_app, wecom_kefu, wecom_app } = config
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
-    webWidget: webWidget?.enabled || false,
-    apiBot: apiBot?.enabled || false,
-    wecomSmartRobot: wecomSmartRobot?.enabled || false,
-    feishuBot: feishuBot?.enabled || false,
-    dingtalkBot: dingtalkBot?.enabled || false,
-    wecomKefu: wecomKefu?.enabled || false,
-    discord: false,
-    telegram: false
+    web_widget: web_widget?.enabled || false,
+    api_bot: api_bot?.enabled || false,
+    wecom_smart: wecom_smart?.enabled || false,
+    feishu_app: feishu_app?.enabled || false,
+    dingtalk_app: dingtalk_app?.enabled || false,
+    wecom_kefu: wecom_kefu?.enabled || false,
+    wecom_app: wecom_app?.enabled || false,
+    discord_app: false,
+    telegram_app: false
   })
 
   const toggleExpand = (card: string) => {
@@ -328,17 +339,18 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       <BotCard
         title="网页挂件机器人"
         description="在您的网站上嵌入智能客服聊天窗口"
+        typeBadge="挂件"
         icon={<Bot className="h-4 w-4" />}
-        isEnabled={webWidget?.enabled ?? false}
-        isExpanded={expandedCards.webWidget}
-        onToggleExpand={() => toggleExpand("webWidget")}
+        isEnabled={web_widget?.enabled ?? false}
+        isExpanded={expandedCards.web_widget}
+        onToggleExpand={() => toggleExpand("web_widget")}
         onToggleEnable={(enabled) => {
-          onChange("webWidget", "enabled", enabled)
+          onChange("web_widget", "enabled", enabled)
           if (!enabled) setShowPreview(false)
-          if (enabled) setExpandedCards(prev => ({ ...prev, webWidget: true }))
+          if (enabled) setExpandedCards(prev => ({ ...prev, web_widget: true }))
         }}
         headerAction={
-          webWidget.enabled && (
+          web_widget.enabled && (
             <Button
               variant="outline"
               size="sm"
@@ -359,20 +371,20 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       >
         <SettingItem label="挂件标题">
           <Input
-            value={webWidget.title}
-            onChange={(e) => onChange("webWidget", "title", e.target.value)}
+            value={web_widget.title}
+            onChange={(e) => onChange("web_widget", "title", e.target.value)}
             placeholder="AI 客服助手"
-            disabled={!webWidget.enabled}
+            disabled={!web_widget.enabled}
             className="bg-white rounded-lg h-9 text-[13px] placeholder:text-slate-400/80"
           />
         </SettingItem>
 
         <SettingItem label="欢迎语">
           <Input
-            value={webWidget.welcomeMessage}
-            onChange={(e) => onChange("webWidget", "welcomeMessage", e.target.value)}
+            value={web_widget.welcome_message}
+            onChange={(e) => onChange("web_widget", "welcome_message", e.target.value)}
             placeholder="您好！我是 AI 助手，有什么可以帮您？"
-            disabled={!webWidget.enabled}
+            disabled={!web_widget.enabled}
             className="bg-white rounded-lg h-9 text-[13px] placeholder:text-slate-400/80"
           />
         </SettingItem>
@@ -381,22 +393,22 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
           <div className="flex gap-2">
             <Input
               type="color"
-              value={webWidget.primaryColor}
-              onChange={(e) => onChange("webWidget", "primaryColor", e.target.value)}
-              disabled={!webWidget.enabled}
+              value={web_widget.primary_color}
+              onChange={(e) => onChange("web_widget", "primary_color", e.target.value)}
+              disabled={!web_widget.enabled}
               className="w-16 h-9 bg-white cursor-pointer rounded-lg p-1"
             />
             <Input
-              value={webWidget.primaryColor}
-              onChange={(e) => onChange("webWidget", "primaryColor", e.target.value)}
-              disabled={!webWidget.enabled}
+              value={web_widget.primary_color}
+              onChange={(e) => onChange("web_widget", "primary_color", e.target.value)}
+              disabled={!web_widget.enabled}
               placeholder="#3b82f6"
               className="flex-1 bg-white font-mono rounded-lg h-9 text-[13px] placeholder:text-slate-400/80"
             />
           </div>
         </SettingItem>
 
-        {webWidget.enabled && (
+        {web_widget.enabled && (
           <InstructionBox
             title="嵌入代码"
             items={[
@@ -405,13 +417,13 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             ]}
             footer={
               <p className="text-[11px] text-blue-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/widget-integration`} target="_blank" className="underline decoration-blue-300 underline-offset-2 hover:text-blue-900 transition-colors">网页挂件配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/widget-integration`} target="_blank" className="underline decoration-blue-300 underline-offset-2 hover:text-blue-900 transition-colors">网页挂件配置文档</a>
               </p>
             }
           />
         )}
 
-        {webWidget.enabled && (
+        {web_widget.enabled && (
           <div className="flex gap-4 -mt-3">
             <div className="min-w-[100px]" />
             <div className="flex-1 p-3 bg-blue-50 border border-blue-100 rounded-lg">
@@ -440,20 +452,21 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
         )}
       </BotCard>
 
-      {/* 问答机器人 (OpenAI 兼容) */}
+      {/* 问答机器人 */}
       <BotCard
-        title="问答机器人 (OpenAI 兼容)"
+        title="问答机器人"
         description="支持 OpenAI 兼容接口，对接各类 AI 客户端"
+        typeBadge="OpenAI 兼容"
         icon={<Code className="h-4 w-4" />}
         iconBgColor={isCommunity ? "bg-slate-50" : "bg-emerald-50"}
         iconTextColor={isCommunity ? "text-slate-400" : "text-emerald-600"}
-        isEnabled={isCommunity ? false : (apiBot?.enabled ?? false)}
-        isExpanded={expandedCards.apiBot}
-        onToggleExpand={() => toggleExpand("apiBot")}
+        isEnabled={isCommunity ? false : (api_bot?.enabled ?? false)}
+        isExpanded={expandedCards.api_bot}
+        onToggleExpand={() => toggleExpand("api_bot")}
         onToggleEnable={(enabled) => {
           if (isCommunity) return
-          onChange("apiBot", "enabled", enabled)
-          if (enabled) setExpandedCards(prev => ({ ...prev, apiBot: true }))
+          onChange("api_bot", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, api_bot: true }))
         }}
         disabled={isCommunity}
         tooltip={isCommunity ? '该功能仅企业版可用' : undefined}
@@ -481,10 +494,10 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="API Key" required>
           <CopyableInput
-            value={apiBot.apiKey}
-            onChange={(val) => onChange("apiBot", "apiKey", val)}
+            value={api_bot.api_key}
+            onChange={(val) => onChange("api_bot", "api_key", val)}
             placeholder="在此设置访问该接口的密钥"
-            disabled={!apiBot.enabled}
+            disabled={!api_bot.enabled}
             showPasswordToggle
             isPasswordVisible={showKey}
             onTogglePasswordVisibility={() => setShowKey(!showKey)}
@@ -501,10 +514,10 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
                     for (let i = 0; i < 32; i++) {
                       result += chars.charAt(Math.floor(Math.random() * chars.length));
                     }
-                    onChange("apiBot", "apiKey", result);
+                    onChange("api_bot", "api_key", result);
                     toast.success("已生成新 API Key");
                   }}
-                  disabled={!apiBot.enabled || isCommunity}
+                  disabled={!api_bot.enabled || isCommunity}
                 >
                   <RefreshCw className="h-3 w-3" />
                   重置/生成 API Key
@@ -517,16 +530,16 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
         <SettingItem label="超时时间 (秒)">
           <Input
             type="number"
-            value={apiBot.timeout}
-            onChange={(e) => onChange("apiBot", "timeout", parseInt(e.target.value))}
-            disabled={!apiBot.enabled || isCommunity}
+            value={api_bot.timeout}
+            onChange={(e) => onChange("api_bot", "timeout", parseInt(e.target.value))}
+            disabled={!api_bot.enabled || isCommunity}
             className="bg-white rounded-lg h-9 max-w-[200px] text-[13px] placeholder:text-slate-400/80"
             min={1}
             max={300}
           />
         </SettingItem>
 
-        {apiBot.enabled && (
+        {api_bot.enabled && (
           <InstructionBox
             title="curl 调用示例"
             bgColor="bg-emerald-50"
@@ -535,13 +548,13 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             items={[`使用以下命令测试您的 API 接口：`]}
             footer={
               <p className="text-[11px] text-emerald-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/chat-api`} target="_blank" className="underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900 transition-colors">问答机器人配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/chat-api`} target="_blank" className="underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900 transition-colors">问答机器人配置文档</a>
               </p>
             }
           />
         )}
 
-        {apiBot.enabled && (
+        {api_bot.enabled && (
           <div className="flex gap-4 -mt-3">
             <div className="min-w-[100px]" />
             <div className="flex-1 p-3 bg-emerald-50 border border-emerald-100 rounded-lg relative group/code">
@@ -552,7 +565,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
                   className="h-6 text-[11px] text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 px-2 gap-1 font-semibold ml-auto"
                   onClick={() => {
                     const code = `curl -X POST "${env.NEXT_PUBLIC_API_URL}/v1/bot/chat/completions" \\
-  -H "Authorization: Bearer ${apiBot.apiKey || 'YOUR_API_KEY'}" \\
+  -H "Authorization: Bearer ${api_bot.api_key || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${chatModel || ""}",
@@ -571,7 +584,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
               </div>
               <code className="block text-[10px] text-emerald-700 font-mono bg-white p-3 rounded-lg overflow-x-auto whitespace-pre border border-emerald-100">
                 {`curl -X POST "${env.NEXT_PUBLIC_API_URL}/v1/bot/chat/completions" \\
-  -H "Authorization: Bearer ${apiBot.apiKey || 'YOUR_API_KEY'}" \\
+  -H "Authorization: Bearer ${api_bot.api_key || 'YOUR_API_KEY'}" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${chatModel || ""}",
@@ -589,40 +602,41 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       {/* 飞书机器人 */}
       <BotCard
         title="飞书机器人"
-        description="在飞书中与您的知识库对话"
+        description="通过飞书自建应用，在飞书中与知识库对话"
+        typeBadge="应用"
         icon={<Image src="/icons/feishu.svg" alt="飞书" width={24} height={24} className="rounded" />}
-        isEnabled={feishuBot?.enabled ?? false}
-        isExpanded={expandedCards.feishuBot}
-        onToggleExpand={() => toggleExpand("feishuBot")}
+        isEnabled={feishu_app?.enabled ?? false}
+        isExpanded={expandedCards.feishu_app}
+        onToggleExpand={() => toggleExpand("feishu_app")}
         onToggleEnable={(enabled) => {
-          onChange("feishuBot", "enabled", enabled)
-          if (enabled) setExpandedCards(prev => ({ ...prev, feishuBot: true }))
+          onChange("feishu_app", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, feishu_app: true }))
         }}
         iconBgColor="bg-slate-50"
         iconTextColor="text-slate-600"
       >
         <SettingItem label="App ID" required>
           <CopyableInput
-            value={feishuBot?.appId || ""}
-            onChange={(val) => onChange("feishuBot", "appId", val)}
+            value={feishu_app?.app_id || ""}
+            onChange={(val) => onChange("feishu_app", "app_id", val)}
             placeholder="cli_xxxxxxxxxxxxxxxxxx"
-            disabled={!feishuBot?.enabled}
+            disabled={!feishu_app?.enabled}
           />
         </SettingItem>
 
         <SettingItem label="App Secret" required>
           <CopyableInput
-            value={feishuBot?.appSecret || ""}
-            onChange={(val) => onChange("feishuBot", "appSecret", val)}
+            value={feishu_app?.app_secret || ""}
+            onChange={(val) => onChange("feishu_app", "app_secret", val)}
             placeholder="飞书应用 App Secret"
-            disabled={!feishuBot?.enabled}
+            disabled={!feishu_app?.enabled}
             showPasswordToggle
             isPasswordVisible={showFeishuAppSecret}
             onTogglePasswordVisibility={() => setShowFeishuAppSecret(!showFeishuAppSecret)}
           />
         </SettingItem>
 
-        {feishuBot?.enabled && (
+        {feishu_app?.enabled && (
           <InstructionBox
             title="配置说明"
             bgColor="bg-indigo-50"
@@ -638,7 +652,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             ]}
             footer={
               <p className="text-[11px] text-indigo-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/feishu-robot`} target="_blank" className="underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900 transition-colors">飞书机器人配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/feishu-app`} target="_blank" className="underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900 transition-colors">飞书机器人配置文档</a>
               </p>
             }
           />
@@ -648,33 +662,34 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       {/* 钉钉机器人 */}
       <BotCard
         title="钉钉机器人"
-        description="在钉钉中与您的知识库对话"
+        description="通过钉钉自建应用，在钉钉中与知识库对话"
+        typeBadge="应用"
         icon={<Image src="/icons/dingtalk.svg" alt="钉钉" width={24} height={24} className="rounded" />}
-        isEnabled={dingtalkBot?.enabled ?? false}
-        isExpanded={expandedCards.dingtalkBot}
-        onToggleExpand={() => toggleExpand("dingtalkBot")}
+        isEnabled={dingtalk_app?.enabled ?? false}
+        isExpanded={expandedCards.dingtalk_app}
+        onToggleExpand={() => toggleExpand("dingtalk_app")}
         onToggleEnable={(enabled) => {
-          onChange("dingtalkBot", "enabled", enabled)
-          if (enabled) setExpandedCards(prev => ({ ...prev, dingtalkBot: true }))
+          onChange("dingtalk_app", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, dingtalk_app: true }))
         }}
         iconBgColor="bg-slate-50"
         iconTextColor="text-slate-600"
       >
         <SettingItem label="Client ID" required>
           <CopyableInput
-            value={dingtalkBot?.clientId || ""}
-            onChange={(val) => onChange("dingtalkBot", "clientId", val)}
+            value={dingtalk_app?.client_id || ""}
+            onChange={(val) => onChange("dingtalk_app", "client_id", val)}
             placeholder="dingxxxxxxxxxx"
-            disabled={!dingtalkBot?.enabled}
+            disabled={!dingtalk_app?.enabled}
           />
         </SettingItem>
 
         <SettingItem label="Client Secret" required>
           <CopyableInput
-            value={dingtalkBot?.clientSecret || ""}
-            onChange={(val) => onChange("dingtalkBot", "clientSecret", val)}
+            value={dingtalk_app?.client_secret || ""}
+            onChange={(val) => onChange("dingtalk_app", "client_secret", val)}
             placeholder="钉钉应用 Client Secret"
-            disabled={!dingtalkBot?.enabled}
+            disabled={!dingtalk_app?.enabled}
             showPasswordToggle
             isPasswordVisible={showDingtalkClientSecret}
             onTogglePasswordVisibility={() => setShowDingtalkClientSecret(!showDingtalkClientSecret)}
@@ -683,14 +698,14 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="Template ID" required>
           <CopyableInput
-            value={dingtalkBot?.templateId || ""}
-            onChange={(val) => onChange("dingtalkBot", "templateId", val)}
+            value={dingtalk_app?.template_id || ""}
+            onChange={(val) => onChange("dingtalk_app", "template_id", val)}
             placeholder="钉钉机器人模板 ID"
-            disabled={!dingtalkBot?.enabled}
+            disabled={!dingtalk_app?.enabled}
           />
         </SettingItem>
 
-        {dingtalkBot?.enabled && (
+        {dingtalk_app?.enabled && (
           <InstructionBox
             title="配置说明"
             bgColor="bg-orange-50"
@@ -705,7 +720,106 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             ]}
             footer={
               <p className="text-[11px] text-orange-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/dingtalk-robot`} target="_blank" className="underline decoration-orange-300 underline-offset-2 hover:text-orange-900 transition-colors">钉钉机器人配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/dingtalk-app`} target="_blank" className="underline decoration-orange-300 underline-offset-2 hover:text-orange-900 transition-colors">钉钉机器人配置文档</a>
+              </p>
+            }
+          />
+        )}
+      </BotCard>
+
+      {/* 企业微信机器人(应用) */}
+      <BotCard
+        title="企业微信机器人"
+        description="通过企业微信自建应用，在企微中与知识库对话"
+        typeBadge="应用"
+        icon={<Image src="/icons/wecom.svg" alt="企业微信" width={24} height={24} className="rounded" />}
+        isEnabled={wecom_app?.enabled ?? false}
+        isExpanded={expandedCards.wecom_app}
+        onToggleExpand={() => toggleExpand("wecom_app")}
+        onToggleEnable={(enabled) => {
+          onChange("wecom_app", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, wecom_app: true }))
+        }}
+        iconBgColor="bg-slate-50"
+        iconTextColor="text-slate-600"
+      >
+        <SettingItem label="回调地址" badge="系统预设">
+          <CopyableInput
+            value={`${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-app?site_id=${siteId}`}
+            readOnly
+            hint="请在企业微信自建应用「接收消息」配置中填写此地址"
+          />
+        </SettingItem>
+
+        <SettingItem label="企业 ID (CorpID)" required>
+          <CopyableInput
+            value={wecom_app?.corp_id || ""}
+            onChange={(val) => onChange("wecom_app", "corp_id", val)}
+            placeholder="企业微信 CorpID"
+            disabled={!wecom_app?.enabled}
+          />
+        </SettingItem>
+
+        <SettingItem label="AgentID" required>
+          <CopyableInput
+            value={wecom_app?.agent_id || ""}
+            onChange={(val) => onChange("wecom_app", "agent_id", val)}
+            placeholder="自建应用 AgentId"
+            disabled={!wecom_app?.enabled}
+          />
+        </SettingItem>
+
+        <SettingItem label="Secret" required>
+          <CopyableInput
+            value={wecom_app?.secret || ""}
+            onChange={(val) => onChange("wecom_app", "secret", val)}
+            placeholder="自建应用 Secret"
+            disabled={!wecom_app?.enabled}
+            showPasswordToggle
+            isPasswordVisible={showWecomAppSecret}
+            onTogglePasswordVisibility={() => setShowWecomAppSecret(!showWecomAppSecret)}
+          />
+        </SettingItem>
+
+        <SettingItem label="Token" required>
+          <CopyableInput
+            value={wecom_app?.token || ""}
+            onChange={(val) => onChange("wecom_app", "token", val)}
+            placeholder="接收消息 Token"
+            disabled={!wecom_app?.enabled}
+            showPasswordToggle
+            isPasswordVisible={showWecomAppToken}
+            onTogglePasswordVisibility={() => setShowWecomAppToken(!showWecomAppToken)}
+          />
+        </SettingItem>
+
+        <SettingItem label="AES Key" required>
+          <CopyableInput
+            value={wecom_app?.encoding_aes_key || ""}
+            onChange={(val) => onChange("wecom_app", "encoding_aes_key", val)}
+            placeholder="EncodingAESKey"
+            disabled={!wecom_app?.enabled}
+            showPasswordToggle
+            isPasswordVisible={showWecomAppAESKey}
+            onTogglePasswordVisibility={() => setShowWecomAppAESKey(!showWecomAppAESKey)}
+          />
+        </SettingItem>
+
+        {wecom_app?.enabled && (
+          <InstructionBox
+            title="配置说明"
+            bgColor="bg-green-50"
+            borderColor="border-green-100"
+            textColor="text-green-700"
+            items={[
+              "在企业微信管理后台进入 <b>「应用管理」-「自建」</b>，点击创建应用",
+              "获取 <b>AgentId</b> 和 <b>Secret</b>，填入上方对应字段",
+              "在应用详情页的 <b>「接收消息」</b> 中设置 API 接收，填入上方回调地址并配置 Token 和 AES Key",
+              "在 <b>「我的企业」</b> 底部获取 <b>企业 ID (CorpID)</b>"
+            ]}
+            footer={
+              <p className="text-[11px] text-green-800/80">
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/wecom-app`} target="_blank" className="underline decoration-green-300 underline-offset-2 hover:text-green-900 transition-colors">企业微信机器人配置文档</a>
               </p>
             }
           />
@@ -716,13 +830,14 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       <BotCard
         title="企业微信客服"
         description="对接企业微信客服，使用知识库自动回复客户咨询"
+        typeBadge="原生"
         icon={<Image src="/icons/wecom.svg" alt="企业微信" width={24} height={24} className="rounded" />}
-        isEnabled={wecomKefu?.enabled ?? false}
-        isExpanded={expandedCards.wecomKefu}
-        onToggleExpand={() => toggleExpand("wecomKefu")}
+        isEnabled={wecom_kefu?.enabled ?? false}
+        isExpanded={expandedCards.wecom_kefu}
+        onToggleExpand={() => toggleExpand("wecom_kefu")}
         onToggleEnable={(enabled) => {
-          onChange("wecomKefu", "enabled", enabled)
-          if (enabled) setExpandedCards(prev => ({ ...prev, wecomKefu: true }))
+          onChange("wecom_kefu", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, wecom_kefu: true }))
         }}
         iconBgColor="bg-slate-50"
         iconTextColor="text-slate-600"
@@ -737,19 +852,19 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="企业 ID (CorpID)" required>
           <CopyableInput
-            value={wecomKefu?.corpId || ""}
-            onChange={(val) => onChange("wecomKefu", "corpId", val)}
+            value={wecom_kefu?.corp_id || ""}
+            onChange={(val) => onChange("wecom_kefu", "corp_id", val)}
             placeholder="企业微信 CorpID"
-            disabled={!wecomKefu?.enabled}
+            disabled={!wecom_kefu?.enabled}
           />
         </SettingItem>
 
         <SettingItem label="客服 Secret" required>
           <CopyableInput
-            value={wecomKefu?.secret || ""}
-            onChange={(val) => onChange("wecomKefu", "secret", val)}
+            value={wecom_kefu?.secret || ""}
+            onChange={(val) => onChange("wecom_kefu", "secret", val)}
             placeholder="微信客服 Secret"
-            disabled={!wecomKefu?.enabled}
+            disabled={!wecom_kefu?.enabled}
             showPasswordToggle
             isPasswordVisible={showWecomKefuSecret}
             onTogglePasswordVisibility={() => setShowWecomKefuSecret(!showWecomKefuSecret)}
@@ -758,10 +873,10 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="Token" required>
           <CopyableInput
-            value={wecomKefu?.token || ""}
-            onChange={(val) => onChange("wecomKefu", "token", val)}
+            value={wecom_kefu?.token || ""}
+            onChange={(val) => onChange("wecom_kefu", "token", val)}
             placeholder="WeCom Kefu Token"
-            disabled={!wecomKefu?.enabled}
+            disabled={!wecom_kefu?.enabled}
             showPasswordToggle
             isPasswordVisible={showWecomKefuToken}
             onTogglePasswordVisibility={() => setShowWecomKefuToken(!showWecomKefuToken)}
@@ -770,17 +885,17 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="AES Key" required>
           <CopyableInput
-            value={wecomKefu?.encodingAesKey || ""}
-            onChange={(val) => onChange("wecomKefu", "encodingAesKey", val)}
+            value={wecom_kefu?.encoding_aes_key || ""}
+            onChange={(val) => onChange("wecom_kefu", "encoding_aes_key", val)}
             placeholder="EncodingAESKey"
-            disabled={!wecomKefu?.enabled}
+            disabled={!wecom_kefu?.enabled}
             showPasswordToggle
             isPasswordVisible={showWecomKefuAESKey}
             onTogglePasswordVisibility={() => setShowWecomKefuAESKey(!showWecomKefuAESKey)}
           />
         </SettingItem>
 
-        {wecomKefu?.enabled && (
+        {wecom_kefu?.enabled && (
           <InstructionBox
             title="配置说明"
             bgColor="bg-teal-50"
@@ -793,7 +908,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             ]}
             footer={
               <p className="text-[11px] text-teal-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/wecom-kefu`} target="_blank" className="underline decoration-teal-300 underline-offset-2 hover:text-teal-900 transition-colors">企业微信客服配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/wecom-kefu`} target="_blank" className="underline decoration-teal-300 underline-offset-2 hover:text-teal-900 transition-colors">企业微信客服配置文档</a>
               </p>
             }
           />
@@ -803,14 +918,15 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       {/* 企业微信智能机器人 */}
       <BotCard
         title="企业微信智能机器人"
-        description="在企业微信中与您的知识库对话"
+        description="通过企业微信智能机器人能力，在企微群聊/单聊中与知识库对话"
+        typeBadge="原生"
         icon={<Image src="/icons/wecom.svg" alt="企业微信" width={24} height={24} className="rounded" />}
-        isEnabled={wecomSmartRobot?.enabled ?? false}
-        isExpanded={expandedCards.wecomSmartRobot}
-        onToggleExpand={() => toggleExpand("wecomSmartRobot")}
+        isEnabled={wecom_smart?.enabled ?? false}
+        isExpanded={expandedCards.wecom_smart}
+        onToggleExpand={() => toggleExpand("wecom_smart")}
         onToggleEnable={(enabled) => {
-          onChange("wecomSmartRobot", "enabled", enabled)
-          if (enabled) setExpandedCards(prev => ({ ...prev, wecomSmartRobot: true }))
+          onChange("wecom_smart", "enabled", enabled)
+          if (enabled) setExpandedCards(prev => ({ ...prev, wecom_smart: true }))
         }}
         iconBgColor="bg-slate-50"
         iconTextColor="text-slate-600"
@@ -825,10 +941,10 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="Token" required>
           <CopyableInput
-            value={wecomSmartRobot?.token || ""}
-            onChange={(val) => onChange("wecomSmartRobot", "token", val)}
+            value={wecom_smart?.token || ""}
+            onChange={(val) => onChange("wecom_smart", "token", val)}
             placeholder="WeCom Robot Token"
-            disabled={!wecomSmartRobot?.enabled}
+            disabled={!wecom_smart?.enabled}
             showPasswordToggle
             isPasswordVisible={showWecomToken}
             onTogglePasswordVisibility={() => setShowWecomToken(!showWecomToken)}
@@ -837,17 +953,17 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
 
         <SettingItem label="AES Key" required>
           <CopyableInput
-            value={wecomSmartRobot?.encodingAesKey || ""}
-            onChange={(val) => onChange("wecomSmartRobot", "encodingAesKey", val)}
+            value={wecom_smart?.encoding_aes_key || ""}
+            onChange={(val) => onChange("wecom_smart", "encoding_aes_key", val)}
             placeholder="EncodingAESKey"
-            disabled={!wecomSmartRobot?.enabled}
+            disabled={!wecom_smart?.enabled}
             showPasswordToggle
             isPasswordVisible={showWecomAESKey}
             onTogglePasswordVisibility={() => setShowWecomAESKey(!showWecomAESKey)}
           />
         </SettingItem>
 
-        {wecomSmartRobot?.enabled && (
+        {wecom_smart?.enabled && (
           <InstructionBox
             title="配置说明"
             bgColor="bg-sky-50"
@@ -860,7 +976,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             ]}
             footer={
               <p className="text-[11px] text-sky-800/80">
-                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/wecom-robot`} target="_blank" className="underline decoration-sky-300 underline-offset-2 hover:text-sky-900 transition-colors">企业微信机器人配置文档</a>
+                详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/wecom-smart`} target="_blank" className="underline decoration-sky-300 underline-offset-2 hover:text-sky-900 transition-colors">企业微信智能机器人配置文档</a>
               </p>
             }
           />
@@ -870,11 +986,12 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       {/* Discord 机器人 */}
       <BotCard
         title="Discord 机器人"
-        description="在 Discord 中与您的知识库对话"
+        description="通过 Discord 应用，在 Discord 中与知识库对话"
+        typeBadge="应用"
         icon={<MessageSquare className="h-4 w-4" />}
         isEnabled={false}
-        isExpanded={expandedCards.discord}
-        onToggleExpand={() => toggleExpand("discord")}
+        isExpanded={expandedCards.discordApp}
+        onToggleExpand={() => toggleExpand("discordApp")}
         onToggleEnable={() => { }}
         disabled={true}
         badge={<Badge variant="outline" className="text-[9px] font-bold px-1.5 h-4 bg-slate-50 text-slate-400">敬请期待</Badge>}
@@ -884,7 +1001,7 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             Discord 机器人功能开发中，敬请期待...
           </div>
           <p className="text-[10px] text-slate-400/80">
-            详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/discord-robot`} target="_blank" className="underline underline-offset-2 hover:text-slate-600 transition-colors">Discord 机器人配置文档</a>
+            详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/discord-app`} target="_blank" className="underline underline-offset-2 hover:text-slate-600 transition-colors">Discord 机器人配置文档</a>
           </p>
         </div>
       </BotCard>
@@ -893,10 +1010,11 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
       <BotCard
         title="Telegram 机器人"
         description="在 Telegram 中与您的知识库对话"
+        typeBadge="应用"
         icon={<Send className="h-4 w-4" />}
         isEnabled={false}
-        isExpanded={expandedCards.telegram}
-        onToggleExpand={() => toggleExpand("telegram")}
+        isExpanded={expandedCards.telegramApp}
+        onToggleExpand={() => toggleExpand("telegramApp")}
         onToggleEnable={() => { }}
         disabled={true}
         badge={<Badge variant="outline" className="text-[9px] font-bold px-1.5 h-4 bg-slate-50 text-slate-400">敬请期待</Badge>}
@@ -906,18 +1024,18 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             Telegram 机器人功能开发中，敬请期待...
           </div>
           <p className="text-[10px] text-slate-400/80">
-            详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/tech/telegram-robot`} target="_blank" className="underline underline-offset-2 hover:text-slate-600 transition-colors">Telegram 机器人配置文档</a>
+            详细图文指引请参考：<a href={`${env.NEXT_PUBLIC_DOCS_URL}/development/bots/telegram-app`} target="_blank" className="underline underline-offset-2 hover:text-slate-600 transition-colors">Telegram 机器人配置文档</a>
           </p>
         </div>
       </BotCard>
 
       {/* 预览挂件 */}
-      {showPreview && webWidget.enabled && (
+      {showPreview && web_widget.enabled && (
         <ChatWidgetPreview
-          title={webWidget.title}
-          welcomeMessage={webWidget.welcomeMessage}
-          primaryColor={webWidget.primaryColor}
-          position={webWidget.position as "left" | "right"}
+          title={web_widget.title}
+          welcomeMessage={web_widget.welcome_message}
+          primaryColor={web_widget.primary_color}
+          position={web_widget.position as "left" | "right"}
           onClose={() => setShowPreview(false)}
         />
       )}

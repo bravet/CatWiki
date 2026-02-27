@@ -8,10 +8,10 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.core.integration.robot.base import RobotInboundEvent, RobotSession
+from app.core.integration.robot.base import MessageDeduplicator, RobotInboundEvent, RobotSession
 from app.core.integration.robot.factory import RobotFactory
-from app.core.integration.robot.feishu import FeishuLongConnConfig
-from app.core.integration.robot.feishu.longconn import start_longconn_client
+from app.core.integration.robot.feishu_app.types import FeishuLongConnConfig
+from app.core.integration.robot.feishu_app.longconn import start_longconn_client
 from app.db.database import AsyncSessionLocal
 from app.models.site import Site
 from app.services.robot import RobotOrchestrator
@@ -36,10 +36,7 @@ class FeishuRobotService:
         self._workers: dict[int, FeishuWorkerState] = {}
         self._workers_lock = threading.Lock()
         self._refresh_lock = asyncio.Lock()
-        self._processed_lock = threading.Lock()
-        self._processed_message_ids: OrderedDict[str, float] = OrderedDict()
-        self._processed_ttl_seconds = 600
-        self._processed_max_size = 2000
+        self._deduplicator = MessageDeduplicator()
 
     @classmethod
     def get_instance(cls) -> "FeishuRobotService":
@@ -111,10 +108,10 @@ class FeishuRobotService:
         candidates: dict[int, FeishuLongConnConfig] = {}
         for site in sites:
             bot_config = site.bot_config or {}
-            feishu = bot_config.get("feishuBot") or {}
+            feishu = bot_config.get("feishu_app") or {}
             enabled = bool(feishu.get("enabled"))
-            app_id = (feishu.get("appId") or "").strip()
-            app_secret = (feishu.get("appSecret") or "").strip()
+            app_id = (feishu.get("app_id") or "").strip()
+            app_secret = (feishu.get("app_secret") or "").strip()
             if enabled and app_id and app_secret:
                 candidates[site.id] = FeishuLongConnConfig(
                     site_id=site.id, app_id=app_id, app_secret=app_secret
@@ -135,14 +132,16 @@ class FeishuRobotService:
             if not self._is_worker_active(config.site_id, generation, config):
                 return
 
-            adapter = RobotFactory.get_adapter("feishu")
+            adapter = RobotFactory.get_adapter("feishu_app")
             inbound_event = adapter.parse_inbound_text_event(raw_data, config.site_id)
             if not inbound_event:
                 return
 
             if inbound_event.extra.get("sender_type") == "app":
                 return
-            if inbound_event.message_id and self._is_duplicate_message(inbound_event.message_id):
+            if inbound_event.message_id and self._deduplicator.is_duplicate(
+                inbound_event.message_id
+            ):
                 logger.debug("飞书长连接忽略重复消息: message_id=%s", inbound_event.message_id)
                 return
 
@@ -186,27 +185,6 @@ class FeishuRobotService:
         except Exception:
             logger.exception("飞书长连接异步消息处理失败: site_id=%s", site_id)
 
-    def _is_duplicate_message(self, message_id: str) -> bool:
-        now = time.time()
-        with self._processed_lock:
-            self._evict_processed(now)
-            if message_id in self._processed_message_ids:
-                return True
-            self._processed_message_ids[message_id] = now
-            self._processed_message_ids.move_to_end(message_id)
-            if len(self._processed_message_ids) > self._processed_max_size:
-                self._processed_message_ids.popitem(last=False)
-            return False
-
-    def _evict_processed(self, now: float) -> None:
-        expire_before = now - self._processed_ttl_seconds
-        while self._processed_message_ids:
-            first_key = next(iter(self._processed_message_ids))
-            ts = self._processed_message_ids[first_key]
-            if ts >= expire_before:
-                break
-            self._processed_message_ids.popitem(last=False)
-
     def _get_worker(self, site_id: int) -> FeishuWorkerState | None:
         with self._workers_lock:
             return self._workers.get(site_id)
@@ -236,8 +214,8 @@ class FeishuRobotService:
         app_secret: str,
     ) -> None:
         # 获取适配器与会话
-        adapter = RobotFactory.get_adapter("feishu")
-        from app.core.integration.robot.feishu.types import FeishuAdapterConfig
+        adapter = RobotFactory.get_adapter("feishu_app")
+        from app.core.integration.robot.feishu_app.types import FeishuAdapterConfig
 
         session = RobotSession(
             event=inbound_event, config=FeishuAdapterConfig(app_id=app_id, app_secret=app_secret)
@@ -247,8 +225,10 @@ class FeishuRobotService:
         # 注意：这里不再需要手动创建 db session，orchestrate_reply 内部会处理推理逻辑
         from fastapi import BackgroundTasks
 
+        bt = BackgroundTasks()
         await RobotOrchestrator.orchestrate_reply(
             adapter=adapter,
             session=session,
-            background_tasks=BackgroundTasks(),
+            background_tasks=bt,
         )
+        await bt()

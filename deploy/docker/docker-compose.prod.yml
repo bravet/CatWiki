@@ -9,6 +9,7 @@ services:
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       LANG: C.UTF-8
+      TZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -77,6 +78,7 @@ services:
     environment:
       # 环境配置
       ENVIRONMENT: prod
+      TZ: Asia/Shanghai
       
       # 数据库配置
       POSTGRES_SERVER: postgres
@@ -128,6 +130,7 @@ services:
     environment:
       # 环境配置
       ENVIRONMENT: prod
+      TZ: Asia/Shanghai
       
       # 数据库配置
       POSTGRES_SERVER: postgres
@@ -185,6 +188,7 @@ services:
       - .env.admin
     environment:
       NODE_ENV: production
+      TZ: Asia/Shanghai
     depends_on:
       backend:
         condition: service_healthy
@@ -225,6 +229,7 @@ services:
       - .env.client
     environment:
       NODE_ENV: production
+      TZ: Asia/Shanghai
     depends_on:
       backend:
         condition: service_healthy
@@ -257,6 +262,8 @@ services:
       dockerfile: Dockerfile.prod
     image: catwiki-docs:latest
     container_name: catwiki-docs
+    environment:
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     ports:
       - "127.0.0.1:${DOCS_PORT:-8003}:80"
@@ -284,6 +291,8 @@ services:
       dockerfile: Dockerfile.prod
     image: catwiki-website:latest
     container_name: catwiki-website
+    environment:
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     ports:
       - "127.0.0.1:${WEBSITE_PORT:-8004}:80"

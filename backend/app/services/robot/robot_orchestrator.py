@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -21,6 +22,9 @@ class RobotOrchestrator:
     DEFAULT_TIMEOUT_REPLY = "服务响应超时，请稍后再试。"
     DEFAULT_EMPTY_REPLY = "抱歉，我暂时无法回答这个问题。"
 
+    _global_locks: dict[str, float] = {}  # thread_id -> start_time
+    _global_lock_mutex = threading.Lock()
+
     @classmethod
     async def orchestrate_reply(
         cls,
@@ -32,8 +36,53 @@ class RobotOrchestrator:
         """
         核心编排逻辑：流式 AI 推理 + 实时推送 + 异常处理。
         """
-        full_answer = ""
         provider = adapter.get_provider_name()
+        provider_id = adapter.get_provider_id()
+        thread_id = cls._get_thread_id(provider_id, session.event.from_user, session.event.chat_id)
+        content = session.event.content.strip()
+
+        # 1. 指令预处理 (全局通用)
+        if content.lower() in ["/clear", "重置", "清空对话"]:
+            logger.info("🧹 [%s] 指令触发: 重置对话 thread_id=%s", provider, thread_id)
+            # 强制清理锁
+            with cls._global_lock_mutex:
+                cls._global_locks.pop(thread_id, None)
+
+            from app.services.chat.session_service import ChatSessionService
+            from app.db.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await ChatSessionService.delete_by_thread_id(db, thread_id)
+
+            await adapter.reply(
+                session, "✅ 已为您清空对话上下文，现在可以开始新的咨询了。", is_finish=True
+            )
+            return
+
+        # 2. 全局并发锁：防止同一线程并发 AI 任务
+        with cls._global_lock_mutex:
+            # 清理过期的锁 (超过 10 分钟认为已挂掉)
+            now = time.time()
+            expired_threads = [tid for tid, ts in cls._global_locks.items() if now - ts > 600]
+            for tid in expired_threads:
+                cls._global_locks.pop(tid, None)
+
+            if thread_id in cls._global_locks:
+                logger.warning(
+                    "⏳ [%s] 并发任务拦截: thread_id=%s 已有任务在运行", provider, thread_id
+                )
+                # 对于非 Pull 模式的平台，可以选择不回复或发送提醒
+                # 我们这里选择发送一个轻微提醒（如果适配器支持更新/发送）
+                try:
+                    await adapter.reply(session, "正在为您写答案，请稍候...", is_finish=False)
+                except Exception:
+                    pass
+                return
+
+            # 加锁
+            cls._global_locks[thread_id] = now
+
+        full_answer = ""
         start_time = time.time()
         last_sync_time = start_time
         sync_count = 0
@@ -45,27 +94,39 @@ class RobotOrchestrator:
             # 1. 发送初始状态（如飞书发送空白卡片）
             await adapter.reply(session, "", is_finish=False)
 
-            # 2. 启动流式推理
-            async for chunk in cls.stream_ask(
-                provider=provider,
-                site_id=session.event.site_id,
-                thread_id=f"{provider.lower()}-robot-{session.event.from_user}",
-                user=session.event.from_user,
-                content=session.event.content,
-                background_tasks=background_tasks,
-            ):
-                token_count += 1
-                full_answer += chunk
+            if adapter.is_streaming_supported(session):
+                # 2. 启动流式推理
+                async for chunk in cls.stream_ask(
+                    provider=provider,
+                    site_id=session.event.site_id,
+                    thread_id=thread_id,
+                    user=session.event.from_user,
+                    content=session.event.content,
+                    background_tasks=background_tasks,
+                ):
+                    token_count += 1
+                    full_answer += chunk
 
-                # 3. 节流推送到适配器
-                now = time.time()
-                if now - last_sync_time >= sync_interval:
-                    try:
-                        await adapter.reply(session, full_answer, is_finish=False)
-                        last_sync_time = now
-                        sync_count += 1
-                    except Exception as e:
-                        logger.warning("%s 流式更新失败 (待下次重试): %s", provider, e)
+                    # 3. 节流推送到适配器
+                    now = time.time()
+                    if now - last_sync_time >= sync_interval:
+                        try:
+                            await adapter.reply(session, full_answer, is_finish=False)
+                            last_sync_time = now
+                            sync_count += 1
+                        except Exception as e:
+                            logger.warning("%s 流式更新失败 (待下次重试): %s", provider, e)
+            else:
+                # 不支持流式的平台（如企微内部应用/企微客服），走非流式一次性拉取，速度更快
+                full_answer = await cls.ask(
+                    provider=provider,
+                    site_id=session.event.site_id,
+                    thread_id=thread_id,
+                    user=session.event.from_user,
+                    content=session.event.content,
+                    background_tasks=background_tasks,
+                )
+                token_count = len(full_answer)
 
             # 4. 最终全量更新
             await adapter.reply(session, full_answer, is_finish=True)
@@ -73,26 +134,24 @@ class RobotOrchestrator:
 
             total_duration = time.time() - start_time
             logger.info(
-                "🚀 %s 消息编排完成: 总耗时=%.2fs, Token数=%d, 同步次数=%d (节流比=%.2f)",
+                "🚀 %s 消息编排完成: 总耗时=%.2fs, 推理模式=%s, 同步次数=%d",
                 provider,
                 total_duration,
-                token_count,
+                "Stream" if adapter.is_streaming_supported(session) else "Block",
                 sync_count,
-                token_count / sync_count if sync_count > 0 else 0,
             )
 
         except Exception as e:
-            logger.exception("%s 消息编排流异常: %s", provider, e)
+            logger.exception("%s 消息编排异常: %s", provider, e)
             try:
                 await adapter.reply(session, full_answer, is_error=True)
             except Exception:
                 logger.error("%s 错误状态更新失败", provider)
         finally:
-            if background_tasks:
-                try:
-                    await background_tasks()
-                except Exception as e:
-                    logger.error("执行后台任务失败: %s", e)
+            # Note: background_tasks is handled by FastAPI, no need to await/call it here.
+            # 释放锁
+            with cls._global_lock_mutex:
+                cls._global_locks.pop(thread_id, None)
 
     @classmethod
     async def ask(
@@ -175,6 +234,12 @@ class RobotOrchestrator:
         except Exception as e:
             logger.error("%s AI 流式推理失败: %s", provider, e, exc_info=True)
             yield cls.DEFAULT_ERROR_REPLY
+
+    @staticmethod
+    def _get_thread_id(provider_id: str, from_user: str, chat_id: str | None = None) -> str:
+        """统一生成机器人会话 ID"""
+        target = chat_id or from_user
+        return f"{provider_id}-robot-{target}"
 
     @staticmethod
     def _extract_first_message_content(response: Any) -> str | None:

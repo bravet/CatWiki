@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from app.core.integration.robot.feishu.types import FeishuLongConnConfig
+from app.core.integration.robot.feishu_app.types import FeishuLongConnConfig
 
 logger = logging.getLogger(__name__)
 

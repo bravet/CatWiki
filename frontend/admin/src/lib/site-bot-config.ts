@@ -19,13 +19,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const mergeSection = <K extends keyof BotConfig>(baseSection: BotConfig[K], rawValue: unknown): BotConfig[K] => {
-  if (!isRecord(rawValue)) {
+  if (!isRecord(rawValue) || !baseSection) {
     return baseSection
   }
   // 使用简单的键值覆盖，减少类型断言
   const result = { ...baseSection } as Record<string, unknown>
   for (const key in rawValue) {
-    if (key in baseSection) {
+    if (key in (baseSection as object)) {
       const val = rawValue[key]
       if (val !== undefined && val !== null) {
         result[key] = val
@@ -36,15 +36,16 @@ const mergeSection = <K extends keyof BotConfig>(baseSection: BotConfig[K], rawV
 }
 
 export function mergeSiteBotConfig(raw: unknown): BotConfig {
-  const base = initialConfigs.botConfig
+  const base = initialConfigs.bot_config
   if (!isRecord(raw)) return base
 
   return {
-    webWidget: mergeSection<"webWidget">(base.webWidget, raw.webWidget),
-    apiBot: mergeSection<"apiBot">(base.apiBot, raw.apiBot),
-    wecomSmartRobot: mergeSection<"wecomSmartRobot">(base.wecomSmartRobot, raw.wecomSmartRobot),
-    feishuBot: mergeSection<"feishuBot">(base.feishuBot, raw.feishuBot),
-    dingtalkBot: mergeSection<"dingtalkBot">(base.dingtalkBot, raw.dingtalkBot),
-    wecomKefu: mergeSection<"wecomKefu">(base.wecomKefu, raw.wecomKefu),
+    web_widget: mergeSection<"web_widget">(base.web_widget, raw.web_widget),
+    api_bot: mergeSection<"api_bot">(base.api_bot, raw.api_bot),
+    wecom_smart: mergeSection<"wecom_smart">(base.wecom_smart, raw.wecom_smart),
+    feishu_app: mergeSection<"feishu_app">(base.feishu_app, raw.feishu_app),
+    dingtalk_app: mergeSection<"dingtalk_app">(base.dingtalk_app, raw.dingtalk_app),
+    wecom_kefu: mergeSection<"wecom_kefu">(base.wecom_kefu, raw.wecom_kefu),
+    wecom_app: mergeSection<"wecom_app">(base.wecom_app, raw.wecom_app),
   }
 }

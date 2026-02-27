@@ -1,7 +1,10 @@
+import logging
 from typing import Any
 
 from app.core.integration.robot.base import BaseRobotAdapter, RobotInboundEvent, RobotSession
-from app.core.integration.robot.dingtalk.client import DingTalkClient
+from app.core.integration.robot.dingtalk_app.client import DingTalkClient
+
+logger = logging.getLogger(__name__)
 
 
 class DingTalkAdapter(BaseRobotAdapter):
@@ -13,15 +16,20 @@ class DingTalkAdapter(BaseRobotAdapter):
     def get_provider_name(self) -> str:
         return "钉钉"
 
+    def get_provider_id(self) -> str:
+        return "dingtalk_app"
+
+    def is_streaming_supported(self, session: RobotSession | None = None) -> bool:
+        """
+        钉钉强制依赖 AI 互动卡片模板，必须支持流式。
+        """
+        return True
+
     def get_sync_interval(self) -> float:
         """钉钉对流式更新限频较严且卡片渲染稍慢，建议 0.8s 同步一次。"""
         return 0.8
 
     def parse_inbound_text_event(self, data: Any, site_id: int) -> RobotInboundEvent | None:
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         message_type = (
             str(getattr(data, "message_type", "") or getattr(data, "msgtype", "")).strip().lower()
         )
@@ -65,6 +73,7 @@ class DingTalkAdapter(BaseRobotAdapter):
             message_id=str(message_id) if message_id else None,
             from_user=str(from_user),
             content=text,
+            chat_id=str(conversation_id) if str(conversation_type) == "2" else None,
             raw_data=data,
             extra={
                 "sender_nick": str(sender_nick) if sender_nick else None,
@@ -86,7 +95,7 @@ class DingTalkAdapter(BaseRobotAdapter):
         is_error: bool = False,
     ) -> None:
         """更新/回复钉钉消息。"""
-        from app.core.integration.robot.dingtalk.types import DingTalkAdapterConfig
+        from app.core.integration.robot.dingtalk_app.types import DingTalkAdapterConfig
 
         if not isinstance(session.config, DingTalkAdapterConfig):
             raise ValueError("DingTalkAdapter requires DingTalkAdapterConfig")
@@ -96,48 +105,13 @@ class DingTalkAdapter(BaseRobotAdapter):
         client_secret = config.client_secret
         template_id = config.template_id
 
-        # 1. 如果配置了互动卡片模板，则走互动卡片流式逻辑
-        if template_id and client_id and client_secret:
-            await self._reply_card(session, content, is_finish, is_error)
-            return
-
-        # 2. 否则走普通 Webhook Markdown 回复（暂不支持流式，仅在完成时发送一次）
-        if is_finish or is_error:
-            session_webhook = session.event.extra.get("session_webhook")
-            if not session_webhook:
-                return
-
-            display_content = content or "抱歉，我暂时无法回答这个问题。"
-            if is_error:
-                display_content = (
-                    (content + "\n\n服务繁忙，请稍后再试。")
-                    if content
-                    else "服务繁忙，请稍后再试。"
+        # 强制要求走互动卡片流式逻辑
+        if not template_id or not client_id or not client_secret:
+            if is_error or is_finish:
+                logger.error(
+                    "DingTalkAdapter: 缺少 Client_ID 或卡片 Template_ID，钉钉机器人现已强制要求配置 AI 互动卡片。"
                 )
-
-            await self.client.send_markdown_with_fallback(
-                session_webhook=session_webhook,
-                at_user_ids=session.event.extra.get("at_user_ids"),
-                title="CatWiki 回复",
-                markdown=display_content,
-            )
-
-    async def _reply_card(
-        self,
-        session: RobotSession,
-        content: str,
-        is_finish: bool = False,
-        is_error: bool = False,
-    ) -> None:
-        from app.core.integration.robot.dingtalk.types import DingTalkAdapterConfig
-
-        if not isinstance(session.config, DingTalkAdapterConfig):
-            raise ValueError("DingTalkAdapter requires DingTalkAdapterConfig")
-
-        config = session.config
-        client_id = config.client_id
-        client_secret = config.client_secret
-        template_id = config.template_id
+            return
 
         if not session.context_id:
             # 初始化卡片

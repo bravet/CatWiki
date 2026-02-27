@@ -43,7 +43,7 @@ class ConfigurationService:
     3. 安全日志：脱敏处理 API Key，并区分“新鲜加载”与“缓存命中”日志。
     4. 配置身份标识 (Hash/Fingerprint):
        - 系统的物理实例（如向量库连接、Chat 客户端、Reranker 实例等）通过解析后的配置哈希来识别。
-       - 哈希组成核心字段：{ "model", "apiKey", "baseUrl", "dimension"(仅向量) }。
+       - 哈希组成核心字段：{ "model", "api_key", "base_url", "dimension"(仅向量) }。
        - 当这些核心字段发生变化时，代表该模块的“身份”改变，将触发后端对应实例的重置或重新初始化。
     """
 
@@ -72,8 +72,8 @@ class ConfigurationService:
         # 只选取影响物理连接身份的核心字段
         identity_parts = {
             "model": config.get("model"),
-            "apiKey": config.get("apiKey"),
-            "baseUrl": str(config.get("baseUrl", "")).rstrip("/"),
+            "api_key": config.get("api_key"),
+            "base_url": str(config.get("base_url", "")).rstrip("/"),
             "dimension": config.get("dimension"),  # 只有向量模型会有这个字段
             "extra_body": config.get("extra_body"),
         }

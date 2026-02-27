@@ -67,6 +67,7 @@ const mergeAIConfigs = (backendData: unknown, initial: AIConfigs): AIConfigs => 
     embedding: parseSection(backendData.embedding, initial.embedding),
     rerank: parseSection(backendData.rerank, initial.rerank),
     vl: parseSection(backendData.vl, initial.vl),
+    bot_config: parseSection(backendData.bot_config, initial.bot_config),
   }
 }
 
@@ -74,8 +75,8 @@ function toApiModelConfig(config: AIConfigs[RuntimeModelType]): AIConfigUpdate["
   return {
     provider: config.provider,
     model: config.model,
-    apiKey: config.apiKey,
-    baseUrl: config.baseUrl,
+    api_key: config.api_key,
+    base_url: config.base_url,
     dimension: typeof config.dimension === "number" ? config.dimension : null,
     extra_body: config.extra_body as Record<string, any>,
     mode: config.mode === "platform"
@@ -237,8 +238,8 @@ export function SettingsProvider({ children, scope = 'tenant' }: { children: Rea
         .map(k => `${k}:${normalize(record[k])}`)
         .join('|')
     }
-    const currentStr = normalize({ chat: configs.chat, embedding: configs.embedding, rerank: configs.rerank, vl: configs.vl })
-    const savedStr = normalize({ chat: savedConfigs.chat, embedding: savedConfigs.embedding, rerank: savedConfigs.rerank, vl: savedConfigs.vl })
+    const currentStr = normalize({ chat: configs.chat, embedding: configs.embedding, rerank: configs.rerank, vl: configs.vl, bot_config: configs.bot_config })
+    const savedStr = normalize({ chat: savedConfigs.chat, embedding: savedConfigs.embedding, rerank: savedConfigs.rerank, vl: savedConfigs.vl, bot_config: savedConfigs.bot_config })
     return currentStr !== savedStr
   })()
 
@@ -251,7 +252,7 @@ export function SettingsProvider({ children, scope = 'tenant' }: { children: Rea
     }
 
     // 自定义模式下必须填写所有必填项
-    return !!(config.provider && config.model && config.apiKey && config.baseUrl)
+    return !!(config.provider && config.model && config.api_key && config.base_url)
   }
 
   const value: SettingsContextType = {

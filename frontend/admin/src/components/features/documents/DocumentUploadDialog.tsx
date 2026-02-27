@@ -134,8 +134,8 @@ export function DocumentUploadDialog({
                 enabled: Boolean(item.enabled),
                 config: parseProcessorConfig(item.config),
                 origin: parseProcessorOrigin(item.origin),
-                baseUrl: typeof item.baseUrl === "string" ? item.baseUrl : "",
-                apiKey: typeof item.apiKey === "string" ? item.apiKey : "",
+                base_url: typeof item.base_url === "string" ? item.base_url : "",
+                api_key: typeof item.api_key === "string" ? item.api_key : "",
               }))
             : []
           const activeProcessors = list.filter(p => p.enabled)

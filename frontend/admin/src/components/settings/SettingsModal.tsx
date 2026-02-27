@@ -21,7 +21,7 @@ import { ModelSettingsCard } from "@/components/settings/models/ModelSettingsCar
 import { ModelDetailCard } from "@/components/settings/models/ModelDetailCard"
 import { GlobalUsers } from "@/components/settings/users/GlobalUsers"
 import { GlobalSites } from "@/components/settings/sites/GlobalSites"
-import { type ModelType } from "@/types/settings"
+import { type SettingsTabId } from "@/types/settings"
 import {
   Settings,
   Globe,
@@ -54,7 +54,7 @@ function SettingsContent() {
 
   // State
   const [activeTab, setActiveTab] = useState("general")
-  const [selectedModel, setSelectedModel] = useState<ModelType | null>(null)
+  const [selectedModel, setSelectedModel] = useState<SettingsTabId | null>(null)
   const isSiteSettings = searchParams.get("modal") === "site-settings"
   const siteId = searchParams.get("siteId")
 
@@ -110,7 +110,7 @@ function SettingsContent() {
     router.replace(`${pathname}?${params.toString()}`)
   }
 
-  const handleSelectModel = (model: ModelType) => {
+  const handleSelectModel = (model: SettingsTabId) => {
     if (model === "chat" || model === "embedding" || model === "rerank" || model === "vl") {
       setSelectedModel(model)
     }

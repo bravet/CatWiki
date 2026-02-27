@@ -76,7 +76,7 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
   const [themeColor, setThemeColor] = useState<string>("blue")
   const [layoutMode, setLayoutMode] = useState<string>("sidebar")
   const [quickQuestions, setQuickQuestions] = useState<QuickQuestion[]>([])
-  const [botConfig, setBotConfig] = useState(initialConfigs.botConfig)
+  const [botConfig, setBotConfig] = useState(initialConfigs.bot_config)
   const [mounted, setMounted] = useState(false)
 
   const initialDataRef = useRef<SiteSettingsSnapshot | null>(null)
@@ -90,11 +90,11 @@ export function SiteSettings({ siteId, onBack }: SiteSettingsProps) {
   const { data: siteData, isLoading: loading } = useSiteById(siteId)
   const updateSiteMutation = useUpdateSite()
   const { data: aiConfigData } = useAIConfig('tenant')
-  
+
   // 模型显示逻辑：优先使用租户自定义模型，如果是平台模式则取平台默认模型
   const chatConfig = aiConfigData?.config_value?.chat
-  const chatModel = (chatConfig?.mode === 'platform' 
-    ? aiConfigData?.platform_defaults?.chat?.model 
+  const chatModel = (chatConfig?.mode === 'platform'
+    ? aiConfigData?.platform_defaults?.chat?.model
     : chatConfig?.model) || ''
 
   // 加载站点数据

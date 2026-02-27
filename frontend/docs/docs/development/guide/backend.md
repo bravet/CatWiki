@@ -90,5 +90,5 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
 
 - [AI 对话核心架构](/development/tech/ai-chat-architecture)
 - [API 概览](/development/api/overview)
-- [机器人集成指南系列](/development/tech/feishu-robot)
+- [机器人集成指南系列](/development/bots/feishu-app)
 - [RustFS 使用手册](/development/tech/rustfs)

@@ -48,14 +48,15 @@ export default withMermaid(
             text: 'AI 机器人',
             collapsed: false,
             items: [
-              { text: '网页挂件机器人', link: '/development/tech/widget-integration' },
-              { text: '企业微信智能机器人', link: '/development/tech/wecom-robot' },
-              { text: '企业微信客服', link: '/development/tech/wecom-kefu' },
-              { text: '飞书机器人', link: '/development/tech/feishu-robot' },
-              { text: '钉钉机器人', link: '/development/tech/dingtalk-robot' },
-              { text: '问答机器人 (OpenAI 兼容)', link: '/development/tech/chat-api' },
-              { text: 'Discord 机器人', link: '/development/tech/discord-robot' },
-              { text: 'Telegram 机器人', link: '/development/tech/telegram-robot' },
+              { text: '网页挂件机器人', link: '/development/bots/widget-integration' },
+              { text: '飞书机器人(应用)', link: '/development/bots/feishu-app' },
+              { text: '钉钉机器人(应用)', link: '/development/bots/dingtalk-app' },
+              { text: '企业微信机器人(应用)', link: '/development/bots/wecom-app' },
+              { text: '企业微信智能机器人', link: '/development/bots/wecom-smart' },
+              { text: '企业微信客服', link: '/development/bots/wecom-kefu' },
+              { text: '问答机器人 (OpenAI 兼容)', link: '/development/bots/chat-api' },
+              { text: 'Discord 机器人(应用)', link: '/development/bots/discord-app' },
+              { text: 'Telegram 机器人(应用)', link: '/development/bots/telegram-app' },
             ]
           },
           {

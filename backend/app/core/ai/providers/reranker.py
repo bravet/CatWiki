@@ -49,8 +49,8 @@ class Reranker:
         # 构造最终执行所需的配置（按指纹隔离）
         if conf_hash not in self._instances:
             # 优先级：数据库动态配置 > 环境变量固化配置
-            api_key = rerank_conf.get("apiKey") or settings.AI_RERANK_API_KEY
-            base_url = rerank_conf.get("baseUrl") or settings.AI_RERANK_API_BASE
+            api_key = rerank_conf.get("api_key") or settings.AI_RERANK_API_KEY
+            base_url = rerank_conf.get("base_url") or settings.AI_RERANK_API_BASE
             model = rerank_conf.get("model") or settings.AI_RERANK_MODEL
             extra_body = rerank_conf.get("extra_body")
 

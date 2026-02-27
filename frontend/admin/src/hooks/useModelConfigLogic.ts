@@ -24,7 +24,7 @@ export function useModelConfigLogic(type: RuntimeModelType, onSuccess?: () => vo
   const testConnection = useTestConnection(scope)
 
   const config = configs[type] || initialConfigs[type]
-  const hasPlatformResource = !!(platformDefaults && platformDefaults[type] && platformDefaults[type].apiKey)
+  const hasPlatformResource = !!(platformDefaults && platformDefaults[type] && platformDefaults[type].api_key)
   const mode = config.mode || "custom"
 
   const handleModeChange = (newMode: "custom" | "platform") => {
@@ -77,8 +77,8 @@ export function useModelConfigLogic(type: RuntimeModelType, onSuccess?: () => vo
     config,
     baseConfig: {
       model: config.model,
-      apiKey: config.apiKey,
-      baseUrl: config.baseUrl,
+      api_key: config.api_key,
+      base_url: config.base_url,
       dimension: config.dimension,
       extra_body: config.extra_body
     },

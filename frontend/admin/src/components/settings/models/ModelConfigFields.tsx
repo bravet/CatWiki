@@ -103,11 +103,11 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
         <label className="text-sm font-semibold text-slate-700">API Key</label>
         <Input
           type="password"
-          value={config.apiKey}
-          onChange={(e) => onUpdate("apiKey", e.target.value)}
+          value={config.api_key}
+          onChange={(e) => onUpdate("api_key", e.target.value)}
           placeholder="sk-..."
           autoComplete="new-password"
-          name="model_apiKey_disable_autofill"
+          name="model_api_key_disable_autofill"
           className="bg-white font-mono"
         />
       </div>
@@ -115,8 +115,8 @@ export function ModelConfigFields({ type, config, onUpdate, onSave }: ModelConfi
       <div className="space-y-2">
         <label className="text-sm font-semibold text-slate-700">API Base URL</label>
         <Input
-          value={config.baseUrl}
-          onChange={(e) => onUpdate("baseUrl", e.target.value)}
+          value={config.base_url}
+          onChange={(e) => onUpdate("base_url", e.target.value)}
           placeholder="https://api.openai.com/v1"
           className="bg-white font-mono"
         />

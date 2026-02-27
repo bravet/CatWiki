@@ -13,11 +13,11 @@
 // limitations under the License.
 
 import { MessageSquare, Layers, RefreshCw, Eye } from "lucide-react"
-import { ModelType } from "@/types/settings"
+import { SettingsTabId } from "@/types/settings"
 import type { LucideIcon } from "lucide-react"
 
 export interface ModelMeta {
-  id: ModelType
+  id: SettingsTabId
   title: string
   subtitle: string
   icon: LucideIcon

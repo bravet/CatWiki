@@ -62,7 +62,7 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         return result.scalar_one_or_none()
 
     async def get_by_api_token(self, db: AsyncSession, *, api_token: str) -> Site | None:
-        """根据 API Token 获取站点 (查询 bot_config->apiBot->apiKey)"""
+        """根据 API Token 获取站点 (查询 bot_config->api_bot->api_key)"""
         # 1. 尝试从缓存获取
         # TODO: 未来考虑使用 Redis 替代内存缓存，以支持多实例部署和防止容器重启导致缓存失效
         from app.core.infra.cache import get_cache
@@ -79,8 +79,9 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         # 这种方式比 cast 更稳健，避免了不同 SQLAlchemy/Driver 版本生成的 SQL 语法不兼容问题 ([...])
         result = await db.execute(
             select(self.model).where(
-                func.json_extract_path_text(self.model.bot_config, "apiBot", "apiKey") == api_token,
-                func.json_extract_path_text(self.model.bot_config, "apiBot", "enabled") == "true",
+                func.json_extract_path_text(self.model.bot_config, "api_bot", "api_key")
+                == api_token,
+                func.json_extract_path_text(self.model.bot_config, "api_bot", "enabled") == "true",
             )
         )
         site = result.scalar_one_or_none()
@@ -97,8 +98,8 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         """更新站点 (重写以处理缓存失效)"""
         # 1. 获取旧的 API Key (用于清除缓存)
         old_api_key = None
-        if db_obj.bot_config and "apiBot" in db_obj.bot_config:
-            old_api_key = db_obj.bot_config["apiBot"].get("apiKey")
+        if db_obj.bot_config and "api_bot" in db_obj.bot_config:
+            old_api_key = db_obj.bot_config["api_bot"].get("api_key")
 
         # 2. 执行更新
         updated_site = await super().update(db, db_obj=db_obj, obj_in=obj_in)

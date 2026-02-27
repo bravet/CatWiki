@@ -103,6 +103,15 @@ headers: {
 
 - `POST /admin/api/v1/system-configs/doc-processor/test` - 测试文档处理服务连接
 
+### 租户管理 (EE)
+
+- `GET /admin/api/v1/tenants` - 获取租户列表 (Admin Only)
+- `POST /admin/api/v1/tenants` - 创建租户 (Admin Only)
+- `GET /admin/api/v1/tenants/current` - 获取当前上下文租户
+- `GET /admin/api/v1/tenants/{id}` - 获取租户详情
+- `PUT /admin/api/v1/tenants/{id}` - 更新租户信息
+- `DELETE /admin/api/v1/tenants/{id}` - 级联删除租户及数据
+
 ### 统计信息
 
 - `GET /admin/api/v1/stats:siteStats` - 获取站点统计

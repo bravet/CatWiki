@@ -26,8 +26,8 @@ from sqlalchemy.orm import joinedload
 from app.core.common.masking import mask_bot_config_inplace
 from app.core.common.utils import Paginator, generate_token
 from app.core.infra.config import settings
-from app.core.integration.robot.dingtalk.service import DingTalkRobotService
-from app.core.integration.robot.feishu.service import FeishuRobotService
+from app.core.integration.robot.dingtalk_app.service import DingTalkRobotService
+from app.core.integration.robot.feishu_app.service import FeishuRobotService
 from app.core.web.deps import get_current_user_with_tenant, is_demo_tenant
 from app.core.web.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.crud import crud_site, crud_user
@@ -59,23 +59,54 @@ def _validate_site_bot_config(bot_config: dict | None) -> None:
     if not bot_config:
         return
 
-    feishu = bot_config.get("feishuBot") or {}
+    feishu = bot_config.get("feishu_app") or {}
     if feishu.get("enabled"):
-        app_id = (feishu.get("appId") or "").strip()
-        app_secret = (feishu.get("appSecret") or "").strip()
+        app_id = (feishu.get("app_id") or "").strip()
+        app_secret = (feishu.get("app_secret") or "").strip()
         if not app_id or not app_secret:
             raise BadRequestException(detail="启用飞书机器人时，App ID 和 App Secret 均不能为空。")
 
-    dingtalk = bot_config.get("dingtalkBot") or {}
+    dingtalk = bot_config.get("dingtalk_app") or {}
     if not dingtalk.get("enabled"):
         return
-    client_id = (dingtalk.get("clientId") or "").strip()
-    client_secret = (dingtalk.get("clientSecret") or "").strip()
-    template_id = (dingtalk.get("templateId") or "").strip()
+    client_id = (dingtalk.get("client_id") or "").strip()
+    client_secret = (dingtalk.get("client_secret") or "").strip()
+    template_id = (dingtalk.get("template_id") or "").strip()
     if not client_id or not client_secret or not template_id:
         raise BadRequestException(
             detail="启用钉钉机器人时，Client ID、Client Secret、模板 ID 均不能为空。"
         )
+
+    wecom_smart = bot_config.get("wecom_smart") or {}
+    if wecom_smart.get("enabled"):
+        if not wecom_smart.get("token") or not wecom_smart.get("encoding_aes_key"):
+            raise BadRequestException(
+                detail="启用企业微信智能机器人时，Token 和 Encoding AES Key 不能为空。"
+            )
+
+    wecom_kefu = bot_config.get("wecom_kefu") or {}
+    if wecom_kefu.get("enabled"):
+        if (
+            not wecom_kefu.get("corp_id")
+            or not wecom_kefu.get("secret")
+            or not wecom_kefu.get("token")
+            or not wecom_kefu.get("encoding_aes_key")
+        ):
+            raise BadRequestException(
+                detail="启用企业微信客服时，企业 ID、Secret、Token 和 Encoding AES Key 均不能为空。"
+            )
+
+    wecom_app = bot_config.get("wecom_app") or {}
+    if wecom_app.get("enabled"):
+        if (
+            not wecom_app.get("corp_id")
+            or not wecom_app.get("secret")
+            or not wecom_app.get("token")
+            or not wecom_app.get("encoding_aes_key")
+        ):
+            raise BadRequestException(
+                detail="启用企业微信机器人(应用)时，企业 ID、Secret、Token 和 Encoding AES Key 均不能为空。"
+            )
 
 
 @router.get("", response_model=ApiResponse[PaginatedResponse[Site]], operation_id="listAdminSites")
@@ -193,12 +224,12 @@ async def create_site(
     # 处理机器人配置：如果启用 API Bot 且没填 Key，自动生成一个
     if site_in.bot_config:
         _validate_site_bot_config(site_in.bot_config)
-        api_bot = site_in.bot_config.get("apiBot")
+        api_bot = site_in.bot_config.get("api_bot")
         # CE 版本不支持 API Bot（企业版专属功能）
         if api_bot and settings.CATWIKI_EDITION == "community":
             api_bot["enabled"] = False
-        elif api_bot and api_bot.get("enabled") and not api_bot.get("apiKey"):
-            api_bot["apiKey"] = f"sk-{generate_token(24)}"
+        elif api_bot and api_bot.get("enabled") and not api_bot.get("api_key"):
+            api_bot["api_key"] = f"sk-{generate_token(24)}"
 
     site = await crud_site.create(db, obj_in=site_in)
     # 预加载租户信息以填充 tenant_slug
@@ -271,19 +302,19 @@ async def update_site(
     # 处理机器人配置：如果启用 API Bot 且没填 Key，尝试沿用旧的或生成新的
     if site_in.bot_config:
         _validate_site_bot_config(site_in.bot_config)
-        api_bot = site_in.bot_config.get("apiBot")
+        api_bot = site_in.bot_config.get("api_bot")
         # CE 版本不支持 API Bot（企业版专属功能）
         if api_bot and settings.CATWIKI_EDITION == "community":
             api_bot["enabled"] = False
-        elif api_bot and api_bot.get("enabled") and not api_bot.get("apiKey"):
+        elif api_bot and api_bot.get("enabled") and not api_bot.get("api_key"):
             # 尝试从原有配置中获取
             old_bot_config = site.bot_config or {}
-            old_api_bot = old_bot_config.get("apiBot")
-            if old_api_bot and old_api_bot.get("apiKey"):
-                api_bot["apiKey"] = old_api_bot["apiKey"]
+            old_api_bot = old_bot_config.get("api_bot")
+            if old_api_bot and old_api_bot.get("api_key"):
+                api_bot["api_key"] = old_api_bot["api_key"]
             else:
                 # 原来也没有，生成一个新的
-                api_bot["apiKey"] = f"sk-{generate_token(24)}"
+                api_bot["api_key"] = f"sk-{generate_token(24)}"
 
     site = await crud_site.update(db, db_obj=site, obj_in=site_in)
     # 预加载租户信息以填充 tenant_slug

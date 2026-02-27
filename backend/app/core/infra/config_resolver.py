@@ -52,8 +52,8 @@ class ConfigResolver:
         """Compute Identity Hash for a configuration block."""
         identity_parts = {
             "model": config.get("model"),
-            "apiKey": config.get("apiKey"),
-            "baseUrl": str(config.get("baseUrl", "")).rstrip("/"),
+            "api_key": config.get("api_key"),
+            "base_url": str(config.get("base_url") or "").rstrip("/"),
             "dimension": config.get("dimension"),
             "extra_body": config.get("extra_body"),
         }

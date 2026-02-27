@@ -14,10 +14,10 @@
 
 import { PlugZap } from "lucide-react"
 import { useSettings } from "@/contexts/SettingsContext"
-import { ModelType } from "@/types/settings"
+import { SettingsTabId } from "@/types/settings"
 
 interface PlatformModeViewProps {
-  type: ModelType
+  type: SettingsTabId
 }
 
 export function PlatformModeView({ type }: PlatformModeViewProps) {

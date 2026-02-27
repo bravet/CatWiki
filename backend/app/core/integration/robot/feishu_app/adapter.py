@@ -1,7 +1,11 @@
+import json
+import logging
 from typing import Any
 
 from app.core.integration.robot.base import BaseRobotAdapter, RobotInboundEvent, RobotSession
-from app.core.integration.robot.feishu.client import FeishuClient
+from app.core.integration.robot.feishu_app.client import FeishuClient
+
+logger = logging.getLogger(__name__)
 
 
 class FeishuAdapter(BaseRobotAdapter):
@@ -13,16 +17,14 @@ class FeishuAdapter(BaseRobotAdapter):
     def get_provider_name(self) -> str:
         return "飞书"
 
+    def get_provider_id(self) -> str:
+        return "feishu_app"
+
     def get_sync_interval(self) -> float:
         """飞书接口响应较快，但过频更新会阻塞 AI 推理循环，建议 1.0s 同步一次以平衡流畅度与性能。"""
         return 1.0
 
     def parse_inbound_text_event(self, data: Any, site_id: int) -> RobotInboundEvent | None:
-        import json
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         message = getattr(getattr(data, "event", None), "message", None)
         sender = getattr(getattr(data, "event", None), "sender", None)
         if message is None or message.message_type != "text":
@@ -69,6 +71,7 @@ class FeishuAdapter(BaseRobotAdapter):
             message_id=str(message_id) if message_id else None,
             from_user=from_user,
             content=text,
+            chat_id=chat_id if chat_type == "group" else None,
             raw_data=data,
             extra={
                 "receive_id_type": receive_id_type,
@@ -85,7 +88,7 @@ class FeishuAdapter(BaseRobotAdapter):
         is_error: bool = False,
     ) -> None:
         """更新飞书消息卡片。"""
-        from app.core.integration.robot.feishu.types import FeishuAdapterConfig
+        from app.core.integration.robot.feishu_app.types import FeishuAdapterConfig
 
         if not isinstance(session.config, FeishuAdapterConfig):
             raise ValueError("FeishuAdapter requires FeishuAdapterConfig")

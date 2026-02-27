@@ -18,11 +18,11 @@ export type DocProcessorConfig = {
     /**
      * API 端点地址
      */
-    baseUrl: string;
+    base_url: string;
     /**
      * API 密钥（可选）
      */
-    apiKey?: string;
+    api_key?: string;
     /**
      * 是否启用
      */

@@ -10,14 +10,14 @@ from Crypto.Cipher import AES
 
 from app.core.integration.robot.base import RobotInboundEvent, RobotSession
 from app.core.integration.robot.factory import RobotFactory
-from app.core.integration.robot.wecom_robot.adapter import WeComBufferManager
+from app.core.integration.robot.wecom_smart.adapter import WeComBufferManager
 from app.models.site import Site
 from app.services.robot import RobotOrchestrator
 
 logger = logging.getLogger(__name__)
 
 
-class WeComRobotService:
+class WeComSmartService:
     """企业微信智能机器人业务逻辑 (已重构为统一架构)。"""
 
     @classmethod
@@ -59,11 +59,13 @@ class WeComRobotService:
         reply_payload = None
 
         if msg_type == "text":
+            msgid = data.get("msgid")
             content = data.get("text", {}).get("content", "")
             from_info = data.get("from", {})
             from_user = from_info.get("alias") or from_info.get("userid", "anonymous")
+            chat_id = data.get("chatid")
             reply_payload = await cls.process_text_message(
-                site, from_user, content, background_tasks
+                site, from_user, content, background_tasks, msgid=msgid, chat_id=chat_id
             )
         elif msg_type == "stream":
             stream_id = data.get("stream", {}).get("id")
@@ -71,8 +73,13 @@ class WeComRobotService:
                 reply_payload = cls.get_stream_response(stream_id)
         elif msg_type == "image":
             image_url = data.get("image", {}).get("url")
+            from_info = data.get("from", {})
+            from_user = from_info.get("alias") or from_info.get("userid", "anonymous")
+            chat_id = data.get("chatid")
             if image_url:
-                reply_payload = await cls.process_image_message(image_url, aes_key)
+                reply_payload = await cls.process_image_message(
+                    image_url, aes_key, from_user, chat_id
+                )
 
         if reply_payload:
             reply_json = json.dumps(reply_payload, ensure_ascii=False)
@@ -91,30 +98,81 @@ class WeComRobotService:
 
     @classmethod
     async def process_text_message(
-        cls, site: Site, from_user: str, content: str, background_tasks: Any
+        cls,
+        site: Site,
+        from_user: str,
+        content: str,
+        background_tasks: Any,
+        msgid: str | None = None,
+        chat_id: str | None = None,
     ) -> dict[str, Any]:
         """处理文本消息：启动异步统一编排任务"""
-        # 1. 企微特殊逻辑：清理过期缓冲区
+        # 1. 企微去重逻辑
+        if msgid:
+            existing_stream_id = WeComBufferManager.get_stream_id_by_msgid(msgid)
+            if existing_stream_id:
+                logger.info(
+                    f"♻️ [WeCom] 检测到重复请求, msgid={msgid}, 复用 stream_id={existing_stream_id}"
+                )
+                return {
+                    "msgtype": "stream",
+                    "stream": {
+                        "id": existing_stream_id,
+                        "finish": False,
+                        "content": "正在为您努力计算中...",
+                    },
+                }
+
+        # 2. 检查任务并发锁：防止同一个 thread_id 同时跑两个 AI 任务
+        # 注意：这里继续使用 WeComBufferManager 的锁来处理企微 Pull 模式的快速返回
+        thread_id = RobotOrchestrator._get_thread_id("wecom_smart", from_user, chat_id)
+        running_stream_id = WeComBufferManager.get_stream_id_by_thread(thread_id)
+        if running_stream_id:
+            logger.info(
+                f"⏳ [WeCom] 同一用户已存在任务在跑, thread_id={thread_id}, 复用 sid={running_stream_id}"
+            )
+            return {
+                "msgtype": "stream",
+                "stream": {
+                    "id": running_stream_id,
+                    "finish": False,
+                    "content": "正在为您努力计算中...",
+                },
+            }
+
+        # 3. 定期清理过期缓冲区
         WeComBufferManager.cleanup_buffer()
 
-        # 2. 生成流 ID 并构造会话
+        # 4. 生成流 ID 并构造会话
         stream_id = cls._generate_stream_id()
+        if msgid:
+            WeComBufferManager.register_msgid(msgid, stream_id)
+
+        # 锁定当前线程
+        WeComBufferManager.lock_thread(thread_id, stream_id)
+
+        # 5. [Important] 立即初始化缓冲区
+        initial_content = "已收到，正在为您写答案..."
+        WeComBufferManager.update_buffer(
+            stream_id, initial_content, is_finish=False, is_error=False
+        )
+
         inbound_event = RobotInboundEvent(
             site_id=site.id,
             message_id=None,
             from_user=from_user,
             content=content,
+            chat_id=chat_id,
         )
 
-        adapter = RobotFactory.get_adapter("wecom")
+        adapter = RobotFactory.get_adapter("wecom_smart")
         session = RobotSession(
             event=inbound_event,
             context_id=stream_id,
-            config=None,  # 企微 Webhook 模式暂不需额外 config
+            config=None,
         )
 
-        # 3. 异步启动编排流程
-        # 企微是 Pull 模式，orchestrate_reply 会不断更新 adapter 里的 buffer
+        # 7. 异步启动编排流程
         background_tasks.add_task(
             RobotOrchestrator.orchestrate_reply,
             adapter=adapter,
@@ -124,7 +182,7 @@ class WeComRobotService:
 
         return {
             "msgtype": "stream",
-            "stream": {"id": stream_id, "finish": False, "content": "已收到，正在为您写答案..."},
+            "stream": {"id": stream_id, "finish": False, "content": initial_content},
         }
 
     @classmethod
@@ -142,11 +200,12 @@ class WeComRobotService:
             "stream": {"id": stream_id, "finish": task["finish"], "content": task["content"]},
         }
 
-    @classmethod
-    async def process_image_message(cls, image_url: str, aes_key_base64: str) -> dict[str, Any]:
-        """处理加密图片消息 (保留原有解密逻辑，暂未统一推送)"""
-        # 图片处理逻辑由于暂不支持 AI 分析，目前仅做解密演示，保持现状
+    async def process_image_message(
+        cls, image_url: str, aes_key_base64: str, from_user: str, chat_id: str | None = None
+    ) -> dict[str, Any]:
+        """处理加密图片消息 (保留原有解密逻辑)"""
         temp_id = cls._generate_stream_id()
+        thread_id = RobotOrchestrator._get_thread_id("wecom_smart", from_user, chat_id)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(image_url, timeout=15)
