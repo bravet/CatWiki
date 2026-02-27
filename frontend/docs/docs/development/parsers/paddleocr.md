@@ -1,0 +1,281 @@
+# PaddleOCR 解析器
+
+PaddleOCR 是百度开源的 OCR 引擎，提供强大的文字识别能力。它支持多种语言，特别在中文识别方面表现优异。
+
+## 功能特性
+
+- ✅ 业界领先的中文 OCR 识别率
+- ✅ 支持 80+ 语言识别
+- ✅ 手写体识别
+- ✅ 表格结构识别
+- ✅ 版面分析能力
+- ✅ 轻量级模型可选
+
+## 部署方式
+
+### PaddleOCR-VL NVIDIA GPU 部署（推荐）
+
+> [!IMPORTANT]
+> 当前部署的模型版本为 **PaddleOCR-VL-1.5-0.9B**
+
+PaddleOCR-VL 提供更强的视觉语言模型能力，推荐使用 Docker Compose 配合 NVIDIA GPU 部署。
+
+#### 环境变量配置
+
+[.env](https://github.com/PaddlePaddle/PaddleOCR/blob/main/deploy/paddleocr_vl_docker/accelerators/nvidia-gpu/.env)
+
+```bash
+API_IMAGE_TAG_SUFFIX=latest-nvidia-gpu-offline
+VLM_BACKEND=vllm
+VLM_IMAGE_TAG_SUFFIX=latest-nvidia-gpu-offline
+
+# 模型下载源（可选，国内用户推荐使用 BOS）
+# PADDLE_PDX_MODEL_SOURCE=bos
+```
+
+#### vLLM 配置文件
+
+创建 `vllm_config.yaml`：
+
+```yaml
+max-model-len: 8192
+gpu-memory-utilization: 0.3
+enforce-eager: true
+```
+
+| 参数 | 说明 |
+|------|------|
+| `max-model-len` | 模型最大上下文长度 |
+| `gpu-memory-utilization` | GPU 显存使用率（0.3 = 30%） |
+| `enforce-eager` | 禁用 CUDA Graph，降低显存占用 |
+
+#### Pipeline 配置文件
+
+[pipeline_config_vllm.yaml](https://github.com/PaddlePaddle/PaddleOCR/blob/main/deploy/paddleocr_vl_docker/pipeline_config_vllm.yaml)
+
+```yaml
+pipeline_name: PaddleOCR-VL-1.5
+
+batch_size: 64
+use_queues: True
+use_doc_preprocessor: False
+use_layout_detection: True
+use_chart_recognition: False
+use_seal_recognition: False
+format_block_content: False
+merge_layout_blocks: True
+
+markdown_ignore_labels:
+  - number
+  - footnote
+  - header
+  - header_image
+  - footer
+  - footer_image
+  - aside_text
+
+SubModules:
+  LayoutDetection:
+    module_name: layout_detection
+    model_name: PP-DocLayoutV3
+    batch_size: 8
+    threshold: 0.3
+    layout_nms: True
+
+  VLRecognition:
+    module_name: vl_recognition
+    model_name: PaddleOCR-VL-1.5-0.9B
+    batch_size: 4096
+    genai_config:
+      backend: vllm-server
+      server_url: http://paddleocr-vlm-server:8080/v1
+```
+
+| 参数 | 说明 |
+|------|------|
+| `use_layout_detection` | 启用版面检测 |
+| `use_doc_preprocessor` | 启用文档预处理（方向校正、去畸变） |
+| `markdown_ignore_labels` | Markdown 输出时忽略的标签类型 |
+| `server_url` | VLM 服务地址，需与 compose 中服务名一致 |
+
+#### Docker Compose 配置
+
+[compose.yaml](https://github.com/PaddlePaddle/PaddleOCR/blob/main/deploy/paddleocr_vl_docker/accelerators/nvidia-gpu/compose.yaml)
+
+```yaml
+services:
+  paddleocr-vl-api:
+    image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleocr-vl:${API_IMAGE_TAG_SUFFIX}
+    container_name: paddleocr-vl-api
+    ports:
+      - 8003:8080
+    depends_on:
+      paddleocr-vlm-server:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    # TODO: Allow using a regular user
+    user: root
+    restart: unless-stopped
+    environment:
+      - VLM_BACKEND=${VLM_BACKEND:-vllm}
+    command: /bin/bash -c "paddlex --serve --pipeline /home/paddleocr/pipeline_config_${VLM_BACKEND}.yaml"
+    volumes:
+      - ./pipeline_config_vllm.yaml:/home/paddleocr/pipeline_config_vllm.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+
+  paddleocr-vlm-server:
+    image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleocr-genai-${VLM_BACKEND}-server:${VLM_IMAGE_TAG_SUFFIX}
+    container_name: paddleocr-vlm-server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    # TODO: Allow using a regular user
+    user: root
+    restart: unless-stopped
+    command:
+      - paddlex_genai_server
+      - --model_name=PaddleOCR-VL-1.5-0.9B
+      - --host=0.0.0.0
+      - --port=8080
+      - --backend=vllm
+      - --backend_config=/opt/vllm_config.yaml
+    volumes:
+      # - ./.paddlex:/root/.paddlex
+      - ./vllm_config.yaml:/opt/vllm_config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      start_period: 300s
+```
+
+#### GPU 配置说明
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `device_ids` | 指定 GPU 设备 ID | `["0"]` 使用第一张卡，`["0", "1"]` 使用多卡 |
+| `capabilities` | GPU 能力 | `[gpu]` 启用 GPU 支持 |
+| `count` | GPU 数量 | `all` 使用所有可用 GPU |
+
+#### 启动服务
+
+```bash
+# 启动所有服务
+docker compose up -d
+
+# 查看服务状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f paddleocr-vl-api
+```
+
+
+> [!TIP]
+> **GPU 内存不足？** 可以通过修改 `vllm_config.yaml` 中的 `gpu-memory-utilization` 参数来限制 vLLM 的显存使用率。
+
+## 配置解析器
+
+1. 进入 **设置** → **文档解析**
+2. 点击 **添加解析器**
+3. 填写配置：
+   - **名称**：`PaddleOCR`
+   - **类型**：选择 `PaddleOCR`
+   - **API 端点**：`http://localhost:8868`
+4. 点击 **测试连接**
+5. 启用并保存
+
+## API 接口说明
+
+```bash
+# 图片 OCR
+curl -X POST http://localhost:8868/predict/ocr_system \
+  -F "image=@image.png"
+
+# 文档解析
+curl -X POST http://localhost:8868/predict/layout_analysis \
+  -F "file=@document.pdf"
+```
+
+### 识别模式
+
+| 模式 | API 路径 | 说明 |
+|------|----------|------|
+| 通用 OCR | `/predict/ocr_system` | 纯文字识别 |
+| 版面分析 | `/predict/layout_analysis` | 文档结构分析 |
+| 表格识别 | `/predict/table_recognition` | 表格提取 |
+
+## 语言支持
+
+PaddleOCR 支持多种语言，常用语言代码：
+
+| 语言 | 代码 |
+|------|------|
+| 简体中文 | `ch` |
+| 繁体中文 | `chinese_cht` |
+| 英语 | `en` |
+| 日语 | `japan` |
+| 韩语 | `korean` |
+
+使用方式：
+```bash
+curl -X POST http://localhost:8868/predict/ocr_system \
+  -F "image=@image.png" \
+  -F "lang=ch"
+```
+
+## 适用场景
+
+PaddleOCR 特别适合以下场景：
+
+- 📷 **扫描件识别**：老旧文档、历史档案
+- 🖼️ **图片文字提取**：截图、照片中的文字
+- 📝 **手写体识别**：手写笔记、表单
+- 🌏 **多语言文档**：中英混排、多语种内容
+
+## 模型选择
+
+PaddleOCR 提供多种模型规格：
+
+| 模型 | 大小 | 精度 | 速度 | 适用场景 |
+|------|------|------|------|----------|
+| PP-OCRv4 | 小 | 高 | 快 | 通用场景 |
+| PP-OCRv3 | 中 | 中 | 中 | 平衡方案 |
+| PP-Structure | 大 | 最高 | 慢 | 复杂版面 |
+
+## 常见问题
+
+### Q: 识别率不够高？
+
+尝试以下方案：
+- 提高图片分辨率（建议 DPI ≥ 200）
+- 调整图片对比度
+- 使用预处理去噪
+
+### Q: 中英文混排识别问题？
+
+使用多语言模型：
+```bash
+-F "lang=ch,en"
+```
+
+### Q: 竖排文字识别不正确？
+
+启用方向检测：
+```bash
+-F "use_angle_cls=true"
+```
+
+## 相关链接
+
+- [PaddleOCR 官方文档](https://www.paddleocr.ai/)
+- [PaddleOCR GitHub](https://github.com/PaddlePaddle/PaddleOCR)

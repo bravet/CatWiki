@@ -1,0 +1,19 @@
+{
+  "name": "catwiki-docs",
+  "private": true,
+  "packageManager": "pnpm@10.19.0",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "mermaid": "^10.9.0",
+    "vitepress": "^1.0.0",
+    "vitepress-plugin-mermaid": "^2.0.16",
+    "vue": "^3.4.0"
+  },
+  "dependencies": {
+    "medium-zoom": "^1.1.0"
+  }
+}
