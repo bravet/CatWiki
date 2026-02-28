@@ -35,7 +35,7 @@ import {
 import { CLIENT_SITE_URL } from "@/constants/constants"
 import { useSite } from "@/contexts/SiteContext"
 import { useDeleteSite } from "@/hooks"
-import { useCurrentTenant } from "@/hooks/useHealth"
+
 import { cn } from "@/lib/utils"
 import type { Site } from "@/lib/api-client"
 
@@ -61,8 +61,7 @@ export function GlobalSites() {
 
   // 使用 React Query 删除 hook
   const deleteSiteMutation = useDeleteSite()
-  const { data: currentTenant } = useCurrentTenant()
-  const tenantSlug = currentTenant?.slug || 'default'
+
 
   // 删除站点
   const handleDelete = (id: number, name: string) => {
@@ -190,7 +189,7 @@ export function GlobalSites() {
                   </p>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <a href={`${CLIENT_SITE_URL}/${tenantSlug}/${site.slug || site.id}`} target="_blank" rel="noopener noreferrer">
+                    <a href={`${CLIENT_SITE_URL}/${site.tenant_slug || 'default'}/${site.slug || site.id}`} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 border-border/60 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 shadow-sm">
                         <BookOpen className="h-3.5 w-3.5" />
                         进入站点

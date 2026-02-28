@@ -33,13 +33,10 @@ import {
 } from "lucide-react"
 import { env } from "@/lib/env"
 import { useSiteData } from "@/hooks"
-import { getUserInfo, getSelectedTenantId } from "@/lib/auth"
-import { useEffect, useState, useMemo } from "react"
+import { getUserInfo } from "@/lib/auth"
+import { useState, useMemo } from "react"
 import { getRoutePath, useRouteContext } from "@/lib/routing"
 import { useHealth } from "@/hooks/useHealth"
-import { useQuery } from "@tanstack/react-query"
-import { tenantApi } from "@/ee/api"
-import { type TenantSchema } from "@/lib/api-client"
 
 interface MenuItem {
   title: string
@@ -98,23 +95,8 @@ function AdminSidebarComponent() {
   // 如果是全平台系统管理页面 (用户管理、系统设置)
   const isGlobalManagement = pathname.startsWith('/users') || pathname.startsWith('/settings')
 
-  // ================= 添加 Tenant 查询 =================
-  const selectedTenantId = getSelectedTenantId()
-  const isEnterprise = healthData?.edition === 'enterprise'
-
-  const { data: tenant } = useQuery<TenantSchema>({
-    queryKey: ['tenant', selectedTenantId],
-    queryFn: async () => {
-      if (!selectedTenantId) throw new Error("No tenant selected")
-      return await tenantApi.get(selectedTenantId)
-    },
-    enabled: isEnterprise && !!selectedTenantId,
-    staleTime: 1000 * 60 * 5,
-  })
-
-  // 如果是社区版，使用 'default' 作为租户标识
-  // 如果是企业版，使用查询到的租户标识，获取不到时回退到 'default'（但不应该发生）
-  const tenantSlug = !isEnterprise ? 'default' : (tenant?.slug || 'default')
+  // 直接从站点数据获取 tenantSlug，站点 API 已经返回了 tenant_slug
+  const tenantSlug = siteData.tenant_slug || 'default'
 
   if (isGlobalManagement && (userRole === 'admin' || userRole === 'tenant_admin')) {
     return (

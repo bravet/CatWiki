@@ -80,7 +80,7 @@ import {
   useRemoveVector,
   VectorStatus
 } from "@/hooks"
-import { useCurrentTenant } from "@/hooks/useHealth"
+
 import { env } from "@/lib/env"
 import { CollectionTree } from "@/components/features/documents/CollectionTree"
 import { VectorRetrieveModal } from "@/components/features/documents/VectorRetrieveModal"
@@ -140,8 +140,8 @@ export default function DocumentsPage() {
   const currentSite = useSiteData()
   const siteId = currentSite.id
   const queryClient = useQueryClient()
-  const { data: currentTenant } = useCurrentTenant()
-  const tenantSlug = currentTenant?.slug || 'default'
+  // 直接从站点数据获取 tenantSlug，站点 API 已经返回了 tenant_slug
+  const tenantSlug = currentSite.tenant_slug || 'default'
 
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 500)

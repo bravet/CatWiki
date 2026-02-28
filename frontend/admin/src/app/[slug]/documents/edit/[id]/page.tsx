@@ -50,7 +50,7 @@ import { DocumentStatus } from "@/lib/api-client"
 import { toast } from "sonner"
 import { getRoutePath, useRouteContext } from "@/lib/routing"
 import { useSiteData, useDocument, useCollectionTree, useUpdateDocument, documentKeys } from "@/hooks"
-import { useCurrentTenant } from "@/hooks/useHealth"
+
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/api-client"
 import { env } from "@/lib/env"
@@ -67,8 +67,8 @@ export default function EditDocumentPage() {
   const documentId = parseInt(params.id as string)
   const currentSite = useSiteData()
   const siteId = currentSite.id
-  const { data: currentTenant } = useCurrentTenant()
-  const tenantSlug = currentTenant?.slug || 'default'
+  // 直接从站点数据获取 tenantSlug，站点 API 已经返回了 tenant_slug
+  const tenantSlug = currentSite.tenant_slug || 'default'
 
   const [title, setTitle] = useState("")
   const [summary, setSummary] = useState("")
