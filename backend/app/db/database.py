@@ -15,13 +15,13 @@
 import logging
 from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from starlette.exceptions import HTTPException
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
-from app.core.web.exceptions import CatWikiError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from starlette.exceptions import HTTPException
 
 from app.core.infra.config import settings
+from app.core.web.exceptions import CatWikiError
 from app.db.events import register_core_db_events
 
 logger = logging.getLogger(__name__)

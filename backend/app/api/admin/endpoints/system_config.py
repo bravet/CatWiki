@@ -38,7 +38,6 @@ from app.core.web.deps import get_current_user_with_tenant
 from app.core.web.exceptions import BadRequestException, NotFoundException
 from app.crud.system_config import crud_system_config
 from app.db.database import get_db
-from app.models.system_config import SystemConfig
 from app.models.user import User
 from app.schemas.response import ApiResponse
 from app.schemas.system_config import (

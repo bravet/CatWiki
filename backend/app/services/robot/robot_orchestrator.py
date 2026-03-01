@@ -48,8 +48,8 @@ class RobotOrchestrator:
             with cls._global_lock_mutex:
                 cls._global_locks.pop(thread_id, None)
 
-            from app.services.chat.session_service import ChatSessionService
             from app.db.database import AsyncSessionLocal
+            from app.services.chat.session_service import ChatSessionService
 
             async with AsyncSessionLocal() as db:
                 await ChatSessionService.delete_by_thread_id(db, thread_id)

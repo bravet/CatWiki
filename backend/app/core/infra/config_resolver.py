@@ -12,17 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import hashlib
 import json
 import logging
 from typing import Any
-
-from app.core.infra.tenant import temporary_tenant_context
-from app.crud.system_config import crud_system_config
-from app.db.database import AsyncSessionLocal
-
-logger = logging.getLogger(__name__)
 
 from app.core.infra.config import (
     AI_CHAT_CONFIG_KEY,
@@ -30,6 +23,11 @@ from app.core.infra.config import (
     AI_RERANK_CONFIG_KEY,
     AI_VL_CONFIG_KEY,
 )
+from app.core.infra.tenant import temporary_tenant_context
+from app.crud.system_config import crud_system_config
+from app.db.database import AsyncSessionLocal
+
+logger = logging.getLogger(__name__)
 
 SECTION_TO_KEY = {
     "chat": AI_CHAT_CONFIG_KEY,

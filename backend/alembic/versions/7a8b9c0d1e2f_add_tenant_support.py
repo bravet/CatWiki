@@ -7,6 +7,7 @@ Create Date: 2026-02-10 21:55:00.000000
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -171,7 +172,7 @@ def upgrade() -> None:
     try:
         op.drop_index("idx_view_events_site_date", table_name="document_view_events")
         op.drop_index("idx_view_events_doc_date", table_name="document_view_events")
-    except:
+    except Exception:
         pass
 
 

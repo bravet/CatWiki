@@ -40,6 +40,7 @@ async def list_active_sites(
 
     # 只返回状态为 active 的站点，并预加载租户信息
     from sqlalchemy import select
+
     from app.models.site import Site as SiteModel
 
     stmt = (
@@ -69,6 +70,7 @@ async def get_site_by_slug(
 ) -> ApiResponse[Site]:
     """通过 slug 获取站点详情（客户端）"""
     from sqlalchemy import select
+
     from app.models.site import Site as SiteModel
 
     stmt = select(SiteModel).where(SiteModel.slug == slug).options(joinedload(SiteModel.tenant))
@@ -91,6 +93,7 @@ async def get_site(
 ) -> ApiResponse[Site]:
     """获取站点详情（客户端）"""
     from sqlalchemy import select
+
     from app.models.site import Site as SiteModel
 
     stmt = select(SiteModel).where(SiteModel.id == site_id).options(joinedload(SiteModel.tenant))

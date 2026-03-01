@@ -61,7 +61,7 @@ class LLMManager:
         mode = config.get("_mode", "platform")
 
         if mode == "custom" and not api_key:
-            raise BadRequestException(f"已开启自定义模型模式，但未在管理后台配置 API Key。")
+            raise BadRequestException("已开启自定义模型模式，但未在管理后台配置 API Key。")
 
         # 处理模型覆盖
         effective_model = model_name or config.get("model") or "gpt-3.5-turbo"

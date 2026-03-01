@@ -1,7 +1,7 @@
 .PHONY: help \
-	dev-init dev-up dev-down dev-restart dev-logs dev-clean dev-db-migrate dev-db-psql gen-sdk license \
-	prod-init prod-up prod-rebuild prod-down prod-restart prod-logs prod-clean clean-cache \
-	 setup-hooks
+	dev-init dev-up dev-down dev-rebuild dev-restart dev-logs dev-clean dev-db-migrate dev-db-upgrade dev-db-psql gen-sdk license format \
+	prod-init prod-up prod-rebuild prod-down prod-restart prod-logs prod-clean prod-website prod-docs clean-cache \
+	 setup-hooks check-changed check-all
 
 # ==============================================================================
 # 跨平台配置 (Cross-Platform Config)
@@ -28,6 +28,7 @@ help:
 	@echo "  make dev-init           - 初始化环境配置 (复制 .env.example)"
 	@echo "  make dev-up             - 启动开发服务 (前台运行, 查看日志)"
 	@echo "  make dev-down           - 停止开发容器"
+	@echo "  make dev-rebuild        - 重建并启动开发环境 (后台运行)"
 	@echo "  make dev-restart        - 重启开发环境后端服务"
 	@echo "  make dev-logs           - 查看开发环境后端日志"
 	@echo "  make dev-clean          - 停止容器并删除数据卷 (重置数据库/存储)"
@@ -53,6 +54,8 @@ help:
 	@echo "  make gen-sdk            - 生成前端 TypeScript SDK"
 	@echo "  make license            - 为所有源文件自动注入 License Header"
 	@echo "  make format             - 运行代码格式化 (后端+前端)"
+	@echo "  make check-changed      - 仅检查已暂存改动 (增量)"
+	@echo "  make check-all          - 全量规范检查 (后端+前端+类型)"
 	@echo "  make setup-hooks        - 配置 Git hooksPath 到 scripts/git-hooks"
 	@echo "  make help               - 显示此帮助信息"
 	@echo ""
@@ -218,6 +221,44 @@ format:
 	@echo "🎨 [Frontend] 正在格式化 TypeScript 代码 (Client)..."
 	cd frontend/client && pnpm run lint:fix
 	@echo "✅ 代码格式化完成"
+
+# 增量检查（仅已暂存文件）
+check-changed:
+	@echo "🔎 运行增量检查 (staged files)..."
+	@STAGED="$$(git diff --cached --name-only --diff-filter=ACMR)"; \
+	if [ -z "$$STAGED" ]; then \
+		echo "ℹ️ 未检测到已暂存改动，跳过增量检查。"; \
+		exit 0; \
+	fi; \
+	PY_FILES="$$(printf '%s\n' "$$STAGED" | grep '^backend/.*\.py$$' || true)"; \
+	if [ -n "$$PY_FILES" ]; then \
+		echo "  - backend ruff (staged python)"; \
+		REL_PY_FILES="$$(printf '%s\n' "$$PY_FILES" | sed 's#^backend/##')"; \
+		cd backend && uv run ruff check $$REL_PY_FILES; \
+		cd - >/dev/null; \
+	fi; \
+	if printf '%s\n' "$$STAGED" | grep -Eq '^frontend/admin/.*\.(ts|tsx)$$'; then \
+		echo "  - frontend/admin eslint + tsc"; \
+		cd frontend/admin && pnpm run lint && pnpm exec tsc --noEmit; \
+		cd - >/dev/null; \
+	fi; \
+	if printf '%s\n' "$$STAGED" | grep -Eq '^frontend/client/.*\.(ts|tsx)$$'; then \
+		echo "  - frontend/client eslint + tsc"; \
+		cd frontend/client && pnpm run lint && pnpm exec tsc --noEmit; \
+		cd - >/dev/null; \
+	fi; \
+	echo "✅ 增量检查通过"
+
+# 全量检查（发布/同步前）
+check-all:
+	@echo "🔎 运行全量检查..."
+	@echo "  - backend ruff"
+	cd backend && uv run ruff check .
+	@echo "  - frontend/admin eslint + tsc"
+	cd frontend/admin && pnpm run lint && pnpm exec tsc --noEmit
+	@echo "  - frontend/client eslint + tsc"
+	cd frontend/client && pnpm run lint && pnpm exec tsc --noEmit
+	@echo "✅ 全量检查通过"
 
 # 配置仓库级 Git hooks 路径
 setup-hooks:

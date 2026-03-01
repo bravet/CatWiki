@@ -247,9 +247,7 @@ class ChatService:
 
         from langchain_core.messages import (
             AIMessage,
-            HumanMessage,
             SystemMessage,
-            ToolMessage,
         )
 
         # 2. 识别用户输入

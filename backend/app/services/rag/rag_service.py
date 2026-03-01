@@ -16,8 +16,8 @@ import logging
 import time
 
 from app.core.ai.providers.reranker import reranker
-from app.core.infra.config import settings
 from app.core.common.utils import rag_stats_var
+from app.core.infra.config import settings
 from app.core.vector.vector_store import VectorStoreManager
 from app.schemas.document import VectorRetrieveFilter, VectorRetrieveResponse
 

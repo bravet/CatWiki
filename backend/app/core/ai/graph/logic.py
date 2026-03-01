@@ -29,10 +29,6 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from app.core.common.utils import (
-    log_ai_usage_signal,
-    log_process_step_card,
-)
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -44,6 +40,10 @@ from app.core.ai.prompts import (
     NO_RESULTS_MESSAGE,
     SUMMARIZE_PROMPT,
     SYSTEM_PROMPT,
+)
+from app.core.common.utils import (
+    log_ai_usage_signal,
+    log_process_step_card,
 )
 from app.core.infra.config import settings
 from app.core.vector.rag_utils import is_meaningful_message

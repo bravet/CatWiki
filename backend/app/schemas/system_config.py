@@ -18,7 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, alias_generators
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============ 基础配置 Schema ============
 

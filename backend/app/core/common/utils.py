@@ -29,10 +29,10 @@ from contextvars import ContextVar
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.core.infra.config import settings  # noqa: F401 (部分调用方通过 utils 间接依赖)
+
 # 用于跨层级收集 RAG 统计信息以便在回合结束时进行汇总打印
 rag_stats_var: ContextVar[dict | None] = ContextVar("rag_stats", default=None)
-
-from app.core.infra.config import settings  # noqa: F401 (部分调用方通过 utils 间接依赖)
 
 NAMESPACE_CATWIKI = uuid.uuid5(uuid.NAMESPACE_DNS, "catwiki.com")
 
