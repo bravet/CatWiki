@@ -130,50 +130,63 @@ dev-db-psql:
 # [生产环境] Production Targets
 # ==============================================================================
 
+# 生产部署目录 (EE: docker-ee, CE 经 sync 后会被替换为 docker)
+PROD_DIR := deploy/docker
+
+# 前置检查: 确保 .env.backend 存在
+check-prod-env:
+	@if [ ! -f "$(PROD_DIR)/.env.backend" ]; then \
+		echo ""; \
+		echo "❌ 未找到 $(PROD_DIR)/.env.backend"; \
+		echo "   请先执行: make prod-init"; \
+		echo ""; \
+		exit 1; \
+	fi
+
 # 生产环境初始化
 prod-init:
 	@echo "🚀 开始初始化生产环境配置..."
-	@mkdir -p deploy/docker
-	@cp backend/.env.example deploy/docker/.env.backend
+	@mkdir -p $(PROD_DIR)
+	@cp backend/.env.example $(PROD_DIR)/.env.backend
 	@# 自动修正生产环境基础配置 (适配 Docker)
-	@$(SED_I) 's/^ENVIRONMENT=.*/ENVIRONMENT=prod/g' deploy/docker/.env.backend
-	@$(SED_I) 's/^DEBUG=.*/DEBUG=false/g' deploy/docker/.env.backend
-	@echo "✅ 生产环境配置模板已生成在 deploy/docker/ 目录下。"
+	@$(SED_I) 's/^ENVIRONMENT=.*/ENVIRONMENT=prod/g' $(PROD_DIR)/.env.backend
+	@$(SED_I) 's/^DEBUG=.*/DEBUG=false/g' $(PROD_DIR)/.env.backend
+	@echo "✅ 生产环境配置模板已生成在 $(PROD_DIR)/ 目录下。"
 	@echo "⚠️  请务必在运行 'make prod-up' 前修改这些 .env.* 文件中的敏感信息！"
 
-prod-up:
-	docker compose -f deploy/docker/docker-compose.yml pull
-	docker compose -f deploy/docker/docker-compose.yml up -d
+prod-up: check-prod-env
+	docker compose -f $(PROD_DIR)/docker-compose.yml pull
+	docker compose -f $(PROD_DIR)/docker-compose.yml up -d
 
 # 生产环境本地构建并启动
-prod-up-build:
-	docker compose -f deploy/docker/docker-compose.yml up -d --build
+prod-up-build: check-prod-env
+	docker compose -f $(PROD_DIR)/docker-compose.yml up -d --build
 
 # 生产环境无缓存重新构建
-prod-rebuild:
+prod-rebuild: check-prod-env
 	@echo "🔧 [CatWiki] 无缓存重新构建生产环境..."
-	docker compose -f deploy/docker/docker-compose.yml build --no-cache
-	docker compose -f deploy/docker/docker-compose.yml up -d
+	docker compose -f $(PROD_DIR)/docker-compose.yml build --no-cache
+	docker compose -f $(PROD_DIR)/docker-compose.yml up -d
 
 # 生产环境停止
-prod-down:
-	docker compose -f deploy/docker/docker-compose.yml down
+prod-down: check-prod-env
+	docker compose -f $(PROD_DIR)/docker-compose.yml down
 	@docker rm -f catwiki-backend-init-prod >/dev/null 2>&1 || true
 
 # 生产环境日志
-prod-logs:
-	docker compose -f deploy/docker/docker-compose.yml logs -f
+prod-logs: check-prod-env
+	docker compose -f $(PROD_DIR)/docker-compose.yml logs -f
 
 # 重启生产环境后端服务
-prod-restart:
-	docker compose -f deploy/docker/docker-compose.yml restart backend
+prod-restart: check-prod-env
+	docker compose -f $(PROD_DIR)/docker-compose.yml restart backend
 
 # 深度清理生产环境 (警告：将删除所有生产数据卷！)
-prod-clean:
+prod-clean: check-prod-env
 	@echo "🛑 [危险] 正在尝试深度清理生产环境..."
 	@echo "⚠️  警告：此操作将删除所有生产容器相关的数据卷 and 数据！"
 	@read -p "您确定要继续吗？[y/N] " ans && [ $${ans:-N} = y ] || (echo "❌ 操作已取消"; exit 1)
-	docker compose -f deploy/docker/docker-compose.yml down -v
+	docker compose -f $(PROD_DIR)/docker-compose.yml down -v
 	@docker rm -f catwiki-backend-init-prod >/dev/null 2>&1 || true
 	@echo "✅ 生产环境深度清理完成"
 	@echo ""
