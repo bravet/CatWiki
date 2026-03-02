@@ -65,8 +65,21 @@ export function useModelConfigLogic(type: RuntimeModelType, onSuccess?: () => vo
     }
 
     try {
-      await testConnection.mutateAsync({ modelType: type, config })
-      await handleSave(type)
+      const data = await testConnection.mutateAsync({ modelType: type, config })
+      // 与 handleTest 一致：如果测试返回了 dimension（如 embedding 模型），更新 UI 状态
+      // 同时通过 overrides 直接传入 handleSave，避免 setState 异步时序问题
+      const overrides: Record<string, string | number | boolean | Record<string, unknown>> = {}
+      if (
+        data &&
+        typeof data === 'object' &&
+        'dimension' in data &&
+        typeof (data as { dimension?: unknown }).dimension === 'number'
+      ) {
+        const dim = (data as { dimension: number }).dimension
+        handleUpdate(type, "dimension", dim)
+        overrides.dimension = dim
+      }
+      await handleSave(type, overrides)
       onSuccess?.()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "连接测试发生错误，无法保存")

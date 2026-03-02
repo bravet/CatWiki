@@ -108,7 +108,11 @@ export const initialConfigs: AIConfigs = {
     base_url: "",
     mode: ModelConfigEnum.mode.CUSTOM,
     is_vision: false,
-    extra_body: {}
+    extra_body: {
+      chat_template_kwargs: {
+        enable_thinking: false
+      }
+    }
   },
   embedding: {
     provider: "openai",

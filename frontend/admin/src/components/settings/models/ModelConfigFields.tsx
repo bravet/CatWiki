@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { Input } from "@/components/ui/input"
-import { ShieldCheck, BrainCircuit } from "lucide-react"
+import { ShieldCheck /*, BrainCircuit */ } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 
@@ -31,9 +31,10 @@ interface ModelConfigFieldsProps {
 }
 
 export function ModelConfigFields({ type, config, onUpdate }: ModelConfigFieldsProps) {
-  const isThinkingEnabled = config.extra_body?.chat_template_kwargs?.enable_thinking ?? false;
+  // const isThinkingEnabled = config.extra_body?.chat_template_kwargs?.enable_thinking ?? false;
   const isVisionEnabled = config.is_vision ?? false;
 
+  /* 思考模式暂时隐藏
   const handleThinkingChange = (checked: boolean) => {
     const currentExtraBody = config.extra_body || {};
     const currentKwargs = currentExtraBody.chat_template_kwargs || {};
@@ -45,6 +46,7 @@ export function ModelConfigFields({ type, config, onUpdate }: ModelConfigFieldsP
       }
     });
   };
+  */
 
   const handleVisionChange = (checked: boolean) => {
     onUpdate(type, "is_vision", checked);
@@ -140,6 +142,8 @@ export function ModelConfigFields({ type, config, onUpdate }: ModelConfigFieldsP
       )}
       {type === "chat" && (
         <div className="space-y-4">
+          {/* 思考模式暂时隐藏 */}
+          {/*
           <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex items-center justify-between transition-all hover:bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-violet-100 flex items-center justify-center text-violet-600 shadow-sm">
@@ -161,6 +165,7 @@ export function ModelConfigFields({ type, config, onUpdate }: ModelConfigFieldsP
               className="data-[state=checked]:bg-violet-600"
             />
           </div>
+          */}
 
           <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex items-center justify-between transition-all hover:bg-slate-50">
             <div className="flex items-center gap-3">

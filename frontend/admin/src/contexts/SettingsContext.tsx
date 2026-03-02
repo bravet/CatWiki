@@ -78,7 +78,13 @@ function toApiModelConfig(config: AIConfigs[RuntimeModelType]): AIConfigUpdate["
     api_key: config.api_key,
     base_url: config.base_url,
     dimension: typeof config.dimension === "number" ? config.dimension : null,
-    extra_body: config.extra_body as Record<string, any>,
+    extra_body: {
+      ...(config.extra_body as Record<string, any>),
+      chat_template_kwargs: {
+        ...(config.extra_body as any)?.chat_template_kwargs,
+        enable_thinking: false
+      }
+    },
     is_vision: config.is_vision ?? false,
     mode: config.mode === "platform"
       ? ModelConfig.mode.PLATFORM
@@ -99,7 +105,7 @@ interface SettingsContextType {
 
   // 更新函数
   handleUpdate: (type: RuntimeModelType, field: string, value: PrimitiveConfigValue) => void
-  handleSave: (modelType?: RuntimeModelType) => Promise<void>
+  handleSave: (modelType?: RuntimeModelType, overrides?: Partial<Record<string, PrimitiveConfigValue>>) => Promise<void>
   revertToSavedConfig: (modelType: RuntimeModelType) => void
 
   // 工具函数
@@ -168,13 +174,17 @@ export function SettingsProvider({ children, scope = 'tenant' }: { children: Rea
     })
   }
 
-  const handleSave = async (modelType?: RuntimeModelType) => {
+  const handleSave = async (modelType?: RuntimeModelType, overrides?: Partial<Record<string, PrimitiveConfigValue>>) => {
     // 根据是否传入 modelType 构建 Payload
     // 如果传入则仅保存该项，否则全量保存
     let aiConfig: AIConfigUpdate = {}
 
     if (modelType) {
-      aiConfig[modelType] = toApiModelConfig(configs[modelType])
+      // 合并 overrides 到当前配置（解决 setState 异步导致的时序问题）
+      const mergedConfig = overrides
+        ? { ...configs[modelType], ...overrides }
+        : configs[modelType]
+      aiConfig[modelType] = toApiModelConfig(mergedConfig)
     } else {
       aiConfig = {
         chat: toApiModelConfig(configs.chat),
