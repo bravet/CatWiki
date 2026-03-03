@@ -26,6 +26,7 @@ export interface ModelMeta {
   iconBg: string
   description: string
   required: boolean
+  recommended?: boolean
 }
 
 export const MODEL_META: Record<"chat" | "embedding" | "rerank" | "vl", ModelMeta> = {
@@ -38,7 +39,8 @@ export const MODEL_META: Record<"chat" | "embedding" | "rerank" | "vl", ModelMet
     iconColor: "text-blue-500",
     iconBg: "bg-blue-500/10",
     description: "用于 AI 对话、内容生成和摘要提取的主模型。",
-    required: true
+    required: true,
+    recommended: false
   },
   embedding: {
     id: "embedding",
@@ -49,7 +51,8 @@ export const MODEL_META: Record<"chat" | "embedding" | "rerank" | "vl", ModelMet
     iconColor: "text-emerald-500",
     iconBg: "bg-emerald-500/10",
     description: "用于将文档转化为向量，实现 AI 语义检索。",
-    required: true
+    required: true,
+    recommended: false
   },
   rerank: {
     id: "rerank",
@@ -60,7 +63,8 @@ export const MODEL_META: Record<"chat" | "embedding" | "rerank" | "vl", ModelMet
     iconColor: "text-purple-500",
     iconBg: "bg-purple-500/10",
     description: "在检索完成后对结果进行精排，大幅提升回答准确度。",
-    required: true
+    required: false,
+    recommended: true
   },
   vl: {
     id: "vl",
@@ -71,7 +75,8 @@ export const MODEL_META: Record<"chat" | "embedding" | "rerank" | "vl", ModelMet
     iconColor: "text-orange-500",
     iconBg: "bg-orange-500/10",
     description: "支持图片理解和多模态交互的能力。",
-    required: false
+    required: false,
+    recommended: false
   }
 }
 

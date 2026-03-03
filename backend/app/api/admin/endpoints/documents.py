@@ -56,6 +56,7 @@ from app.schemas.document import (
 )
 from app.schemas.response import ApiResponse, PaginatedResponse
 from app.schemas.system_config import DocProcessorConfig
+from app.services.config.configuration_service import configuration_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -215,7 +216,7 @@ async def list_documents(
         None, description="向量化状态过滤: none, pending, processing, completed, failed"
     ),
     keyword: str | None = Query(None, description="搜索关键词"),
-    order_by: str | None = Query(None, description="排序字段: views, updated_at"),
+    order_by: str | None = Query(None, description="排序字段: views, created_at, updated_at"),
     order_dir: str | None = Query("desc", description="排序方向: asc, desc"),
     exclude_content: bool = Query(True, description="是否排除文档内容（用于列表展示，提升性能）"),
     db: AsyncSession = Depends(get_db),
@@ -346,7 +347,18 @@ async def import_document(
     """
     导入文档 (上传 -> 解析 -> 创建)
     """
-    # 1. 验证输入
+    # 1. 验证输入与配置环境
+    # 同步校验 Embedding 配置 (导入文档作为 RAG 素材，Embedding 是核心基础依赖)
+    try:
+        # 获取当前租户 ID
+        active_tenant_id = get_current_tenant()
+        await configuration_service.get_embedding_config(tenant_id=active_tenant_id, force=True)
+    except Exception as e:
+        logger.warning(f"⚠️ 导入文档前配置检查失败: {e}")
+        raise BadRequestException(
+            detail=f"导入失败：请先在系统设置中完成 Embedding 模型配置。具体原因: {str(e)}"
+        )
+
     site = await crud_site.get(db, id=site_id)
     if not site:
         raise BadRequestException(detail=f"站点 {site_id} 不存在")
@@ -573,25 +585,26 @@ async def _dispatch_vectorization_tasks(
         db, document_ids=success_ids, status=VectorStatus.PENDING
     )
 
-    # 2. 检查向量服务可用性
+    # 2. 检查向量服务相关配置 (同步拦截)
     try:
-        from app.core.vector.vector_store import VectorStoreManager
+        # 使用文档所属租户 ID 进行校验，防止平台管理员代操作时绕过拦截
+        target_tenant_id = documents[0].tenant_id if documents else None
 
-        # 获取实例（get_instance 内部已完成初始化和配置校验）
-        await VectorStoreManager.get_instance()
+        # 仅校验 Embedding 配置 (向量学习的核心必选依赖)
+        await configuration_service.get_embedding_config(tenant_id=target_tenant_id, force=True)
 
-    except (ValueError, Exception) as e:
+    except Exception as e:
         error_msg = str(e)
-        logger.debug(f"Vector store check failed: {e}")
-        # 回滚状态为 FAILED
+        logger.debug(f"Sync configuration check failed: {e}")
+        # 回退状态为 FAILED (对于已经标记为 PENDING 的这些文档)
         await crud_document.batch_update_vector_status(
             db,
             document_ids=success_ids,
             status=VectorStatus.FAILED,
-            error=f"向量服务不可用: {error_msg}",
+            error=f"配置缺失: {error_msg}",
         )
-        # 抛出异常中断流程
-        raise BadRequestException(detail=f"向量服务暂不可用: {error_msg}")
+        # 直接抛出 BadRequestException，FastAPI 会捕获并返回 400 给前端
+        raise BadRequestException(detail=f"学习失败：{error_msg}")
 
     # 3. 分发后台任务
     for doc_id in success_ids:

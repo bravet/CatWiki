@@ -85,7 +85,7 @@ class ConfigResolver:
             async with AsyncSessionLocal() as db:
                 tenant = await crud_tenant.get(db, id=tenant_id)
                 if not tenant:
-                    raise CatWikiError(f"Tenant {tenant_id} not found")
+                    raise CatWikiError(f"租户 {tenant_id} 不存在")
                 allowed_resources = tenant.platform_resources_allowed or []
 
             # 1.1 Try Specific Module Key
@@ -96,28 +96,50 @@ class ConfigResolver:
             tenant_section = await cls.get_raw_db_config(specific_key, tenant_id)
 
             if not tenant_section:
-                # 租户没有该模块的配置，明确报错
-                raise CatWikiError(f"未配置 '{section}' 模块，请在系统设置中完成 AI 模型配置")
+                # 如果是必选模块 (chat/embedding)，则报错
+                if section in ["chat", "embedding"]:
+                    raise CatWikiError(f"未配置 '{section}' 模块，请联系管理员配置模型")
+                # 如果是可选模块 (rerank/vl)，返回禁用状态
+                return {
+                    "_mode": "custom",
+                    "_source": "tenant",
+                    "enabled": False,
+                    "_hash": "disabled",
+                }
 
             mode = tenant_section.get("mode")
             if mode == "custom":
-                tenant_section.update({"_mode": "custom", "_source": "tenant"})
+                tenant_section.update({"_mode": "custom", "_source": "tenant", "enabled": True})
                 tenant_section["_hash"] = cls.compute_config_hash(tenant_section)
                 return tenant_section
 
             if mode == "platform":
                 if "models" not in allowed_resources:
-                    raise CatWikiError(
-                        f"Tenant {tenant_id} attempted to use platform models without 'models' authorization"
-                    )
-                # Proceed to platform resolution below
-            elif mode is None:
-                # mode 未设置 — 配置不完整，明确报错
-                raise CatWikiError(
-                    f"租户 {tenant_id} 的 '{section}' 配置不完整（缺少 mode），请检查 AI 模型配置"
-                )
+                    # 如果是必选模块没授权，报错
+                    if section in ["chat", "embedding"]:
+                        raise CatWikiError(
+                            f"租户 {tenant_id} 尝试使用平台模型资源，但未获得 'models' 授权"
+                        )
+                    # 如果是可选模块没授权，回退到禁用
+                    return {
+                        "_mode": "platform",
+                        "_source": "platform",
+                        "enabled": False,
+                        "_hash": "unauthorized",
+                    }
+                # 授权通过，继续走下方平台流程
             else:
-                raise CatWikiError(f"Invalid config mode for tenant {tenant_id}: {mode}")
+                # mode 未设置或无效
+                if section in ["chat", "embedding"]:
+                    raise CatWikiError(
+                        f"租户 {tenant_id} 的 '{section}' 配置无效，请重新检查配置项"
+                    )
+                return {
+                    "_mode": "custom",
+                    "_source": "tenant",
+                    "enabled": False,
+                    "_hash": "invalid_mode",
+                }
 
         # 2. Platform Level
         specific_key = SECTION_TO_KEY.get(section)
@@ -127,11 +149,18 @@ class ConfigResolver:
         platform_section = await cls.get_raw_db_config(specific_key, None)
 
         if not platform_section:
-            from app.core.web.exceptions import CatWikiError
+            # 必选模块缺失平台配置，报错
+            if section in ["chat", "embedding"]:
+                raise CatWikiError(f"平台未配置 '{section}' 模块，请在系统设置中完成 AI 模型配置")
+            # 可选模块缺失平台配置，返回禁用状态
+            return {
+                "_mode": "platform",
+                "_source": "platform",
+                "enabled": False,
+                "_hash": "platform_missing",
+            }
 
-            raise CatWikiError(f"平台未配置 '{section}' 模块，请在系统设置中完成 AI 模型配置")
-
-        platform_section.update({"_mode": "platform", "_source": "platform"})
+        platform_section.update({"_mode": "platform", "_source": "platform", "enabled": True})
         platform_section["_hash"] = cls.compute_config_hash(platform_section)
         return platform_section
 

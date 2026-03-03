@@ -20,16 +20,12 @@
 3. 安全审计：敏感信息脱敏与访问日志。
 """
 
-import copy
 import json
 import logging
 import time
 from typing import Any, Optional
 
 from app.core.common.masking import mask_sensitive_data
-from app.core.infra.tenant import temporary_tenant_context
-from app.crud import crud_system_config
-from app.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -66,20 +62,10 @@ class ConfigurationService:
         return mask_sensitive_data(config)
 
     def _compute_config_hash(self, config: dict[str, Any]) -> str:
-        """计算配置指纹 (Identity Hash)"""
-        import hashlib
+        """计算配置指纹 (Identity Hash) - 已统一使用 ConfigResolver"""
+        from app.core.infra.config_resolver import ConfigResolver
 
-        # 只选取影响物理连接身份的核心字段
-        identity_parts = {
-            "model": config.get("model"),
-            "api_key": config.get("api_key"),
-            "base_url": str(config.get("base_url", "")).rstrip("/"),
-            "dimension": config.get("dimension"),  # 只有向量模型会有这个字段
-            "extra_body": config.get("extra_body"),
-        }
-        # 排序确保哈希稳定性
-        identity_str = json.dumps(identity_parts, sort_keys=True)
-        return hashlib.md5(identity_str.encode()).hexdigest()
+        return ConfigResolver.compute_config_hash(config)
 
     def _log_resolved_config(self, section: str, target: str, mode: str, config: dict[str, Any]):
         """打印全量可视化卡片 (仅在数据库加载时触发，内部调试用)"""
@@ -109,65 +95,6 @@ class ConfigurationService:
         )
         logger.info(log_msg)
 
-    async def _get_raw_db_config(
-        self, tenant_id: int | None = None, force: bool = False
-    ) -> tuple[dict[str, Any], bool]:
-        """
-        获取原始配置，返回 (配置字典, 是否触发了数据库读取)
-        """
-        cache_key = f"tenant:{tenant_id}" if tenant_id else "platform"
-        now = time.time()
-
-        # 1. 尝试从缓存获取
-        if not force:
-            last_update = self._last_update_map.get(cache_key, 0)
-            if now - last_update < self._cache_ttl and cache_key in self._config_cache:
-                return self._config_cache[cache_key], False
-
-        # 2. 缓存失效，强行查询 DB
-        async with AsyncSessionLocal() as db:
-            try:
-                # 绕过多租户自动过滤拦截器
-                with temporary_tenant_context(tenant_id):
-                    from app.core.infra.config import (
-                        AI_CHAT_CONFIG_KEY,
-                        AI_EMBEDDING_CONFIG_KEY,
-                        AI_RERANK_CONFIG_KEY,
-                        AI_VL_CONFIG_KEY,
-                    )
-
-                    # 获取 4 个独立模型 Key
-                    chat_cfg = await crud_system_config.get_by_key(
-                        db, config_key=AI_CHAT_CONFIG_KEY, tenant_id=tenant_id
-                    )
-                    embed_cfg = await crud_system_config.get_by_key(
-                        db, config_key=AI_EMBEDDING_CONFIG_KEY, tenant_id=tenant_id
-                    )
-                    rerank_cfg = await crud_system_config.get_by_key(
-                        db, config_key=AI_RERANK_CONFIG_KEY, tenant_id=tenant_id
-                    )
-                    vl_cfg = await crud_system_config.get_by_key(
-                        db, config_key=AI_VL_CONFIG_KEY, tenant_id=tenant_id
-                    )
-
-                    # 聚合最终缓存数据 (物理隔离 Key 为准)
-                    raw_data = {
-                        "chat": chat_cfg.config_value if chat_cfg else {},
-                        "embedding": embed_cfg.config_value if embed_cfg else {},
-                        "rerank": rerank_cfg.config_value if rerank_cfg else {},
-                        "vl": vl_cfg.config_value if vl_cfg else {},
-                    }
-
-                # 更新缓存状态
-                self._config_cache[cache_key] = raw_data
-                self._last_update_map[cache_key] = now
-
-                return raw_data, True
-            except Exception as e:
-                logger.error(f"❌ [ConfigService] DB 读取异常 (租户: {tenant_id}): {e}")
-                # 发生异常时尝试返回过期缓存保证系统不直接崩掉，但返回 False 表示未成功刷新
-                return self._config_cache.get(cache_key, {}), False
-
     def clear_cache(self, tenant_id: int | None = -1):
         """清除缓存
 
@@ -190,47 +117,31 @@ class ConfigurationService:
     async def _resolve_config(
         self, section: str, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """统一配置解析逻辑 (带锁)"""
-        # 1. 第一阶段：尝试租户自定义配置
-        if tenant_id:
-            from app.core.web.exceptions import CatWikiError
-            from app.crud.tenant import crud_tenant
+        """统一配置解析逻辑 (带缓存层)"""
+        from app.core.infra.config_resolver import ConfigResolver
 
-            async with AsyncSessionLocal() as db:
-                tenant = await crud_tenant.get(db, id=tenant_id)
-                if not tenant:
-                    raise CatWikiError(f"租户 {tenant_id} 不存在")
-                allowed_resources = tenant.platform_resources_allowed or []
+        cache_key = f"{section}:tenant:{tenant_id}" if tenant_id else f"{section}:platform"
+        now = time.time()
 
-            raw_tenant, fetched_tenant = await self._get_raw_db_config(tenant_id, force=force)
-            tenant_section = copy.deepcopy(raw_tenant.get(section))
+        # 1. 尝试从缓存获取
+        if not force:
+            last_update = self._last_update_map.get(cache_key, 0)
+            if now - last_update < self._cache_ttl and cache_key in self._config_cache:
+                return self._config_cache[cache_key]
 
-            if tenant_section is not None:
-                mode = tenant_section.get("mode")
-                if mode == "custom":
-                    tenant_section.update({"_mode": "custom", "_source": "tenant"})
-                    tenant_section["_hash"] = self._compute_config_hash(tenant_section)
-                    return tenant_section
+        # 2. 缓存失效，调用底层 ConfigResolver (逻辑唯一源)
+        resolved_config = await ConfigResolver.resolve_section(section, tenant_id=tenant_id)
 
-                if mode == "platform":
-                    if "models" not in allowed_resources:
-                        raise CatWikiError(
-                            f"租户 {tenant_id} 尝试使用平台模型资源，但未获得 'models' 授权"
-                        )
-                else:
-                    raise CatWikiError(f"租户 {tenant_id} 的 '{section}' 配置模式无效: {mode}")
+        # 3. 打印日志并存回缓存
+        target_display = f"Tenant {tenant_id}" if tenant_id else "Platform"
+        self._log_resolved_config(
+            section, target_display, resolved_config.get("_mode", "N/A"), resolved_config
+        )
 
-        # 2. 第二阶段：指向平台或默认配置
-        raw_platform, fetched_platform = await self._get_raw_db_config(None, force=force)
-        platform_section = copy.deepcopy(raw_platform.get(section))
+        self._config_cache[cache_key] = resolved_config
+        self._last_update_map[cache_key] = now
 
-        if platform_section is None:
-            raise CatWikiError(f"全局平台配置中缺失 '{section}' 模块定义")
-
-        platform_section.update({"_mode": "platform", "_source": "platform"})
-        platform_section["_hash"] = self._compute_config_hash(platform_section)
-
-        return platform_section
+        return resolved_config
 
     async def get_chat_config(
         self, tenant_id: int | None = None, force: bool = False

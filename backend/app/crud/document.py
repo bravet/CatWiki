@@ -178,8 +178,10 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
             order_col = self.model.views
         elif order_by == "created_at":
             order_col = self.model.created_at
+        elif order_by == "updated_at":
+            order_col = self.model.updated_at
         else:
-            order_col = self.model.updated_at  # 默认按更新时间
+            order_col = self.model.created_at  # 默认按创建时间
 
         if order_dir == "asc":
             query = query.order_by(order_col.asc())

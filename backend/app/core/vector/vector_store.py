@@ -20,6 +20,7 @@
 import asyncio
 import logging
 import time
+from contextvars import ContextVar
 from typing import Any, Optional
 from urllib.parse import quote_plus
 
@@ -72,11 +73,12 @@ class VectorStoreManager:
         self._vector_stores: dict[str, PGVectorStore] = {}  # hash → PGVectorStore
         self._embeddings_cache: dict[str, Any] = {}  # hash → Embeddings
 
-        # 当前上下文选中的实例 (由 _ensure_initialized 动态指向)
-        self._current_store: PGVectorStore | None = None
-        self._current_embeddings = None
-        self._current_model: str | None = None
-        self._current_hash: str | None = None
+        # [NEW] 任务级上下文追踪 (用于日志统计，不污染全局单例状态)
+        self._context_metadata: ContextVar[dict[str, str]] = ContextVar(
+            "vector_store_metadata", default={"model": "N/A", "hash": ""}
+        )
+
+        # [REMOVED] 删除了 self._current_store 等实例变量，改用动态解析返回实例，彻底解决并发安全问题
 
     # ==================== 初始化与配置 ====================
 
@@ -104,17 +106,17 @@ class VectorStoreManager:
 
         return tenant_id, embedding_conf
 
-    def _try_cache_hit(
+    def _try_get_from_cache(
         self,
         conf_hash: str,
         model: str,
         tenant_id: int | None,
         embedding_conf: dict | None = None,
         purpose: str | None = None,
-    ) -> bool:
-        """尝试命中缓存（无锁快速路径），命中则更新 current 指针"""
+    ) -> tuple[PGVectorStore, Any, str, str] | None:
+        """尝试从缓存获取实例（无锁快速路径）"""
         if conf_hash not in self._vector_stores:
-            return False
+            return None
 
         extra = None
         if embedding_conf:
@@ -133,39 +135,53 @@ class VectorStoreManager:
             extra=extra,
             purpose=purpose,
         )
-        self._current_store = self._vector_stores[conf_hash]
-        self._current_embeddings = self._embeddings_cache[conf_hash]
-        self._current_model = model
-        self._current_hash = conf_hash
-        return True
+        return (self._vector_stores[conf_hash], self._embeddings_cache[conf_hash], model, conf_hash)
 
-    async def _ensure_initialized(
+    async def _resolve_store_instance(
         self, tenant_id: int | None = None, force: bool = False, purpose: str | None = None
-    ):
-        """确保向量存储已初始化（支持多实例池）"""
+    ) -> tuple[PGVectorStore, Any, str, str]:
+        """解析并获取向量存储实例（任务安全，不依赖实例属性指针）"""
         # 1. 解析配置（无锁）
         tenant_id, embedding_conf = await self._resolve_config(tenant_id)
         model = embedding_conf.get("model")
         conf_hash = embedding_conf.get("_hash")
 
-        # 2. 快速路径：缓存命中直接返回（无锁）
-        if not force and self._try_cache_hit(
-            conf_hash, model, tenant_id, embedding_conf, purpose=purpose
-        ):
-            return
+        # 2. 快速路径：缓存命中直接返回
+        if not force:
+            cached = self._try_get_from_cache(
+                conf_hash, model, tenant_id, embedding_conf, purpose=purpose
+            )
+            if cached:
+                # 更新当前任务的元数据快照
+                self._context_metadata.set({"model": model, "hash": conf_hash})
+                return cached
 
         # 3. 慢速路径：持锁初始化新实例
         async with self._lock:
-            # Double-check：避免并发重复初始化
-            if not force and self._try_cache_hit(
-                conf_hash, model, tenant_id, embedding_conf, purpose=purpose
-            ):
-                return
-            await self._do_initialize(tenant_id, embedding_conf, purpose=purpose)
+            # Double-check
+            if not force:
+                cached = self._try_get_from_cache(
+                    conf_hash, model, tenant_id, embedding_conf, purpose=purpose
+                )
+                if cached:
+                    # 更新当前任务的元数据快照
+                    self._context_metadata.set({"model": model, "hash": conf_hash})
+                    return cached
+            return await self._do_initialize(tenant_id, embedding_conf, purpose=purpose)
+
+    @property
+    def last_resolved_model(self) -> str:
+        """获取当前任务最后一次解析的模型名称 (任务安全)"""
+        return self._context_metadata.get().get("model", "N/A")
+
+    @property
+    def last_resolved_hash(self) -> str:
+        """获取当前任务最后一次解析的配置哈希 (任务安全)"""
+        return self._context_metadata.get().get("hash", "")
 
     async def _do_initialize(
         self, tenant_id: int | None, embedding_conf: dict, purpose: str | None = None
-    ):
+    ) -> tuple[PGVectorStore, Any, str, str]:
         """执行实际的初始化逻辑（调用方必须持有 self._lock）"""
         model = embedding_conf.get("model")
         api_key = embedding_conf.get("api_key")
@@ -218,17 +234,17 @@ class VectorStoreManager:
             metadata_columns=OPTIMIZED_COLUMN_NAMES,
         )
 
-        # 存入实例池并切换指针
+        # 存入实例池
         self._vector_stores[conf_hash] = new_store
         self._embeddings_cache[conf_hash] = new_embeddings
-        self._current_store = new_store
-        self._current_embeddings = new_embeddings
-        self._current_model = model
-        self._current_hash = conf_hash
+
+        # 更新当前任务的元数据快照
+        self._context_metadata.set({"model": model, "hash": conf_hash})
 
         logger.debug(
             f"✅ [VectorStore] 实例初始化完成 (哈希: {conf_hash[:8]}, 租户: {tenant_id}, 来源: {source})"
         )
+        return (new_store, new_embeddings, model, conf_hash)
 
     def _init_engine(self):
         """初始化 SQLAlchemy 引擎（仅首次调用时执行）"""
@@ -272,18 +288,15 @@ class VectorStoreManager:
 
     async def reload_credentials(self, tenant_id: int | None = None) -> None:
         """热更新向量存储凭证（强制刷新配置变更）"""
-        await self._ensure_initialized(tenant_id=tenant_id, force=True)
+        await self._resolve_store_instance(tenant_id=tenant_id, force=True)
 
     @classmethod
     async def get_instance(cls, purpose: str | None = None) -> "VectorStoreManager":
-        """获取向量存储管理器单例（自动感知当前租户上下文）"""
+        """获取向量存储管理器单例（已移除实例属性指针，确保任务安全）"""
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
                     cls._instance = cls()
-
-        # 内部有快速路径，缓存命中时不需要锁
-        await cls._instance._ensure_initialized(purpose=purpose)
         return cls._instance
 
     # ==================== 文档操作 ====================
@@ -291,14 +304,8 @@ class VectorStoreManager:
     async def add_documents(
         self, documents: list[LangChainDocument], ids: list[str], storage_batch_size: int = 100
     ) -> list[str]:
-        """添加文档到向量存储
-
-        Args:
-            documents: 要存储的文档列表
-            ids: 文档 ID 列表
-            storage_batch_size: 每批写入数据库的文档数量
-        """
-        await self._ensure_initialized()
+        """添加文档到向量存储"""
+        store, _, _, _ = await self._resolve_store_instance()
 
         start_time = time.time()
         total = len(documents)
@@ -306,7 +313,7 @@ class VectorStoreManager:
         for i in range(0, total, storage_batch_size):
             batch_docs = documents[i : i + storage_batch_size]
             batch_ids = ids[i : i + storage_batch_size]
-            await self._current_store.aadd_documents(documents=batch_docs, ids=batch_ids)
+            await store.aadd_documents(documents=batch_docs, ids=batch_ids)
             logger.debug(
                 f"已存储批次 {i // storage_batch_size + 1}/{(total + storage_batch_size - 1) // storage_batch_size}"
             )
@@ -318,14 +325,14 @@ class VectorStoreManager:
 
     async def delete_documents(self, ids: list[str]) -> None:
         """从向量存储删除文档"""
-        await self._ensure_initialized()
+        store, _, _, _ = await self._resolve_store_instance()
         logger.info(f"开始删除 {len(ids)} 个文档")
-        await self._current_store.adelete(ids=ids)
+        await store.adelete(ids=ids)
         logger.info("✅ 成功删除文档")
 
     async def delete_by_metadata(self, key: str, value: str) -> None:
         """根据元数据删除文档"""
-        await self._ensure_initialized()
+        store, _, _, _ = await self._resolve_store_instance()
         logger.info(f"开始根据元数据删除文档: {key}={value}")
 
         where_clause = self._get_metadata_where_clause(key)
@@ -343,11 +350,11 @@ class VectorStoreManager:
         self, query: str, k: int = 5, filter: dict | None = None, purpose: str | None = None
     ) -> list[LangChainDocument]:
         """相似度搜索"""
-        await self._ensure_initialized(purpose=purpose)
+        store, _, model, conf_hash = await self._resolve_store_instance(purpose=purpose)
         logger.debug(
-            f"♻️  [EMBEDDING] Searching | Model: {self._current_model} | Hash: {self._current_hash[:8] if self._current_hash else 'N/A'}"
+            f"♻️  [EMBEDDING] Searching | Model: {model} | Hash: {conf_hash[:8] if conf_hash else 'N/A'}"
         )
-        results = await self._current_store.asimilarity_search(query=query, k=k, filter=filter)
+        results = await store.asimilarity_search(query=query, k=k, filter=filter)
         logger.info(f"✨ [EMBEDDING] Found {len(results)} chunks")
         return results
 
@@ -355,17 +362,15 @@ class VectorStoreManager:
         self, query: str, k: int = 5, filter: dict | None = None, purpose: str | None = None
     ) -> list[tuple[LangChainDocument, float]]:
         """带相似度分数的搜索"""
-        await self._ensure_initialized(purpose=purpose)
+        store, _, model, conf_hash = await self._resolve_store_instance(purpose=purpose)
         logger.debug(
-            f"♻️  [EMBEDDING] Searching (w/score) | Model: {self._current_model} | Hash: {self._current_hash[:8] if self._current_hash else 'N/A'}"
+            f"♻️  [EMBEDDING] Searching (w/score) | Model: {model} | Hash: {conf_hash[:8] if conf_hash else 'N/A'}"
         )
-        return await self._current_store.asimilarity_search_with_score(
-            query=query, k=k, filter=filter
-        )
+        return await store.asimilarity_search_with_score(query=query, k=k, filter=filter)
 
     async def get_chunks_by_metadata(self, key: str, value: str) -> list[dict]:
         """根据元数据获取文档片段"""
-        await self._ensure_initialized()
+        await self._resolve_store_instance()
         try:
             where_clause = self._get_metadata_where_clause(key)
             sql = text(f"""

@@ -23,8 +23,6 @@ from typing import Any
 
 import httpx
 
-from app.core.infra.config import settings
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,20 +36,19 @@ class Reranker:
     async def _get_instance_config(
         self, tenant_id: int | None = None, purpose: str | None = None
     ) -> dict[str, Any]:
-        """获取并确认为当前上下文准备的配置实例"""
+        """获取并确认为当前上下文准备的配置实例 (不回退到环境变量)"""
         from app.core.common.utils import log_ai_usage_signal
         from app.services.config.configuration_service import configuration_service
 
-        # 获取数据库或缓存中的动态配置
+        # 获取数据库中的动态配置 (已在 service 层处理了权限/零回退拦截)
         rerank_conf = await configuration_service.get_rerank_config(tenant_id=tenant_id)
         conf_hash = rerank_conf.get("_hash")
 
         # 构造最终执行所需的配置（按指纹隔离）
         if conf_hash not in self._instances:
-            # 优先级：数据库动态配置 > 环境变量固化配置
-            api_key = rerank_conf.get("api_key") or settings.AI_RERANK_API_KEY
-            base_url = rerank_conf.get("base_url") or settings.AI_RERANK_API_BASE
-            model = rerank_conf.get("model") or settings.AI_RERANK_MODEL
+            api_key = rerank_conf.get("api_key")
+            base_url = rerank_conf.get("base_url")
+            model = rerank_conf.get("model")
             extra_body = rerank_conf.get("extra_body")
 
             self._instances[conf_hash] = {

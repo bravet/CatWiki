@@ -55,6 +55,11 @@ export function ModelDetailCard({ modelType, onBack }: ModelDetailCardProps) {
                   <Icon className="h-6 w-6" />
                 </div>
                 {info.title}
+                {info.recommended ? (
+                  <span className="text-sm font-normal text-amber-600 ml-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">(推荐开启)</span>
+                ) : !info.required && (
+                  <span className="text-sm font-normal text-muted-foreground ml-1">(选填)</span>
+                )}
               </CardTitle>
               <CardDescription className="text-base text-muted-foreground/80 mt-1.5">
                 {info.description}

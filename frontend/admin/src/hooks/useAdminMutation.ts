@@ -75,8 +75,9 @@ export function useAdminMutation<TData = unknown, TError = Error, TVariables = u
 
       // 提取 ApiError 中的详细消息
       if (error instanceof ApiError) {
-        if (error.body && typeof error.body === 'object' && error.body.msg) {
-          message = error.body.msg
+        if (error.body && typeof error.body === 'object') {
+          // @ts-ignore
+          message = error.body.msg || error.body.detail || message
         }
       }
 

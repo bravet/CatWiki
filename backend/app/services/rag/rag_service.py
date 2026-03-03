@@ -152,14 +152,16 @@ class RAGService:
             logger.info(
                 f"✨ [RAG] Turn Done | Recall: {recalled_count} -> Filtered: {output_count} | {duration:.3f}s"
             )
-            embedding_model = getattr(vector_store, "_current_model", "N/A")
-            embedding_model = getattr(vector_store, "_current_model", "N/A")
-            embedding_hash = getattr(vector_store, "_current_hash", "")
-            rerank_info = "disabled"
+            embedding_model = vector_store.last_resolved_model
+            embedding_hash = vector_store.last_resolved_hash
+            rerank_model_name = "disabled"
             if should_apply_rerank:
-                for inst in reranker._instances.values():
-                    rerank_info = inst.get("model", "N/A")
-                    break
+                from app.services.config.configuration_service import configuration_service
+
+                rerank_conf = await configuration_service.get_rerank_config(
+                    tenant_id=current_tenant_id
+                )
+                rerank_model_name = rerank_conf.get("model", "N/A")
 
             # 💡 [精简] 统一字典累加逻辑，避免 if/else 分支冗余
             stats = rag_stats_var.get()
@@ -181,7 +183,7 @@ class RAGService:
                     "recalled_count": stats.get("recalled_count", 0) + len(results),
                     "filtered_count": stats.get("filtered_count", 0) + len(candidate_list),
                     "threshold": final_threshold,
-                    "rerank_model": rerank_info,
+                    "rerank_model": rerank_model_name,
                     "output_count": stats.get("output_count", 0) + len(response_objects),
                     "top_k": final_top_k,
                     "retrieval_duration": stats.get("retrieval_duration", 0.0) + duration,

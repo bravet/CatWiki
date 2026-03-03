@@ -82,12 +82,14 @@ export function ManualModeConfig({ onSelectModel, activeTab }: ManualModeConfigP
                         )}
                         <Badge
                           variant={item.required ? "default" : "outline"}
-                          className={`text-[9px] px-1.5 py-0 h-4 ${item.required
-                            ? "bg-red-100 text-red-700 border-red-200"
-                            : "bg-slate-100 text-slate-600 border-slate-200"
+                          className={`text-[9px] px-1.5 py-0 h-4 ${item.recommended
+                            ? "bg-amber-100 text-amber-700 border-amber-200"
+                            : item.required
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
                             }`}
                         >
-                          {item.required ? "必选" : "可选"}
+                          {item.recommended ? "推荐开启" : item.required ? "必选" : "可选"}
                         </Badge>
                       </div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wider">{item.subtitle}</p>
