@@ -39,7 +39,22 @@ if [ "$CURRENT_BRANCH" != "ce" ]; then
 fi
 echo "📌 当前分支: ${CURRENT_BRANCH}"
 
+# ---- 架构配置 ----
+PLATFORMS=${PLATFORMS:-"linux/amd64,linux/arm64"}
+echo "🌐 目标架构: ${PLATFORMS}"
+
+# ---- 准备 Buildx ----
+export DOCKER_CLI_EXPERIMENTAL=enabled
+if ! docker buildx inspect catwiki-builder > /dev/null 2>&1; then
+  echo "🔧 创建新的 buildx builder: catwiki-builder..."
+  docker buildx create --name catwiki-builder --driver docker-container --use
+else
+  docker buildx use catwiki-builder
+fi
+docker buildx inspect --bootstrap
+
 # ---- 凭证处理 ----
+# ... (保持原有凭证逻辑) ...
 if [ -z "${DOCKERHUB_USERNAME:-}" ]; then
     echo ""
     read -r -p "🔑 请输入 Docker Hub 用户名: " DOCKERHUB_USERNAME
@@ -67,8 +82,7 @@ echo ""
 echo "🔑 正在登录 Docker Hub..."
 echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
-# CE 版本不包含 website，其余服务保持一致
-# 格式: 服务名称(用于镜像名):相对构建路径:Dockerfile名称
+# ... (保持 SERVICES 定义) ...
 SERVICES=(
   "backend:backend:Dockerfile.prod"
   "admin:frontend/admin:Dockerfile.prod"
@@ -100,46 +114,38 @@ for SERVICE_CONFIG in "${SERVICES[@]}"; do
     continue
   fi
 
-  # Docker Hub 镜像名称: <namespace>/catwiki-<service>:<version>
+  # Docker Hub 镜像名称
   IMAGE_NAME="catwiki-${SERVICE_NAME}"
   FULL_IMAGE_NAME="${NAMESPACE}/${IMAGE_NAME}:${VERSION}"
 
   echo ""
   echo "------------------------------------------"
-  echo "🔨 [${SERVICE_NAME}] 开始构建 CE 镜像..."
+  echo "🔨 [${SERVICE_NAME}] 开始构建并推送多架构 CE 镜像..."
   echo "📁 构建上下文: ${CONTEXT_DIR}"
   echo "📄 Dockerfile: ${DOCKERFILE}"
-  echo "🏷️  镜像标签: ${FULL_IMAGE_NAME}"
+  echo "🌐 平台: ${PLATFORMS}"
+  echo "🏷️  主要标签: ${FULL_IMAGE_NAME}"
   echo "------------------------------------------"
 
-  # 构建镜像
-  if docker build -t "$FULL_IMAGE_NAME" -f "${CONTEXT_DIR}/${DOCKERFILE}" "${CONTEXT_DIR}"; then
-    # backend-init 复用 backend 镜像
-    if [ "$SERVICE_NAME" == "backend" ]; then
-      INIT_IMAGE_NAME="${NAMESPACE}/catwiki-backend-init:${VERSION}"
-      echo "🏷️  [backend-init] 从 backend 镜像标记为 ${INIT_IMAGE_NAME}..."
-      docker tag "$FULL_IMAGE_NAME" "$INIT_IMAGE_NAME"
+  # 准备构建标签
+  BUILD_TAGS=("-t" "$FULL_IMAGE_NAME")
+  
+  # 如果版本不是 latest，增加 latest 标签
+  if [ "$VERSION" != "latest" ]; then
+    BUILD_TAGS+=("-t" "${NAMESPACE}/${IMAGE_NAME}:latest")
+  fi
 
-      echo "☁️  [backend-init] 推送到 Docker Hub..."
-      docker push "$INIT_IMAGE_NAME"
-    fi
-
-    echo "☁️  [${SERVICE_NAME}] 推送到 Docker Hub..."
-    docker push "$FULL_IMAGE_NAME"
-
-    # 如果版本不是 latest，额外打一个 latest 标签
+  # backend 特殊处理: 同时打上 backend-init 标签
+  if [ "$SERVICE_NAME" == "backend" ]; then
+    BUILD_TAGS+=("-t" "${NAMESPACE}/catwiki-backend-init:${VERSION}")
     if [ "$VERSION" != "latest" ]; then
-      LATEST_IMAGE_NAME="${NAMESPACE}/${IMAGE_NAME}:latest"
-      docker tag "$FULL_IMAGE_NAME" "$LATEST_IMAGE_NAME"
-      docker push "$LATEST_IMAGE_NAME"
-      echo "🏷️  [${SERVICE_NAME}] 同时推送 latest 标签"
-
-      if [ "$SERVICE_NAME" == "backend" ]; then
-        INIT_LATEST="${NAMESPACE}/catwiki-backend-init:latest"
-        docker tag "$FULL_IMAGE_NAME" "$INIT_LATEST"
-        docker push "$INIT_LATEST"
-      fi
+      BUILD_TAGS+=("-t" "${NAMESPACE}/catwiki-backend-init:latest")
     fi
+  fi
+
+  # 使用 buildx 进行多架构构建并直接推送
+  if docker buildx build --platform "$PLATFORMS" "${BUILD_TAGS[@]}" -f "${CONTEXT_DIR}/${DOCKERFILE}" "${CONTEXT_DIR}" --push; then
+    echo "✅ [${SERVICE_NAME}] 多架构镜像已推送成功！"
   else
     echo "❌ [${SERVICE_NAME}] 构建失败！"
     FAILED_SERVICES+=("$SERVICE_NAME")
