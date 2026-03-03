@@ -3,6 +3,7 @@ services:
   # PostgreSQL 数据库服务
   postgres:
     image: pgvector/pgvector:pg18
+    pull_policy: if_not_present
     command: postgres -c "log_statement=none" -c "log_min_messages=error" -c "log_min_error_statement=error"
     container_name: catwiki-postgres-dev
     env_file:
@@ -39,6 +40,7 @@ services:
   # Redis 缓存服务
   redis:
     image: redis:8.4.2
+    pull_policy: if_not_present
     container_name: catwiki-redis-dev
     command: redis-server
     healthcheck:
@@ -72,6 +74,7 @@ services:
   # RustFS 对象存储服务
   rustfs:
     image: rustfs/rustfs:1.0.0-alpha.76
+    pull_policy: if_not_present
     container_name: catwiki-rustfs-dev
     env_file:
       - ./backend/.env

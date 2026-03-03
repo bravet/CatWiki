@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # 基础配置
     PROJECT_NAME: str = "CatWiki API"
     DESCRIPTION: str = "CatWiki 后端 API"
-    VERSION: str = "0.0.4"
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/v1"  # 客户端 API
     ADMIN_API_V1_STR: str = "/admin/v1"  # 管理后台 API
 

@@ -33,11 +33,12 @@ echo "=========================================="
 CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CURRENT_BRANCH" != "ce" ]; then
     echo ""
-    echo "❌ 当前分支为 ${CURRENT_BRANCH}，此脚本需要在 ce 分支上运行。"
+    echo "❌ 错误：当前分支为 ${CURRENT_BRANCH}，由于安全原因，发布 CE 镜像必须在 'ce' 分支运行。"
+    echo "   这样可以确保企业版 (EE) 代码不会由于配置误操作而泄露到公共仓库。"
     echo "   请先执行: git checkout ce"
     exit 1
 fi
-echo "📌 当前分支: ${CURRENT_BRANCH}"
+echo "✅ 分支安全校验通过: ${CURRENT_BRANCH}"
 
 # ---- 架构配置 ----
 PLATFORMS=${PLATFORMS:-"linux/amd64,linux/arm64"}

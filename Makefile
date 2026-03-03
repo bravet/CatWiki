@@ -8,7 +8,7 @@
 .PHONY: help \
 	dev-init dev-up dev-down dev-rebuild dev-restart dev-logs dev-clean dev-db-migrate dev-db-upgrade dev-db-psql gen-sdk license format \
 	prod-init prod-up prod-up-build prod-rebuild prod-down prod-restart prod-logs prod-clean prod-docs clean-cache \
- publish-ce-github publish-ce-images setup-hooks check-changed check-all
+	set-version publish-ce-github publish-ce-images setup-hooks check-changed check-all
 
 # ------------------------------------------------------------------------------
 # 1. 跨平台配置 (Cross-Platform Config)
@@ -64,6 +64,7 @@ help:
 	@echo ""
 	@echo " 📦  [发布同步] (Release & Sync)"
 	@echo "  make publish-ce-images  - 构建 CE 镜像并推送到 Docker Hub (公开仓库)"
+	@echo "  make set-version v=1.0.1 - 统一修改项目版本号 (代码, 配置, 镜像标签)"
 	@echo ""
 	@echo " ⚠️  Windows 用户注意: 请使用 WSL2 或 Git Bash 运行 make 命令"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -262,6 +263,10 @@ license:
 	@echo "🔏 [CatWiki] 正在为源文件注入 License Header..."
 	@python3 scripts/add_license_header.py
 	@echo "✅ License Header 注入完成！"
+
+# 统一修改版本号
+set-version:
+	@python3 scripts/version.py $(v)
 
 # ------------------------------------------------------------------------------
 # 6. [发布同步] Release & Sync Targets
