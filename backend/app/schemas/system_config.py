@@ -145,8 +145,8 @@ class WecomSmartConfig(BaseConfigModel):
     """企业微信智能机器人配置"""
 
     enabled: bool = Field(default=False, description="是否启用")
-    token: str = Field(default="", description="Token")
-    encoding_aes_key: str = Field(default="", description="Encoding AES Key")
+    bot_id: str = Field(default="", description="Bot ID")
+    secret: str = Field(default="", description="Secret")
 
 
 class WecomKefuConfig(BaseConfigModel):

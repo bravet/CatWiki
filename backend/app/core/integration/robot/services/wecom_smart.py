@@ -1,245 +1,205 @@
-import base64
-import json
+import asyncio
 import logging
-import random
-import string
+import threading
+from dataclasses import dataclass
 from typing import Any
 
-import httpx
-from Crypto.Cipher import AES
+from sqlalchemy import select
 
-from app.core.integration.robot.adapters.wecom_smart import WeComBufferManager
-from app.core.integration.robot.base import RobotInboundEvent, RobotSession
+from app.core.integration.robot.base import MessageDeduplicator, RobotSession
+from app.core.integration.robot.connections.wecom_longconn import start_wecom_smart_longconn_client
 from app.core.integration.robot.factory import RobotFactory
+from app.core.integration.robot.types.wecom_smart import WeComSmartLongConnConfig
+from app.db.database import AsyncSessionLocal
 from app.models.site import Site
 from app.services.robot import RobotOrchestrator
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class WeComSmartWorkerState:
+    config: WeComSmartLongConnConfig
+    generation: int
+
+
 class WeComSmartService:
-    """企业微信智能机器人业务逻辑 (已重构为统一架构)。"""
+    """企业微信智能机器人长连接服务 (WebSocket 模式)。"""
+
+    _instance: "WeComSmartService | None" = None
+
+    def __init__(self) -> None:
+        self._app_loop: asyncio.AbstractEventLoop | None = None
+        self._service_running = False
+        self._workers: dict[int, WeComSmartWorkerState] = {}
+        self._workers_lock = threading.Lock()
+        self._refresh_lock = asyncio.Lock()
+        self._deduplicator = MessageDeduplicator()
 
     @classmethod
-    def verify_url(
-        cls, crypt: Any, msg_signature: str, timestamp: str, nonce: str, echostr: str
-    ) -> str:
-        """验证企业微信回调 URL"""
-        ret, decrypted_echostr = crypt.VerifyURL(msg_signature, timestamp, nonce, echostr)
-        if ret != 0:
-            logger.error(f"企业微信回调 URL 验证失败: 错误码={ret}")
-            raise ValueError(f"验证失败: {ret}")
-        return decrypted_echostr
+    def get_instance(cls) -> "WeComSmartService":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
-    @classmethod
-    async def process_webhook(
-        cls,
-        site: Site,
-        crypt: Any,
-        aes_key: str,
-        post_data: bytes,
-        msg_signature: str,
-        timestamp: str,
-        nonce: str,
-        background_tasks: Any,
-    ) -> str | None:
-        """处理企业微信智能机器人 Webhook 消息"""
-        ret, msg_body = crypt.DecryptMsg(post_data, msg_signature, timestamp, nonce)
-        if ret != 0:
-            logger.error(f"企业微信消息解密失败: 错误码={ret}")
-            raise ValueError(f"解密失败: {ret}")
+    async def startup(self, app_loop: asyncio.AbstractEventLoop) -> None:
+        self._app_loop = app_loop
+        self._service_running = True
+        await self.refresh()
+
+    async def shutdown(self) -> None:
+        self._service_running = False
+        with self._workers_lock:
+            self._workers.clear()
+        await RobotFactory.shutdown()
+        logger.info("企业微信智能机器人长连接服务已关闭")
+
+    async def refresh(self) -> None:
+        if not self._service_running:
+            return
+
+        if self._app_loop is None:
+            try:
+                self._app_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                logger.warning("企微智能机器人长连接刷新失败：无可用事件循环")
+                return
+
+        async with self._refresh_lock:
+            enabled_configs = await self._pick_enabled_configs()
+
+            with self._workers_lock:
+                current_site_ids = set(self._workers.keys())
+            enabled_site_ids = set(enabled_configs.keys())
+
+            for site_id in current_site_ids - enabled_site_ids:
+                self._deactivate_worker(site_id)
+                logger.info("企微智能机器人长连接已停用: site_id=%s", site_id)
+
+            started_or_updated: list[int] = []
+            for site_id, config in enabled_configs.items():
+                state = self._get_worker(site_id)
+                if state and state.config == config:
+                    continue
+
+                generation = (state.generation + 1) if state else 1
+                self._set_worker(
+                    site_id, WeComSmartWorkerState(config=config, generation=generation)
+                )
+                self._start_worker_thread(config=config, generation=generation)
+                started_or_updated.append(site_id)
+
+            if started_or_updated:
+                logger.info(
+                    "企微智能机器人长连接已刷新: started_or_updated=%s active_sites=%s",
+                    started_or_updated,
+                    sorted(enabled_site_ids),
+                )
+            elif not enabled_site_ids:
+                logger.info("企微智能机器人长连接当前无启用站点")
+
+    async def _pick_enabled_configs(self) -> dict[int, WeComSmartLongConnConfig]:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Site).where(Site.status == "active").order_by(Site.id.asc())
+            )
+            sites = result.scalars().all()
+
+        candidates: dict[int, WeComSmartLongConnConfig] = {}
+        for site in sites:
+            bot_config = site.bot_config or {}
+            wecom = bot_config.get("wecom_smart") or {}
+            enabled = bool(wecom.get("enabled"))
+            bot_id = (wecom.get("bot_id") or "").strip()
+            secret = (wecom.get("secret") or "").strip()
+            if enabled and bot_id and secret:
+                candidates[site.id] = WeComSmartLongConnConfig(
+                    site_id=site.id, bot_id=bot_id, secret=secret
+                )
+        return candidates
+
+    def _start_worker_thread(self, *, config: WeComSmartLongConnConfig, generation: int) -> None:
+        thread = threading.Thread(
+            target=self._run_ws_client,
+            args=(config, generation),
+            name=f"wecom-smart-longconn-site-{config.site_id}-g{generation}",
+            daemon=True,
+        )
+        thread.start()
+
+    def _run_ws_client(self, config: WeComSmartLongConnConfig, generation: int) -> None:
+        def _on_event(cmd: str, raw_data: Any) -> None:
+            if not self._is_worker_active(config.site_id, generation, config):
+                return
+
+            if cmd == "aibot_msg_callback":
+                adapter = RobotFactory.get_adapter("wecom_smart")
+                inbound_event = adapter.parse_inbound_text_event(raw_data, config.site_id)
+                if not inbound_event:
+                    return
+
+                if inbound_event.message_id and self._deduplicator.is_duplicate(
+                    inbound_event.message_id
+                ):
+                    return
+
+                logger.info(
+                    "企微智能机器人长连接收到消息: site_id=%s user=%s",
+                    config.site_id,
+                    inbound_event.from_user,
+                )
+
+                asyncio.run_coroutine_threadsafe(
+                    self._process_text_message(inbound_event=inbound_event),
+                    self._app_loop,
+                )
+            elif cmd == "aibot_event_callback":
+                # 获取事件类型并处理（如进入会话提示欢迎语）
+                pass
 
         try:
-            data = json.loads(msg_body)
-        except json.JSONDecodeError:
-            logger.error("解析解密后的企业微信消息 JSON 失败")
-            raise ValueError("JSON 解析失败")
-
-        msg_type = data.get("msgtype")
-        reply_payload = None
-
-        if msg_type == "text":
-            msgid = data.get("msgid")
-            content = data.get("text", {}).get("content", "")
-            from_info = data.get("from", {})
-            from_user = from_info.get("alias") or from_info.get("userid", "anonymous")
-            chat_id = data.get("chatid")
-            reply_payload = await cls.process_text_message(
-                site, from_user, content, background_tasks, msgid=msgid, chat_id=chat_id
+            # 运行异步长连接客户端
+            asyncio.run(start_wecom_smart_longconn_client(config=config, on_event=_on_event))
+        except Exception:
+            logger.exception(
+                "企微智能机器人长连接客户端异常退出: generation=%s site_id=%s",
+                generation,
+                config.site_id,
             )
-        elif msg_type == "stream":
-            stream_id = data.get("stream", {}).get("id")
-            if stream_id:
-                reply_payload = cls.get_stream_response(stream_id)
-        elif msg_type == "image":
-            image_url = data.get("image", {}).get("url")
-            from_info = data.get("from", {})
-            from_user = from_info.get("alias") or from_info.get("userid", "anonymous")
-            chat_id = data.get("chatid")
-            if image_url:
-                reply_payload = await cls.process_image_message(
-                    image_url, aes_key, from_user, chat_id
-                )
 
-        if reply_payload:
-            reply_json = json.dumps(reply_payload, ensure_ascii=False)
-            ret, encrypted_resp = crypt.EncryptMsg(reply_json, nonce, timestamp)
-            if ret == 0:
-                return encrypted_resp
-            logger.error(f"企业微信消息加密失败: 错误码={ret}")
+    def _is_worker_active(
+        self, site_id: int, generation: int, config: WeComSmartLongConnConfig
+    ) -> bool:
+        if not self._service_running or self._app_loop is None:
+            return False
+        with self._workers_lock:
+            state = self._workers.get(site_id)
+            return bool(state and state.generation == generation and state.config == config)
 
-        return "success"
-
-    @classmethod
-    def _generate_stream_id(cls, length: int = 10) -> str:
-        """生成随机流 ID"""
-        letters = string.ascii_letters + string.digits
-        return "".join(random.choice(letters) for _ in range(length))
-
-    @classmethod
-    async def process_text_message(
-        cls,
-        site: Site,
-        from_user: str,
-        content: str,
-        background_tasks: Any,
-        msgid: str | None = None,
-        chat_id: str | None = None,
-    ) -> dict[str, Any]:
-        """处理文本消息：启动异步统一编排任务"""
-        # 1. 企微去重逻辑
-        if msgid:
-            existing_stream_id = WeComBufferManager.get_stream_id_by_msgid(msgid)
-            if existing_stream_id:
-                logger.info(
-                    f"♻️ [WeCom] 检测到重复请求, msgid={msgid}, 复用 stream_id={existing_stream_id}"
-                )
-                return {
-                    "msgtype": "stream",
-                    "stream": {
-                        "id": existing_stream_id,
-                        "finish": False,
-                        "content": "正在为您努力计算中...",
-                    },
-                }
-
-        # 2. 检查任务并发锁：防止同一个 thread_id 同时跑两个 AI 任务
-        # 注意：这里继续使用 WeComBufferManager 的锁来处理企微 Pull 模式的快速返回
-        thread_id = RobotOrchestrator._get_thread_id("wecom_smart", from_user, chat_id)
-        running_stream_id = WeComBufferManager.get_stream_id_by_thread(thread_id)
-        if running_stream_id:
-            logger.info(
-                f"⏳ [WeCom] 同一用户已存在任务在跑, thread_id={thread_id}, 复用 sid={running_stream_id}"
-            )
-            return {
-                "msgtype": "stream",
-                "stream": {
-                    "id": running_stream_id,
-                    "finish": False,
-                    "content": "正在为您努力计算中...",
-                },
-            }
-
-        # 3. 定期清理过期缓冲区
-        WeComBufferManager.cleanup_buffer()
-
-        # 4. 生成流 ID 并构造会话
-        stream_id = cls._generate_stream_id()
-        if msgid:
-            WeComBufferManager.register_msgid(msgid, stream_id)
-
-        # 锁定当前线程
-        WeComBufferManager.lock_thread(thread_id, stream_id)
-
-        # 5. [Important] 立即初始化缓冲区
-        initial_content = "已收到，正在为您写答案..."
-        WeComBufferManager.update_buffer(
-            stream_id, initial_content, is_finish=False, is_error=False
-        )
-
-        inbound_event = RobotInboundEvent(
-            site_id=site.id,
-            message_id=None,
-            from_user=from_user,
-            content=content,
-            chat_id=chat_id,
-        )
-
+    async def _process_text_message(self, *, inbound_event: Any) -> None:
+        # 获取适配器与会话
         adapter = RobotFactory.get_adapter("wecom_smart")
-        session = RobotSession(
-            event=inbound_event,
-            context_id=stream_id,
-            config=None,
-        )
+        session = RobotSession(event=inbound_event)
 
-        # 7. 异步启动编排流程
-        background_tasks.add_task(
-            RobotOrchestrator.orchestrate_reply,
+        # 调用统一编排流程
+        from fastapi import BackgroundTasks
+
+        bt = BackgroundTasks()
+        await RobotOrchestrator.orchestrate_reply(
             adapter=adapter,
             session=session,
-            background_tasks=background_tasks,
+            background_tasks=bt,
         )
+        await bt()
 
-        return {
-            "msgtype": "stream",
-            "stream": {"id": stream_id, "finish": False, "content": initial_content},
-        }
+    def _get_worker(self, site_id: int) -> WeComSmartWorkerState | None:
+        with self._workers_lock:
+            return self._workers.get(site_id)
 
-    @classmethod
-    def get_stream_response(cls, stream_id: str) -> dict[str, Any]:
-        """获取流式进度 (代理到 BufferManager)"""
-        task = WeComBufferManager.get_buffered_response(stream_id)
-        if not task:
-            return {
-                "msgtype": "stream",
-                "stream": {"id": stream_id, "finish": True, "content": "任务已过期，请重新提问。"},
-            }
+    def _set_worker(self, site_id: int, state: WeComSmartWorkerState) -> None:
+        with self._workers_lock:
+            self._workers[site_id] = state
 
-        return {
-            "msgtype": "stream",
-            "stream": {"id": stream_id, "finish": task["finish"], "content": task["content"]},
-        }
-
-    async def process_image_message(
-        cls, image_url: str, aes_key_base64: str, from_user: str, chat_id: str | None = None
-    ) -> dict[str, Any]:
-        """处理加密图片消息 (保留原有解密逻辑)"""
-        temp_id = cls._generate_stream_id()
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(image_url, timeout=15)
-                resp.raise_for_status()
-                encrypted_data = resp.content
-
-            missing_padding = len(aes_key_base64) % 4
-            if missing_padding:
-                aes_key_base64 += "=" * (4 - missing_padding)
-            aes_key = base64.b64decode(aes_key_base64)
-
-            cipher = AES.new(aes_key, AES.MODE_CBC, aes_key[:16])
-            decrypted_data = cipher.decrypt(encrypted_data)
-
-            pad_len = decrypted_data[-1]
-            if not (1 <= pad_len <= 32):
-                raise ValueError("无效的填充模式")
-            decrypted_data = decrypted_data[:-pad_len]
-
-            logger.info(f"图片解密成功: {len(decrypted_data)} 字节")
-            return {
-                "msgtype": "stream",
-                "stream": {
-                    "id": temp_id,
-                    "finish": True,
-                    "content": "已收到图片。目前智能机器人主要处理文本咨询，后续将支持图片分析。",
-                },
-            }
-        except Exception as e:
-            logger.error(f"图片处理失败: {e}")
-            return {
-                "msgtype": "stream",
-                "stream": {
-                    "id": temp_id,
-                    "finish": True,
-                    "content": "图片处理失败，请检查网络或稍后重试。",
-                },
-            }
+    def _deactivate_worker(self, site_id: int) -> None:
+        with self._workers_lock:
+            self._workers.pop(site_id, None)

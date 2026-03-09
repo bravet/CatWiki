@@ -303,8 +303,7 @@ function InstructionBox({
 export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBotSettingsProps) {
   const [showPreview, setShowPreview] = useState(false)
   const [showKey, setShowKey] = useState(false)
-  const [showWecomToken, setShowWecomToken] = useState(false)
-  const [showWecomAESKey, setShowWecomAESKey] = useState(false)
+  const [showWecomSmartSecret, setShowWecomSmartSecret] = useState(false)
   const [showFeishuAppSecret, setShowFeishuAppSecret] = useState(false)
   const [showDingtalkClientSecret, setShowDingtalkClientSecret] = useState(false)
   const [showWecomKefuSecret, setShowWecomKefuSecret] = useState(false)
@@ -949,35 +948,24 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
         iconBgColor="bg-slate-50"
         iconTextColor="text-slate-600"
       >
-        <SettingItem label="回调地址" badge="系统预设">
+        <SettingItem label="Bot ID" required>
           <CopyableInput
-            value={`${env.NEXT_PUBLIC_API_URL}/v1/bot/wecom-smart?site_id=${siteId}`}
-            readOnly
-            hint="请在企业微信管理后台“智能机器人”配置中填写此地址"
+            value={wecom_smart?.bot_id || ""}
+            onChange={(val) => onChange("wecom_smart", "bot_id", val)}
+            placeholder="请输入 Bot ID"
+            disabled={!wecom_smart?.enabled}
           />
         </SettingItem>
 
-        <SettingItem label="Token" required>
+        <SettingItem label="Secret" required>
           <CopyableInput
-            value={wecom_smart?.token || ""}
-            onChange={(val) => onChange("wecom_smart", "token", val)}
-            placeholder="请输入 Token"
+            value={wecom_smart?.secret || ""}
+            onChange={(val) => onChange("wecom_smart", "secret", val)}
+            placeholder="请输入 Secret"
             disabled={!wecom_smart?.enabled}
             showPasswordToggle
-            isPasswordVisible={showWecomToken}
-            onTogglePasswordVisibility={() => setShowWecomToken(!showWecomToken)}
-          />
-        </SettingItem>
-
-        <SettingItem label="AES Key" required>
-          <CopyableInput
-            value={wecom_smart?.encoding_aes_key || ""}
-            onChange={(val) => onChange("wecom_smart", "encoding_aes_key", val)}
-            placeholder="请输入 EncodingAESKey"
-            disabled={!wecom_smart?.enabled}
-            showPasswordToggle
-            isPasswordVisible={showWecomAESKey}
-            onTogglePasswordVisibility={() => setShowWecomAESKey(!showWecomAESKey)}
+            isPasswordVisible={showWecomSmartSecret}
+            onTogglePasswordVisibility={() => setShowWecomSmartSecret(!showWecomSmartSecret)}
           />
         </SettingItem>
 
@@ -989,8 +977,8 @@ export function SiteBotSettings({ siteId, config, onChange, chatModel }: SiteBot
             textColor="text-sky-700"
             items={[
               "在企业微信管理后台进入 <b>「安全与管理」-「管理工具」-「智能机器人」</b>",
-              "点击 <b>「添加机器人」</b>，选择使用 <b>「API 模式」</b> 进行创建",
-              "获取 <b>Token</b> 和 <b>AES Key</b> 填入本卡片，并将上方 <b>回调地址</b> 填入企微后台"
+              "点击 <b>「添加机器人」</b>，选择最新推荐的 <b>「长连接」</b> 模式（无需公网回调）",
+              "获取 <b>Bot ID</b> 和 <b>Secret</b> 填入本卡片并保存即可生效"
             ]}
             footer={
               <p className="text-[11px] text-sky-800/80">

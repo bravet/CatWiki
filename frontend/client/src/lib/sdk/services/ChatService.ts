@@ -2,15 +2,15 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ChatCompletionRequest } from '../models/ChatCompletionRequest';
 import type { ChatCompletionResponse } from '../models/ChatCompletionResponse';
+import type { InternalChatCompletionRequest } from '../models/InternalChatCompletionRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class ChatService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
     /**
      * Create Chat Completion
-     * 创建聊天补全 (OpenAI 兼容接口)
+     * 创建聊天补全（内部接口，非 OpenAI 兼容）
      * @returns ChatCompletionResponse Successful Response
      * @throws ApiError
      */
@@ -19,7 +19,7 @@ export class ChatService {
         origin,
         referer,
     }: {
-        requestBody: ChatCompletionRequest,
+        requestBody: InternalChatCompletionRequest,
         origin?: (string | null),
         referer?: (string | null),
     }): CancelablePromise<ChatCompletionResponse> {

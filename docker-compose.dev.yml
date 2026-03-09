@@ -290,11 +290,11 @@ services:
     environment:
       NODE_ENV: development
       TZ: Asia/Shanghai
-      NEXT_PUBLIC_API_URL: /api-proxy
+      NEXT_PUBLIC_API_URL: http://localhost:3000
       NEXT_PUBLIC_DOCS_URL: http://localhost:8003
       NEXT_PUBLIC_ADMIN_URL: http://localhost:8001
       NEXT_PUBLIC_DEBUG: true
-      PROXY_API_URL: http://backend:3000
+      # PROXY_API_URL: http://localhost:3000
     ports:
       - "8002:8002"
     volumes:

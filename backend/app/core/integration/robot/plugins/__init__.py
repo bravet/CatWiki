@@ -5,11 +5,8 @@ import importlib
 from app.core.infra.config import settings
 
 BUILTIN_PLUGINS = [
-    "wecom_smart",
     "wecom_kefu",
     "wecom_app",
-    "feishu_app",
-    "dingtalk_app",
 ]
 
 

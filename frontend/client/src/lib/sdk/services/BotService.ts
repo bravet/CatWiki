@@ -2,77 +2,12 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ChatCompletionRequest } from '../models/ChatCompletionRequest';
 import type { ModelList } from '../models/ModelList';
+import type { OpenAIChatCompletionRequest } from '../models/OpenAIChatCompletionRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class BotService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
-    /**
-     * Verify Url
-     * 验证回调 URL (企业微信智能机器人设置时触发)
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public verifyUrlV1BotWecomSmartGet({
-        msgSignature,
-        timestamp,
-        nonce,
-        echostr,
-        siteId,
-    }: {
-        msgSignature: string,
-        timestamp: string,
-        nonce: string,
-        echostr: string,
-        siteId: number,
-    }): CancelablePromise<any> {
-        return this.httpRequest.request({
-            method: 'GET',
-            url: '/v1/bot/wecom-smart',
-            query: {
-                'msg_signature': msgSignature,
-                'timestamp': timestamp,
-                'nonce': nonce,
-                'echostr': echostr,
-                'site_id': siteId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Handle Wecom Message
-     * 处理企业微信智能机器人消息回调 (JSON 协议)
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public handleWecomMessageV1BotWecomSmartPost({
-        msgSignature,
-        timestamp,
-        nonce,
-        siteId,
-    }: {
-        msgSignature: string,
-        timestamp: string,
-        nonce: string,
-        siteId: number,
-    }): CancelablePromise<any> {
-        return this.httpRequest.request({
-            method: 'POST',
-            url: '/v1/bot/wecom-smart',
-            query: {
-                'msg_signature': msgSignature,
-                'timestamp': timestamp,
-                'nonce': nonce,
-                'site_id': siteId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
     /**
      * Verify Kefu Url
      * 验证回调 URL (企业微信客服设置时触发)
@@ -218,7 +153,7 @@ export class BotService {
          * Bearer <api_key>
          */
         authorization: string,
-        requestBody: ChatCompletionRequest,
+        requestBody: OpenAIChatCompletionRequest,
     }): CancelablePromise<any> {
         return this.httpRequest.request({
             method: 'POST',

@@ -4,18 +4,9 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.integration.robot.crypto.wecom_kefu import WXBizXmlMsgCrypt
-from app.core.integration.robot.crypto.wecom_smart import WXBizJsonMsgCrypt
 from app.crud.site import crud_site
 
 _WECOM_CONTEXT_META = {
-    "smart": {
-        "config_key": "wecom_smart",
-        "crypt_cls": WXBizJsonMsgCrypt,
-        "receiveid": lambda cfg: "",
-        "enabled_msg": "该站点未启用企业微信智能机器人",
-        "invalid_msg": "企业微信机器人配置不完整",
-        "require_corp_id": False,
-    },
     "kefu": {
         "config_key": "wecom_kefu",
         "crypt_cls": WXBizXmlMsgCrypt,
@@ -61,10 +52,6 @@ async def get_wecom_context(kind: str, site_id: int, db: AsyncSession) -> dict:
 
     crypt = meta["crypt_cls"](token, aes_key, receiveid)
     return {"site": site, "config": config, "crypt": crypt}
-
-
-async def get_wecom_smart_context(site_id: int, db: AsyncSession) -> dict:
-    return await get_wecom_context("smart", site_id, db)
 
 
 async def get_wecom_kefu_context(site_id: int, db: AsyncSession) -> dict:

@@ -52,10 +52,10 @@ def mask_bot_config_inplace(config_value: dict) -> None:
     # 2. WeCom Smart Robot
     wecom = config_value.get("wecom_smart", {})
     if wecom:
-        if "token" in wecom:
-            wecom["token"] = mask_variable(wecom["token"])
-        if "encoding_aes_key" in wecom:
-            wecom["encoding_aes_key"] = mask_variable(wecom["encoding_aes_key"])
+        if "bot_id" in wecom:
+            wecom["bot_id"] = mask_variable(wecom["bot_id"])
+        if "secret" in wecom:
+            wecom["secret"] = mask_variable(wecom["secret"])
 
     # 3. Feishu Bot
     feishu = config_value.get("feishu_app", {})

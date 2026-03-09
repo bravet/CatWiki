@@ -21,6 +21,7 @@ from app.core.infra.rustfs import init_rustfs
 from app.core.integration.robot.plugins import load_plugins
 from app.core.integration.robot.services.dingtalk_app import DingTalkRobotService
 from app.core.integration.robot.services.feishu_app import FeishuRobotService
+from app.core.integration.robot.services.wecom_smart import WeComSmartService
 from app.core.lifecycle.config import init_system_configs
 from app.core.vector.vector_store import VectorStoreManager
 
@@ -71,6 +72,11 @@ class LifecycleManager:
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] DingTalk Stream startup failed: {e}")
 
+        try:
+            await WeComSmartService.get_instance().startup(asyncio.get_running_loop())
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] WeCom Smart LongConn startup failed: {e}")
+
         logger.info("✨ [Lifecycle] All core components started.")
 
     @classmethod
@@ -103,6 +109,11 @@ class LifecycleManager:
             await DingTalkRobotService.get_instance().shutdown()
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] DingTalk shutdown failed: {e}")
+
+        try:
+            await WeComSmartService.get_instance().shutdown()
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] WeCom Smart shutdown failed: {e}")
 
         logger.info("🏁 [Lifecycle] All core components stopped.")
 

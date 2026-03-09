@@ -4,7 +4,7 @@
 > **本接口为 OpenAI 兼容接口，支持“即插即用”！**
 > 您可以直接在支持 OpenAI 协议的第三方客户端中填写 CatWiki 地址，无需任何代码修改即可实现知识库能力的无缝接入。
 
-问答机器人 API 完全兼容 OpenAI Chat Completion 标准协议。这意味着您可以将其作为 OpenAI 的掉包替换方案，无缝接入 Cherry Studio、NextChat、Chatbox 等主流 AI 客户端，或是集成到您自己的业务系统中。
+问答机器人 API 完全兼容 OpenAI Chat Completion 标准协议。这意味着您可以将其作为 OpenAI 的掉包替换方案，无缝接入 **`知几喵`**、**Cherry Studio**、**NextChat**、**Chatbox** 等主流 AI 客户端，或是集成到您自己的业务系统中。
 
 ## 1. 核心接入信息
 
@@ -26,7 +26,17 @@
 
 ## 2. 客户端接入示例
 
-以 **Cherry Studio** 或 **NextChat** 为例，配置方式如下：
+目前已有大量成熟的第三方客户端支持 OpenAI 协议。我们重点推荐 **知几喵 APP** 作为您的移动端首选，同时也支持 **Cherry Studio**、**NextChat**、**Chatbox** 等主流工具。
+
+### 2.1 知几喵 APP (官方推荐)
+
+**知几喵** 是与 CatWiki 深度对接的首选第三方移动端/桌面端客户端。它提供了精美的 UI 和完善的知识库引用支持。
+
+详细的接入与下载请参考：[**知几喵与 OpenClaw 指南**](/zhijimiao/openclaw-quick-start)。
+
+### 2.2 其他桌面客户端 (Cherry Studio / NextChat 等)
+
+配置逻辑基本一致：
 
 1.  **添加自定义模型服务 (OpenAI 兼容)**：
     - **API 地址**: `http://您的服务器IP:3000/v1/bot`
@@ -44,7 +54,7 @@ curl -X POST http://localhost:3000/v1/bot/chat/completions \
     "messages": [
       {"role": "user", "content": "根据知识库内容，介绍一下 CatWiki"}
     ],
-    "model": "catwiki",
+    "model": "you-model-name",
     "stream": true
   }'
 ```

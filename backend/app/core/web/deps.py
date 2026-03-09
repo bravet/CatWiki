@@ -202,9 +202,7 @@ async def set_client_tenant_context(
             site = await crud_site.get(db, id=int(site_id_str))
             if site:
                 tenant_id = site.tenant_id
-                request.state.site = (
-                    site  # 缓存此站点对象供后续依赖（如 get_wecom_smart_context）复用
-                )
+                request.state.site = site  # 缓存此站点对象供后续依赖复用
                 logger.debug(
                     f"🔍 [TenantResolve] Resolved tenant_id={tenant_id} from site_id={site_id_str}"
                 )

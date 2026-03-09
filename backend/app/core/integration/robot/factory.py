@@ -2,7 +2,7 @@ from app.core.integration.robot.adapters.dingtalk_app import DingTalkAdapter
 from app.core.integration.robot.adapters.feishu_app import FeishuAdapter
 from app.core.integration.robot.adapters.wecom_app import WeComAppAdapter
 from app.core.integration.robot.adapters.wecom_kefu import WeComKefuAdapter
-from app.core.integration.robot.adapters.wecom_smart import WeComAdapter
+from app.core.integration.robot.adapters.wecom_smart import WeComSmartAdapter
 from app.core.integration.robot.base import BaseRobotAdapter
 
 
@@ -25,7 +25,7 @@ class RobotFactory:
         elif platform == "dingtalk_app":
             adapter = DingTalkAdapter()
         elif platform == "wecom_smart":
-            adapter = WeComAdapter()
+            adapter = WeComSmartAdapter()
         elif platform == "wecom_app":
             adapter = WeComAppAdapter()
         elif platform == "wecom_kefu":

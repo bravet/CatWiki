@@ -23,6 +23,7 @@ export default withMermaid(
 
       nav: [
         { text: '首页', link: '/' },
+        { text: '知几喵APP', link: '/zhijimiao/intro', activeMatch: '/zhijimiao/' },
         { text: '开发指南', link: '/development/start/quick-start', activeMatch: '/development/' },
         { text: '部署指南', link: '/deployment/guide/docker', activeMatch: '/deployment/' },
         { text: '关于', link: '/about/project/intro', activeMatch: '/about/' }
@@ -99,6 +100,16 @@ export default withMermaid(
             items: [
               { text: '环境文件 配置', link: '/deployment/config/environment' },
               { text: 'Docker 配置', link: '/deployment/config/docker' }
+            ]
+          }
+        ],
+        '/zhijimiao/': [
+          {
+            text: '知几喵APP',
+            items: [
+              { text: 'APP介绍', link: '/zhijimiao/intro' },
+              { text: 'CatWiki对接', link: '/zhijimiao/llm-quick-start' },
+              { text: 'OpenClaw对接', link: '/zhijimiao/openclaw-quick-start' }
             ]
           }
         ],

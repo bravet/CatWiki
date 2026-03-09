@@ -28,6 +28,7 @@ from app.core.common.utils import Paginator, generate_token
 from app.core.infra.config import settings
 from app.core.integration.robot.services.dingtalk_app import DingTalkRobotService
 from app.core.integration.robot.services.feishu_app import FeishuRobotService
+from app.core.integration.robot.services.wecom_smart import WeComSmartService
 from app.core.web.deps import get_current_user_with_tenant, is_demo_tenant
 from app.core.web.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.crud import crud_site, crud_user
@@ -43,7 +44,7 @@ router = APIRouter()
 
 
 async def _refresh_bot_stream_services() -> None:
-    """站点机器人配置变更后，刷新飞书/钉钉长连接服务。"""
+    """站点机器人配置变更后，刷新飞书/钉钉/企微智能机器人长连接服务。"""
     try:
         await FeishuRobotService.get_instance().refresh()
     except Exception as e:
@@ -52,6 +53,10 @@ async def _refresh_bot_stream_services() -> None:
         await DingTalkRobotService.get_instance().refresh()
     except Exception as e:
         logger.warning(f"刷新钉钉 Stream 失败: {e}")
+    try:
+        await WeComSmartService.get_instance().refresh()
+    except Exception as e:
+        logger.warning(f"刷新企微智能机器人长连接失败: {e}")
 
 
 def _validate_site_bot_config(bot_config: dict | None) -> None:
@@ -79,9 +84,9 @@ def _validate_site_bot_config(bot_config: dict | None) -> None:
 
     wecom_smart = bot_config.get("wecom_smart") or {}
     if wecom_smart.get("enabled"):
-        if not wecom_smart.get("token") or not wecom_smart.get("encoding_aes_key"):
+        if not wecom_smart.get("bot_id") or not wecom_smart.get("secret"):
             raise BadRequestException(
-                detail="启用企业微信智能机器人时，Token 和 Encoding AES Key 不能为空。"
+                detail="启用企业微信智能机器人时，Bot ID 和 Secret 不能为空。"
             )
 
     wecom_kefu = bot_config.get("wecom_kefu") or {}

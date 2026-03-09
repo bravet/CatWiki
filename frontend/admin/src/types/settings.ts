@@ -51,8 +51,8 @@ export type BotConfig = {
   }
   wecom_smart: {
     enabled: boolean
-    token: string
-    encoding_aes_key: string
+    bot_id: string
+    secret: string
   }
   feishu_app: {
     enabled: boolean
@@ -154,8 +154,8 @@ export const initialConfigs: AIConfigs = {
     },
     wecom_smart: {
       enabled: false,
-      token: "",
-      encoding_aes_key: ""
+      bot_id: "",
+      secret: ""
     },
     feishu_app: {
       enabled: false,
