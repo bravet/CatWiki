@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.integration.robot.base import MessageDeduplicator, RobotInboundEvent, RobotSession
-from app.core.integration.robot.connections.dingtalk_stream import start_stream_client
+from app.core.integration.robot.connections.dingtalk_longconn import start_longconn_client
 from app.core.integration.robot.factory import RobotFactory
 from app.core.integration.robot.types.dingtalk_app import (
     DingTalkStreamConfig,
@@ -141,10 +141,9 @@ class DingTalkRobotService:
             if not inbound_event:
                 return
 
-            if inbound_event.message_id and self._deduplicator.is_duplicate(
-                inbound_event.message_id
+            if self._deduplicator.check_and_log_duplicate(
+                config.site_id, inbound_event.message_id, "钉钉 Stream"
             ):
-                logger.debug("钉钉 Stream 忽略重复消息: message_id=%s", inbound_event.message_id)
                 return
 
             logger.info(
@@ -166,7 +165,7 @@ class DingTalkRobotService:
             )
 
         try:
-            start_stream_client(config=config, on_text_event=_on_text_event)
+            start_longconn_client(config=config, on_text_event=_on_text_event)
         except Exception:
             logger.exception(
                 "钉钉 Stream 客户端异常退出: generation=%s site_id=%s",

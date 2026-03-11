@@ -137,10 +137,9 @@ class FeishuRobotService:
 
             if inbound_event.extra.get("sender_type") == "app":
                 return
-            if inbound_event.message_id and self._deduplicator.is_duplicate(
-                inbound_event.message_id
+            if self._deduplicator.check_and_log_duplicate(
+                config.site_id, inbound_event.message_id, "飞书长连接"
             ):
-                logger.debug("飞书长连接忽略重复消息: message_id=%s", inbound_event.message_id)
                 return
 
             logger.info(

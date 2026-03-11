@@ -5,7 +5,9 @@
 ## 1. 下载安装
 
 - **iOS**：前往 **App Store** 搜索 "**知几喵**"，点击下载安装。
-
+<div align="center">
+  <img src="/images/logo.png" width="200" alt="logo" />
+</div>
 ## 2. 添加模型
 
 1. 打开知几喵，进入 **"设置"** 页面。

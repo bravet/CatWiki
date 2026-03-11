@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Settings, Globe } from "lucide-react"
 import { useSettings } from "@/contexts/SettingsContext"
 import { type SettingsTabId } from "@/types/settings"
-import { MODEL_TYPES_LIST } from "@/constants/models"
+import { MODEL_TYPES_LIST } from "./constants"
 
 interface ManualModeConfigProps {
   onSelectModel: (model: SettingsTabId) => void

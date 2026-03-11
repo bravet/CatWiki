@@ -35,7 +35,7 @@ class MinerUDocProcessor(BaseDocProcessor):
         self.timeout = 120.0  # Increase timeout for large files
         logger.info(f"MinerUDocProcessor initialized (v3) with {config.name}")
 
-    async def check_health(self) -> bool:
+    async def is_healthy(self) -> bool:
         """
         MinerU 没有标准的 /health 接口，通常使用 /openapi.json 检查服务存活
         或者尝试访问根路径

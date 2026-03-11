@@ -30,7 +30,7 @@ class DoclingDocProcessor(BaseDocProcessor):
     Docling 文档解析器
     """
 
-    async def check_health(self) -> bool:
+    async def is_healthy(self) -> bool:
         headers = {}
         if self.api_key:
             # OpenAPI defined security: {'APIKeyAuth': {'type': 'apiKey', 'in': 'header', 'name': 'X-Api-Key'}}

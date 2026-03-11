@@ -7,7 +7,7 @@ from app.core.integration.robot.types.dingtalk_app import DingTalkStreamConfig
 logger = logging.getLogger(__name__)
 
 
-def start_stream_client(
+def start_longconn_client(
     *,
     config: DingTalkStreamConfig,
     on_text_event: Callable[[Any], None],

@@ -134,3 +134,18 @@ class MessageDeduplicator:
                 self._cache.popitem(last=False)
 
             return False
+
+    def check_and_log_duplicate(self, site_id: int, message_id: str | None, tag: str) -> bool:
+        """检查消息是否重复并记录日志。如果是重复消息返回 True，否则返回 False。"""
+        import logging
+
+        if not message_id:
+            return False
+
+        dedupe_key = f"{site_id}:{message_id}"
+        if self.is_duplicate(dedupe_key):
+            logging.getLogger(self.__module__).debug(
+                "%s 忽略重复消息: site_id=%s message_id=%s", tag, site_id, message_id
+            )
+            return True
+        return False

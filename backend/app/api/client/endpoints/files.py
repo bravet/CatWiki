@@ -22,12 +22,8 @@ from fastapi.responses import Response
 
 from app.core.infra.rustfs import RustFSService
 from app.core.web.deps import get_rustfs
-from app.core.web.exceptions import (
-    DatabaseException,
-    NotFoundException,
-    ServiceUnavailableException,
-)
 from app.schemas.response import ApiResponse
+from app.services.file_service import FileService
 
 router = APIRouter()
 
@@ -37,41 +33,10 @@ async def download_file(
     object_name: str,
     rustfs: RustFSService = Depends(get_rustfs),
 ):
-    """
-    下载文件（客户端）
-
-    Args:
-        object_name: 文件对象名称（路径）
-        rustfs: RustFS 服务实例
-
-    Returns:
-        文件内容
-    """
-    if not rustfs.is_available():
-        raise ServiceUnavailableException(detail="对象存储服务不可用")
-
-    # 检查文件是否存在
-    if not rustfs.file_exists(object_name):
-        raise NotFoundException(detail="文件不存在")
-
-    # 下载文件
-    data = rustfs.download_file(object_name)
-    if data is None:
-        raise DatabaseException(detail="文件下载失败")
-
-    # 获取文件信息
-    info = rustfs.get_file_info(object_name)
-    content_type = (
-        info.get("content_type", "application/octet-stream") if info else "application/octet-stream"
-    )
-
-    # 从元数据中获取原始文件名
-    filename = object_name.split("/")[-1]
-    if info and info.get("metadata"):
-        filename = info["metadata"].get("original_filename", filename)
-
+    """下载文件（客户端）"""
+    content, content_type, filename = await FileService.download_file(rustfs, object_name)
     return Response(
-        content=data,
+        content=content,
         media_type=content_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
@@ -84,77 +49,26 @@ async def get_file_info(
     object_name: str,
     rustfs: RustFSService = Depends(get_rustfs),
 ) -> ApiResponse[dict]:
-    """
-    获取文件信息（客户端）
-
-    Args:
-        object_name: 文件对象名称（路径）
-        rustfs: RustFS 服务实例
-
-    Returns:
-        文件基本信息（不包含敏感元数据）
-    """
-    if not rustfs.is_available():
-        raise ServiceUnavailableException(detail="对象存储服务不可用")
-
-    # 检查文件是否存在
-    if not rustfs.file_exists(object_name):
-        raise NotFoundException(detail="文件不存在")
-
-    # 获取文件信息
-    info = rustfs.get_file_info(object_name)
-    if info is None:
-        raise DatabaseException(detail="获取文件信息失败")
-
-    # 只返回基本信息，不包含敏感元数据
-    safe_info = {
-        "object_name": object_name,
-        "size": info.get("size"),
-        "content_type": info.get("content_type"),
-        "last_modified": info.get("last_modified").isoformat()
-        if info.get("last_modified")
-        else None,
-    }
-
-    return ApiResponse.ok(data=safe_info, msg="获取成功")
+    """获取文件信息（客户端）"""
+    data = await FileService.get_client_file_info(rustfs, object_name)
+    return ApiResponse.ok(data=data, msg="获取成功")
 
 
 @router.get(
     "/{object_name:path}:presignedUrl",
+    # 注意：该端点名称虽然保留，但实际行为依赖 bucket 公开性
     response_model=ApiResponse[dict],
     operation_id="getClientPresignedUrl",
 )
 async def get_presigned_url(
     object_name: str,
+    # 客户端接口参数 expires_hours 虽然在旧代码里有 Query，但实际上 get_public_url(False) 并不使用它。
+    # 这里我们保留参数以保持接口兼容，但不传递给 get_public_url。
     expires_hours: int = Query(1, ge=1, le=24, description="URL 有效期（小时，最长 24 小时）"),
     rustfs: RustFSService = Depends(get_rustfs),
 ) -> ApiResponse[dict]:
-    """
-    获取文件的访问 URL（客户端）
-
-    注意：如果存储桶是公开的，返回直接 URL；否则返回预签名 URL
-
-    Args:
-        object_name: 文件对象名称（路径）
-        expires_hours: 预签名 URL 有效期（小时，默认 1 小时，最长 24 小时）
-        rustfs: RustFS 服务实例
-
-    Returns:
-        文件访问 URL
-    """
-    if not rustfs.is_available():
-        raise ServiceUnavailableException(detail="对象存储服务不可用")
-
-    # 检查文件是否存在
-    if not rustfs.file_exists(object_name):
-        raise NotFoundException(detail="文件不存在")
-
-    # 生成 URL（公开存储桶使用直接 URL）
-    url = rustfs.get_public_url(object_name, use_presigned=False)
-
-    if url is None:
-        raise DatabaseException(detail="生成 URL 失败")
-
+    """获取文件的访问 URL（客户端）"""
+    url = await FileService.get_public_url(rustfs, object_name)
     return ApiResponse.ok(
         data={
             "object_name": object_name,

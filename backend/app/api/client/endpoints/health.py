@@ -15,12 +15,11 @@
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.infra.config import settings
 from app.db.database import get_db
 from app.schemas.response import ApiResponse, HealthResponse
+from app.services.health_service import HealthService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,32 +36,5 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> ApiResponse[Health
     """
     客户端专用的健康检查接口
     """
-    from datetime import UTC, datetime
-
-    try:
-        from app.ee.license import license_service
-
-        is_licensed = license_service.is_valid
-    except ImportError:
-        is_licensed = False
-
-    health_status = {
-        "status": "healthy",
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
-        "edition": settings.CATWIKI_EDITION,
-        "is_licensed": is_licensed,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "checks": {},
-    }
-
-    # 简单检查数据库连接
-    try:
-        await db.execute(text("SELECT 1"))
-        health_status["checks"]["database"] = "ok"
-    except Exception as e:
-        health_status["checks"]["database"] = "error"
-        health_status["status"] = "unhealthy"
-        logger.error(f"客户端健康检查失败: {e}")
-
+    health_status = await HealthService.get_health_status(db, detailed=False)
     return ApiResponse.ok(data=health_status)

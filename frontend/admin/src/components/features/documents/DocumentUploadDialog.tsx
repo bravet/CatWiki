@@ -62,9 +62,7 @@ type DocProcessor = Omit<DocProcessorConfig, "config"> & {
   config?: ProcessorExtraConfig
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
+import { isRecord } from "@/lib/utils"
 
 function parseProcessorConfig(config: unknown): ProcessorExtraConfig {
   if (!isRecord(config)) {

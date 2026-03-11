@@ -164,9 +164,7 @@ async function wrapResponse<
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
+import { isRecord, cn } from './utils'
 
 function normalizeChunks(value: unknown): DocumentChunk[] {
   if (!Array.isArray(value)) {

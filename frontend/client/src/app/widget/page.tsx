@@ -16,7 +16,7 @@
 
 import { useSearchParams } from "next/navigation"
 import { useState, useEffect, Suspense } from "react"
-import { ChatWidget } from "@/components/ChatWidget"
+import { ChatWidget } from "@/components/ai"
 
 import { api } from "@/lib/api-client"
 import type { ClientSite } from "@/lib/api-client"

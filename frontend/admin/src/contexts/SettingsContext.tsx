@@ -30,9 +30,7 @@ type RuntimeModelType = typeof MODEL_TYPES[number]
 type PrimitiveConfigValue = string | number | boolean | Record<string, unknown>
 const EMPTY_RECORD: Record<string, unknown> = {}
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
+import { isRecord } from "@/lib/utils"
 
 // 深度合并函数
 const deepMerge = (target: Record<string, unknown>, source: unknown): Record<string, unknown> => {

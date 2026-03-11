@@ -52,7 +52,7 @@ class BaseDocProcessor(ABC):
         return self.config.api_key
 
     @abstractmethod
-    async def check_health(self) -> bool:
+    async def is_healthy(self) -> bool:
         """
         检查服务是否可用
         Returns:

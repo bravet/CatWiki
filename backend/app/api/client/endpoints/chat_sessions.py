@@ -53,7 +53,7 @@ async def list_sessions(
     支持按租户、站点和会员过滤，支持关键词搜索，按更新时间倒序排列。
     """
 
-    sessions, total = await ChatSessionService.list_sessions(
+    sessions, paginator = await ChatSessionService.list_sessions(
         db=db,
         tenant_id=tenant_id,
         site_id=site_id,
@@ -66,9 +66,9 @@ async def list_sessions(
     return ApiResponse.ok(
         data=ChatSessionListResponse(
             items=[ChatSessionResponse.model_validate(s) for s in sessions],
-            total=total,
-            page=page,
-            size=size,
+            total=paginator.total,
+            page=paginator.page,
+            size=paginator.size,
         )
     )
 
@@ -87,7 +87,7 @@ async def get_session(
 
     返回会话元数据。如需获取完整消息历史，请调用 /chat/completions 或使用 LangGraph API。
     """
-    session = await ChatSessionService.get_by_thread_id(db=db, thread_id=thread_id)
+    session = await ChatSessionService.get_session_by_thread_id(db=db, thread_id=thread_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -131,7 +131,7 @@ async def delete_session(
 
     删除会话元数据记录，并同步删除 LangGraph Checkpointer 中的消息历史。
     """
-    success = await ChatSessionService.delete_by_thread_id(db=db, thread_id=thread_id)
+    success = await ChatSessionService.delete_session_by_thread_id(db=db, thread_id=thread_id)
 
     if not success:
         raise HTTPException(status_code=404, detail="会话不存在")

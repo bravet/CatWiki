@@ -14,26 +14,46 @@
 
 "use client"
 
-import { LoadingState } from "@/components/ui/loading-state"
-import { EmptyState } from "@/components/ui/empty-state"
-
-import { useState, useMemo } from "react"
-import Link from "next/link"
-import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
 import {
+  LoadingState,
+  EmptyState,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Pagination } from "@/components/ui/pagination"
+  TableRow,
+  Badge,
+  Button,
+  Input,
+  Card,
+  CardContent,
+  CardHeader,
+  Pagination,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetDescription,
+  OptimizedImage,
+  ScrollArea
+} from "@/components/ui"
+
+import { useState, useMemo } from "react"
+import Link from "next/link"
+import { toast } from "sonner"
+import { useQueryClient, useQuery } from "@tanstack/react-query"
 import {
   Plus,
   Search,
@@ -82,42 +102,19 @@ import {
 } from "@/hooks"
 
 import { env } from "@/lib/env"
-import { CollectionTree } from "@/components/features/documents/CollectionTree"
-import { VectorRetrieveModal } from "@/components/features/documents/VectorRetrieveModal"
+import { CollectionTree, VectorRetrieveModal, DocumentUploadDialog } from "@/components/features/documents"
 import type { CollectionItem } from "@/types"
 import { getRoutePath, useRouteContext } from "@/lib/routing"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   type Collection as APICollection,
   type CollectionCreate,
   type Document,
   type CollectionTree as APICollectionTree,
   type DocumentChunk,
-  DocumentStatus
+  DocumentStatus,
+  api
 } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { OptimizedImage } from "@/components/ui/OptimizedImage"
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api-client"
-import { ScrollArea } from "@/components/ui/scroll-area"
-
-
-import { DocumentUploadDialog } from "@/components/features/documents/DocumentUploadDialog"
 
 // 转换集合树为 CollectionItem 的辅助函数
 const convertToCollectionItems = (tree: APICollectionTree[]): CollectionItem[] => {

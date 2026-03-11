@@ -17,10 +17,10 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { SettingsProvider, useSettings } from "@/contexts/SettingsContext"
-import { ModelSettingsCard } from "@/components/settings/models/ModelSettingsCard"
-import { ModelDetailCard } from "@/components/settings/models/ModelDetailCard"
-import { GlobalUsers } from "@/components/settings/users/GlobalUsers"
-import { GlobalSites } from "@/components/settings/sites/GlobalSites"
+import { ModelSettingsCard, ModelDetailCard } from "@/components/settings/models"
+import { GlobalUsers } from "@/components/settings/users"
+import { GlobalSites, SiteSettings } from "@/components/settings/sites"
+import { DocProcessorSettings } from "./doc-processor/DocProcessorSettings"
 import { type SettingsTabId } from "@/types/settings"
 import {
   Settings,
@@ -34,16 +34,7 @@ import {
 } from "lucide-react"
 import { getUserInfo } from "@/lib/auth"
 import { UserRole } from "@/lib/api-client"
-import { Button } from "@/components/ui/button"
-import { SiteSettings } from "./sites/SiteSettings"
-import { DocProcessorSettings } from "./doc-processor/DocProcessorSettings"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { Card } from "@/components/ui/card"
+import { Button, Card, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui"
 import { cn } from "@/lib/utils"
 
 function SettingsContent() {

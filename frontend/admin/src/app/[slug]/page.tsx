@@ -15,8 +15,7 @@
 "use client"
 
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui"
 import { FileText, Users, MessageSquare, Eye, Network, Flame, ChevronRight, Clock, History } from "lucide-react"
 import { useSiteData, useDocuments, useSiteStats } from "@/hooks"
 import { getRoutePath, useRouteContext } from "@/lib/routing"

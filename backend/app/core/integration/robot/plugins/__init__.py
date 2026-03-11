@@ -17,8 +17,3 @@ def load_plugins(providers: list[str] | None = None) -> None:
     providers = providers or BUILTIN_PLUGINS
     for provider in providers:
         importlib.import_module(f"app.core.integration.robot.plugins.builtin.{provider}")
-
-
-def load_market_plugins(providers: list[str]) -> None:
-    for provider in providers:
-        importlib.import_module(f"app.core.integration.robot.plugins.market.{provider}")

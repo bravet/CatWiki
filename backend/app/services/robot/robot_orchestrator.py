@@ -52,7 +52,7 @@ class RobotOrchestrator:
             from app.services.chat.session_service import ChatSessionService
 
             async with AsyncSessionLocal() as db:
-                await ChatSessionService.delete_by_thread_id(db, thread_id)
+                await ChatSessionService.delete_session_by_thread_id(db, thread_id)
 
             await adapter.reply(
                 session, "✅ 已为您清空对话上下文，现在可以开始新的咨询了。", is_finish=True

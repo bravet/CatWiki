@@ -16,7 +16,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Sparkles, MessageSquare, Bot, ArrowRight, BookOpen, Plus, History as HistoryIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui"
 import { Streamdown } from "streamdown"
 import { cn } from "@/lib/utils"
 import { useAIChat } from "@/hooks"

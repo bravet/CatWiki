@@ -33,7 +33,7 @@ import {
   LayoutGrid,
   Loader2
 } from "lucide-react"
-import { CLIENT_SITE_URL } from "@/constants/constants"
+import { env } from "@/lib/env"
 import { useSite } from "@/contexts/SiteContext"
 import { useDeleteSite } from "@/hooks"
 
@@ -194,7 +194,7 @@ export function GlobalSites() {
                   </p>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <a href={`${CLIENT_SITE_URL}/${site.tenant_slug || 'default'}/${site.slug || site.id}`} target="_blank" rel="noopener noreferrer">
+                    <a href={`${env.NEXT_PUBLIC_CLIENT_URL}/${site.tenant_slug || 'default'}/${site.slug || site.id}`} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="w-full h-9 text-xs font-bold flex items-center justify-center gap-2 border-border/60 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 shadow-sm">
                         <BookOpen className="h-3.5 w-3.5" />
                         进入站点

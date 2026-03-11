@@ -20,7 +20,7 @@ import type { Metadata } from 'next'
 const inter = { className: 'font-sans' }
 import { Toaster } from 'sonner'
 import { ReactQueryProvider } from '@/providers/ReactQueryProvider'
-import { StatePersistence } from '@/components/layout/StatePersistence'
+import { StatePersistence } from "@/components/layout"
 import './globals.css'
 
 export const metadata: Metadata = {

@@ -91,8 +91,7 @@ class WeComAppService:
             )
 
             # 1. 去重逻辑
-            if msg_id and cls._deduplicator.is_duplicate(msg_id):
-                logger.debug("企业微信应用忽略重复消息: msg_id=%s", msg_id)
+            if cls._deduplicator.check_and_log_duplicate(site.id, msg_id, "企业微信应用"):
                 return "success"
 
             # 2. 处理文本消息

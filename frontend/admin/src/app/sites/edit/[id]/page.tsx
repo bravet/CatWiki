@@ -16,8 +16,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button, Card, CardContent, CardHeader, CardTitle, CardDescription, Tabs, TabsContent, TabsList, TabsTrigger, ImageUpload } from "@/components/ui"
 import {
   ChevronLeft,
   Save,
@@ -30,17 +29,9 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useSiteById, useUpdateSite } from "@/hooks"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { QuickQuestionsConfig } from "@/components/features/QuickQuestionsConfig"
+import { QuickQuestionsConfig } from "@/components/features"
 import type { QuickQuestion } from "@/lib/api-client"
-import { SiteBotSettings } from "@/components/sites/SiteBotSettings"
-import { SiteUsers } from "@/components/sites/SiteUsers"
-import { ImageUpload } from "@/components/ui/ImageUpload"
+import { SiteBotSettings, SiteUsers } from "@/components/sites"
 import { initialConfigs, type BotConfig } from "@/types/settings"
 import { env } from "@/lib/env"
 import { mergeSiteBotConfig } from "@/lib/site-bot-config"

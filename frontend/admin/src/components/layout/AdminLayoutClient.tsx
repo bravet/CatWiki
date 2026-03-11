@@ -20,8 +20,9 @@ import dynamic from 'next/dynamic'
 import { Toaster } from 'sonner'
 import { ReactQueryProvider } from '@/providers/ReactQueryProvider'
 import { SiteProvider } from '@/contexts/SiteContext'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { UserMenu } from '@/components/layout/UserMenu'
+import { ErrorBoundary } from '@/components/ui'
+import { UserMenu, StatePersistence } from '@/components/layout'
+import { useHealth, useDemoMode } from '@/hooks/useHealth'
 import Link from 'next/link'
 import {
   Search,
@@ -32,16 +33,12 @@ import {
 import { getUserInfo } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { useState, useEffect } from 'react'
-import { StatePersistence } from '@/components/layout/StatePersistence'
-import { useHealth, useDemoMode } from '@/hooks/useHealth'
-
-// 动态导入侧边栏和站点切换器，禁用 SSR 以避免 hydration 错误
-const AdminSidebar = dynamic(() => import('@/components/layout/AdminSidebar').then(mod => ({ default: mod.AdminSidebar })), {
+const AdminSidebar = dynamic(() => import('@/components/layout').then(mod => ({ default: mod.AdminSidebar })), {
   ssr: false,
   loading: () => <div className="w-64 bg-slate-50 border-r border-slate-200" />
 })
 
-const SiteSwitcher = dynamic(() => import('@/components/layout/SiteSwitcher').then(mod => ({ default: mod.SiteSwitcher })), {
+const SiteSwitcher = dynamic(() => import('@/components/layout').then(mod => ({ default: mod.SiteSwitcher })), {
   ssr: false,
   loading: () => <div className="w-40 h-12 bg-slate-100 rounded-xl" />
 })

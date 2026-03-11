@@ -3,7 +3,9 @@
 **知几喵** 是一款功能强大、体验出众的 AI 智能客户端，支持 iOS 平台。
 
 > **获取方式**：iOS 用户请前往 **App Store** 搜索 "**知几喵**" 即可下载安装。
-
+<div align="center">
+  <img src="/images/logo.png" width="200" alt="logo" />
+</div>
 ## 核心功能
 
 - 🤖 **多模型管理**：支持添加多个 OpenAI 兼容的 AI 模型服务，快速切换使用

@@ -28,10 +28,11 @@ class WeComKefuService:
     _welcome_sent: dict[str, float] = {}
 
     @classmethod
-    def _get_lock(cls, open_kfid: str) -> asyncio.Lock:
-        if open_kfid not in cls._sync_locks:
-            cls._sync_locks[open_kfid] = asyncio.Lock()
-        return cls._sync_locks[open_kfid]
+    def _get_lock(cls, site_id: int, open_kfid: str) -> asyncio.Lock:
+        lock_key = f"{site_id}:{open_kfid}"
+        if lock_key not in cls._sync_locks:
+            cls._sync_locks[lock_key] = asyncio.Lock()
+        return cls._sync_locks[lock_key]
 
     @classmethod
     async def sync_messages(
@@ -44,9 +45,11 @@ class WeComKefuService:
     ) -> None:
         """从微信侧拉取客服消息"""
         # 获取并发锁，确保同一个 kfid 同时只有一个同步任务
-        lock = cls._get_lock(open_kfid)
+        lock = cls._get_lock(site.id, open_kfid)
         if lock.locked():
-            logger.debug(f"⏳ [WeComKefu] Sync is already running for {open_kfid}, skipping...")
+            logger.debug(
+                f"⏳ [WeComKefu] Sync is already running for site_id={site.id} kfid={open_kfid}, skipping..."
+            )
             return
 
         async with lock:
@@ -67,7 +70,8 @@ class WeComKefuService:
 
                 while has_more and round_count < max_rounds:
                     round_count += 1
-                    cursor = cls._cursors.get(open_kfid, "")
+                    cursor_key = f"{site.id}:{open_kfid}"
+                    cursor = cls._cursors.get(cursor_key, "")
 
                     async with httpx.AsyncClient() as client:
                         body = {"limit": 100, "open_kfid": open_kfid}
@@ -88,13 +92,15 @@ class WeComKefuService:
 
                         new_cursor = data.get("next_cursor")
                         if new_cursor:
-                            cls._cursors[open_kfid] = new_cursor
+                            cls._cursors[cursor_key] = new_cursor
 
                         msg_list = data.get("msg_list", [])
                         for msg in msg_list:
                             msg_id = msg.get("msgid")
-                            if msg_id and cls._deduplicator.is_duplicate(msg_id):
-                                continue
+                            if msg_id:
+                                dedupe_key = f"{site.id}:{msg_id}"
+                                if cls._deduplicator.is_duplicate(dedupe_key):
+                                    continue
 
                             # origin: 3表示客户发送，1,2表示客服/机器人，4表示系统
                             origin = msg.get("origin", 3)
@@ -211,8 +217,7 @@ class WeComKefuService:
             msg_id = xml_tree.find("MsgId").text if xml_tree.find("MsgId") is not None else None
 
             # 1. 去重逻辑
-            if msg_id and cls._deduplicator.is_duplicate(msg_id):
-                logger.info("微信客服忽略重复消息: msg_id=%s", msg_id)
+            if cls._deduplicator.check_and_log_duplicate(site.id, msg_id, "微信客服"):
                 return "success"
 
             # 微信客服消息事件类型
@@ -281,10 +286,11 @@ class WeComKefuService:
             return
 
         # 简单的频率限制，1分钟内只发一次欢迎语，避免刷屏
-        last_sent = cls._welcome_sent.get(from_user, 0)
+        welcome_key = f"{site.id}:{from_user}"
+        last_sent = cls._welcome_sent.get(welcome_key, 0)
         if time.time() - last_sent < 60:
             return
-        cls._welcome_sent[from_user] = time.time()
+        cls._welcome_sent[welcome_key] = time.time()
 
         await cls.send_message(
             corp_id=bot_config.get("corp_id"),

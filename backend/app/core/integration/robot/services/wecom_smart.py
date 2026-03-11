@@ -138,8 +138,8 @@ class WeComSmartService:
                 if not inbound_event:
                     return
 
-                if inbound_event.message_id and self._deduplicator.is_duplicate(
-                    inbound_event.message_id
+                if self._deduplicator.check_and_log_duplicate(
+                    config.site_id, inbound_event.message_id, "企微智能机器人"
                 ):
                     return
 

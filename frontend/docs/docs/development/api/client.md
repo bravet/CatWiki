@@ -33,18 +33,17 @@ Client API 不需要身份认证，可以直接访问。
 
 ### AI 对话
 
-- `POST /v1/chat/completions` - 创建聊天补全 (OpenAI 兼容接口)
+- `POST /v1/chat/completions` - 创建聊天补全（内部精简接口）
 
 ### 会话记录
 
-- `GET /v1/chat/sessions` - 获取会话列表（支持 tenant_slug, keyword 搜索，member_id 过滤）
+- `GET /v1/chat/sessions` - 获取会话列表（支持 site_id, keyword 搜索，member_id 过滤）
 - `GET /v1/chat/sessions/{thread_id}` - 获取会话详情
 - `GET /v1/chat/sessions/{thread_id}/messages` - 获取会话历史消息
 - `DELETE /v1/chat/sessions/{thread_id}` - 删除会话
 
 ### 机器人 Webhook
 
-- `GET/POST /v1/bot/wecom-smart` - 企业微信智能机器人（URL 验证 & 消息回调）
 - `GET/POST /v1/bot/wecom-kefu` - 企业微信客服（URL 验证 & 消息回调）
 - `GET/POST /v1/bot/wecom-app` - 企业微信应用（URL 验证 & 消息回调）
 
@@ -109,7 +108,7 @@ const site = response.data
 
 ```typescript
 const response = await apiClient.chatSessions.listChatSessions({
-  tenantSlug: "company-a", // 跨站点拉取
+  siteId: 1, // 按站点拉取
   keyword: "搜索内容",
   memberId: "user-123",
   page: 1,
@@ -125,11 +124,11 @@ const sessions = response.data.items
 const response = await fetch("/v1/chat/completions", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    messages: [{ role: "user", content: "你好" }],
-    stream: true,
-    filter: { site_id: 1 }
-  })
+    body: JSON.stringify({
+      message: "你好",
+      stream: true,
+      filter: { site_id: 1 }
+    })
 })
 ```
 

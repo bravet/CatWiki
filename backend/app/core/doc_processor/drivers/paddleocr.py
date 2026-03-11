@@ -178,7 +178,7 @@ class PaddleOCRDocProcessor(BaseDocProcessor):
             logger.error(f"PaddleOCR process failed: {e}", exc_info=True)
             raise e
 
-    async def check_health(self) -> bool:
+    async def is_healthy(self) -> bool:
         """
         检查 PaddleOCR 服务健康状态
         PaddleOCR health API 返回格式:

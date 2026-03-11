@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.integration.robot.crypto.wecom_kefu import WXBizXmlMsgCrypt
+from app.core.integration.robot.crypto.wecom import WXBizXmlMsgCrypt
 from app.crud.site import crud_site
 
 _WECOM_CONTEXT_META = {

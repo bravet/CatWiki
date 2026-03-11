@@ -12,5 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export { Sidebar } from './Sidebar'
-
+export { CollectionTree } from './CollectionTree'
+export { CreateCollectionDialog } from './CreateCollectionDialog'
+export { DocumentDirectory } from './DocumentDirectory'
+export { DocumentUploadDialog } from './DocumentUploadDialog'
+export { VectorRetrieveModal } from './VectorRetrieveModal'

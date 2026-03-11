@@ -21,10 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
+  Button,
+  Input,
+  ScrollArea,
+} from "@/components/ui"
 import { Send, Bot, User, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ClientSite } from "@/lib/api-client"

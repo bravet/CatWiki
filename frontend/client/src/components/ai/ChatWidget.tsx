@@ -19,8 +19,8 @@ import { Bot, X, Send, User, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAIChat } from "@/hooks"
 import { Streamdown } from "streamdown"
-import { MessageSources } from "@/components/ai/MessageSources"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { MessageSources } from "./MessageSources"
+import { ScrollArea } from "@/components/ui"
 import type { ClientSite } from "@/lib/api-client"
 
 interface ChatWidgetProps {

@@ -290,9 +290,9 @@ CatWiki 接入 RustFS/MinIO 存储，支持标准对象存储操作。
 | `POST` | `/completions` | 创建聊天补全 (OpenAI 兼容接口) | `ChatCompletionRequest` |
 
 **特性**:
-- 兼容 OpenAI Chat API 格式
-- 支持流式 (SSE) 和非流式响应
+- **内部专用接口**，采用精简的单条消息模型
 - 自动集成 RAG 检索
+- 支持流式 (SSE) 和非流式响应
 
 ---
 
@@ -302,15 +302,14 @@ CatWiki 接入 RustFS/MinIO 存储，支持标准对象存储操作。
 
 | 方法 | 路径 | 说明 | 参数 |
 |------|------|------|------|
-| `GET` | `/wecom-smart` | 企业微信智能机器人 URL 验证 | `msg_signature`, `timestamp`, `nonce`, `echostr`, `site_id` |
-| `POST` | `/wecom-smart` | 企业微信智能机器人消息回调 | `msg_signature`, `timestamp`, `nonce`, `site_id` |
 | `GET` | `/wecom-kefu` | 企业微信客服 URL 验证 | `msg_signature`, `timestamp`, `nonce`, `echostr`, `site_id` |
 | `POST` | `/wecom-kefu` | 企业微信客服消息回调 | `msg_signature`, `timestamp`, `nonce`, `site_id` |
 | `GET` | `/wecom-app` | 企业微信应用 URL 验证 | `msg_signature`, `timestamp`, `nonce`, `echostr`, `site_id` |
 | `POST` | `/wecom-app` | 企业微信应用消息回调 | `msg_signature`, `timestamp`, `nonce`, `site_id` |
 
 **特性**:
-- 支持多种企业微信集成方式
+- 支持企业微信客服、企业微信应用集成方式
+- 智能机器人（wecom-smart）已升级为长连接模式，无需配置 Webhook URL
 - 自动根据站点配置路由消息
 
 ---

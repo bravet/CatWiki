@@ -19,7 +19,6 @@ import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { api } from "@/lib/api-client"
 import { logError } from "@/lib/error-handler"
-import { PageLoading } from "@/components/ui/loading"
 import {
   BookOpen,
   ChevronRight,
@@ -31,11 +30,11 @@ import {
   Maximize2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { PageLoading, Input } from "@/components/ui"
+import { SiteCard } from "@/components/sites"
 import { AIChatLanding } from "@/components/ai"
-import { ClientSite } from "@/lib/api-client"
+import type { ClientSite } from "@/lib/api-client"
 import { env } from "@/lib/env"
-import { Input } from "@/components/ui/input"
-import { SiteCard } from "@/components/sites/SiteCard"
 
 export default function HomePage() {
   const router = useRouter()

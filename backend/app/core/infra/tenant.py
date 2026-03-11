@@ -19,9 +19,11 @@
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any
 
-# 定义租户 ID 上下文变量，默认为 None (表示全局视角)
-_tenant_context: ContextVar[int | None] = ContextVar("tenant_id", default=None)
+# 定义一个特殊的哨兵值，用于区分“未设置”和“显式设置为 None”
+_UNSET = object()
+_tenant_context: ContextVar[Any] = ContextVar("tenant_id", default=_UNSET)
 
 
 def set_current_tenant(tenant_id: int | None) -> None:
@@ -38,15 +40,16 @@ def get_current_tenant() -> int | None:
     用于数据库拦截器或业务代码
     """
     val = _tenant_context.get()
-    if val is not None:
+
+    # 如果显式设置了值（包括 None），则直接返回
+    if val is not _UNSET:
         return val
 
-    # 尝试加载 EE 版默认值 (例如支持平台全局视角)
+    # 只有在完全没有设置上下文的情况下（例如非 API 任务），才走版本兜底
     try:
         from app.core.infra.config import settings
 
         # 双重保险：只有配置为 enterprise 时才尝试加载 EE 逻辑
-        # 这防止了即使有代码但配置错误（或被攻击者手动放置了文件）的情况
         if settings.CATWIKI_EDITION != "enterprise":
             return 1
 

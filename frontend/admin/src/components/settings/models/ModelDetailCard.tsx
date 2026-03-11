@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronRight, Cpu } from "lucide-react"
 import { SingleModelConfig } from "./SingleModelConfig"
-import { MODEL_META } from "@/constants/models"
+import { MODEL_META } from "./constants"
 
 interface ModelDetailCardProps {
   modelType: "chat" | "embedding" | "rerank" | "vl"

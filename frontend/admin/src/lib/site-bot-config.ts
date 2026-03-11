@@ -14,9 +14,7 @@
 
 import { initialConfigs, type BotConfig } from "@/types/settings"
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
+import { isRecord } from "@/lib/utils"
 
 const mergeSection = <K extends keyof BotConfig>(baseSection: BotConfig[K], rawValue: unknown): BotConfig[K] => {
   if (!isRecord(rawValue) || !baseSection) {

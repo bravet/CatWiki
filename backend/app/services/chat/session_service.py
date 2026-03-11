@@ -21,6 +21,7 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.common.utils import Paginator
 from app.models.chat_session import ChatSession
 
 logger = logging.getLogger(__name__)
@@ -163,7 +164,7 @@ class ChatSessionService:
         keyword: str | None = None,
         page: int = 1,
         size: int = 20,
-    ) -> tuple[list[ChatSession], int]:
+    ) -> tuple[list[ChatSession], Paginator]:
         """获取会话列表
 
         Args:
@@ -173,47 +174,48 @@ class ChatSessionService:
         """
         from sqlalchemy import or_
 
-        query = select(ChatSession)
         count_query = select(func.count(ChatSession.id))
+        if tenant_id is not None:
+            count_query = count_query.where(ChatSession.tenant_id == tenant_id)
+        if site_id is not None:
+            count_query = count_query.where(ChatSession.site_id == site_id)
+        if member_id is not None:
+            count_query = count_query.where(ChatSession.member_id == member_id)
+        if keyword:
+            keyword_filter = or_(
+                ChatSession.title.ilike(f"%{keyword}%"),
+                ChatSession.last_message.ilike(f"%{keyword}%"),
+            )
+            count_query = count_query.where(keyword_filter)
 
+        count_result = await db.execute(count_query)
+        total = count_result.scalar() or 0
+        paginator = Paginator(page=page, size=size, total=total)
+
+        query = select(ChatSession)
         if tenant_id is not None:
             query = query.where(ChatSession.tenant_id == tenant_id)
-            count_query = count_query.where(ChatSession.tenant_id == tenant_id)
-
         if site_id is not None:
             query = query.where(ChatSession.site_id == site_id)
-            count_query = count_query.where(ChatSession.site_id == site_id)
-
         if member_id is not None:
             query = query.where(ChatSession.member_id == member_id)
-            count_query = count_query.where(ChatSession.member_id == member_id)
-
-        # 关键词搜索：匹配标题或最后消息
         if keyword:
             keyword_filter = or_(
                 ChatSession.title.ilike(f"%{keyword}%"),
                 ChatSession.last_message.ilike(f"%{keyword}%"),
             )
             query = query.where(keyword_filter)
-            count_query = count_query.where(keyword_filter)
 
-        # 按更新时间倒序
-        query = query.order_by(desc(ChatSession.updated_at))
-
-        # 分页
-        offset = (page - 1) * size
-        query = query.offset(offset).limit(size)
+        # 按更新时间倒序，分页
+        query = query.order_by(desc(ChatSession.updated_at)).offset(paginator.skip).limit(paginator.size)
 
         result = await db.execute(query)
         sessions = list(result.scalars().all())
 
-        count_result = await db.execute(count_query)
-        total = count_result.scalar() or 0
-
-        return sessions, total
+        return sessions, paginator
 
     @staticmethod
-    async def get_by_thread_id(
+    async def get_session_by_thread_id(
         db: AsyncSession,
         thread_id: str,
     ) -> ChatSession | None:
@@ -230,7 +232,7 @@ class ChatSessionService:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def delete_by_thread_id(
+    async def delete_session_by_thread_id(
         db: AsyncSession,
         thread_id: str,
     ) -> bool:
