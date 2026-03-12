@@ -18,15 +18,24 @@ chat 子包 - 聊天相关服务
 提供以下服务:
 - ChatSessionService: 会话 CRUD 和统计
 - ChatHistoryService: 消息持久化
-- ChatService: 聊天核心逻辑 (现在已经移入 app.services.chat.chat_service 中)
+- ChatService: 聊天核心逻辑
 """
 
-from app.services.chat.chat_service import ChatService  # noqa: F401
-from app.services.chat.history_service import ChatHistoryService  # noqa: F401
-from app.services.chat.session_service import ChatSessionService  # noqa: F401
+from app.services.chat.chat_service import ChatService, get_chat_service  # noqa: F401
+from app.services.chat.history_service import (  # noqa: F401
+    ChatHistoryService,
+    get_chat_history_service,
+)
+from app.services.chat.session_service import (  # noqa: F401
+    ChatSessionService,
+    get_chat_session_service,
+)
 
 __all__ = [
     "ChatSessionService",
+    "get_chat_session_service",
     "ChatHistoryService",
+    "get_chat_history_service",
     "ChatService",
+    "get_chat_service",
 ]

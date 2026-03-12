@@ -17,10 +17,8 @@
 """
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.web.deps import get_current_user_with_tenant, get_valid_site
-from app.db.database import get_db
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.collection import (
@@ -31,7 +29,7 @@ from app.schemas.collection import (
     MoveCollectionRequest,
 )
 from app.schemas.response import ApiResponse, PaginatedResponse
-from app.services.collection_service import CollectionService
+from app.services.collection_service import CollectionService, get_collection_service
 
 router = APIRouter()
 
@@ -45,13 +43,12 @@ async def list_collections(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页大小"),
     parent_id: int | None = Query(None, description="父合集ID，为空则获取根合集"),
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     site: Site = Depends(get_valid_site),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[Collection]]:
     """获取合集列表"""
-    collections, paginator = await CollectionService.list_collections(
-        db,
+    collections, paginator = await service.list_collections(
         site_id=site.id,
         tenant_id=current_user.tenant_id,
         parent_id=parent_id,
@@ -74,12 +71,12 @@ async def get_collection_tree(
     type: str | None = Query(
         None, description="树节点类型：不指定则显示合集和文档，'collection'则只显示合集"
     ),
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     site: Site = Depends(get_valid_site),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[list[CollectionTree]]:
-    tree = await CollectionService.get_collection_tree(
-        db, site_id=site.id, show_type=type, tenant_id=current_user.tenant_id
+    tree = await service.get_collection_tree(
+        site_id=site.id, show_type=type, tenant_id=current_user.tenant_id
     )
     return ApiResponse.ok(data=tree, msg="获取成功")
 
@@ -89,12 +86,12 @@ async def get_collection_tree(
 )
 async def get_collection(
     collection_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Collection]:
     """获取合集详情"""
-    collection = await CollectionService.get_collection(
-        db, collection_id=collection_id, tenant_id=current_user.tenant_id
+    collection = await service.get_collection(
+        collection_id=collection_id, tenant_id=current_user.tenant_id
     )
     return ApiResponse.ok(data=collection, msg="获取成功")
 
@@ -107,13 +104,11 @@ async def get_collection(
 )
 async def create_collection(
     collection_in: CollectionCreate,
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Collection]:
     """创建合集"""
-    collection = await CollectionService.create_collection(
-        db, collection_in, tenant_id=current_user.tenant_id
-    )
+    collection = await service.create_collection(collection_in, tenant_id=current_user.tenant_id)
     return ApiResponse.ok(data=collection, msg="创建成功")
 
 
@@ -123,12 +118,12 @@ async def create_collection(
 async def update_collection(
     collection_id: int,
     collection_in: CollectionUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Collection]:
     """更新合集"""
-    collection = await CollectionService.update_collection(
-        db, collection_id, collection_in, tenant_id=current_user.tenant_id
+    collection = await service.update_collection(
+        collection_id, collection_in, tenant_id=current_user.tenant_id
     )
     return ApiResponse.ok(data=collection, msg="更新成功")
 
@@ -138,11 +133,11 @@ async def update_collection(
 )
 async def delete_collection(
     collection_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[None]:
     """删除合集"""
-    await CollectionService.delete_collection(db, collection_id, tenant_id=current_user.tenant_id)
+    await service.delete_collection(collection_id, tenant_id=current_user.tenant_id)
     return ApiResponse.ok(msg="删除成功")
 
 
@@ -154,7 +149,7 @@ async def delete_collection(
 async def move_collection(
     collection_id: int,
     move_request: MoveCollectionRequest,
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Collection]:
     """
@@ -164,8 +159,7 @@ async def move_collection(
     1. 更新合集的 parent_id
     2. 重新计算目标父级下所有合集的 order，确保顺序连续
     """
-    collection = await CollectionService.move_collection(
-        db,
+    collection = await service.move_collection(
         collection_id,
         move_request.target_parent_id,
         move_request.target_position,

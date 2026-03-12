@@ -17,17 +17,15 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
 from app.schemas.chat_session import (
     ChatSessionListResponse,
     ChatSessionMessagesResponse,
     ChatSessionResponse,
 )
 from app.schemas.response import ApiResponse
-from app.services.chat.history_service import ChatHistoryService
-from app.services.chat.session_service import ChatSessionService
+from app.services.chat.history_service import ChatHistoryService, get_chat_history_service
+from app.services.chat.session_service import ChatSessionService, get_chat_session_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,7 +43,7 @@ async def list_sessions(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     tenant_id: int | None = Query(None, description="租户ID"),
-    db: AsyncSession = Depends(get_db),
+    service: ChatSessionService = Depends(get_chat_session_service),
 ) -> ApiResponse[ChatSessionListResponse]:
     """
     获取会话列表
@@ -53,8 +51,7 @@ async def list_sessions(
     支持按租户、站点和会员过滤，支持关键词搜索，按更新时间倒序排列。
     """
 
-    sessions, paginator = await ChatSessionService.list_sessions(
-        db=db,
+    sessions, paginator = await service.list_sessions(
         tenant_id=tenant_id,
         site_id=site_id,
         member_id=member_id,
@@ -80,14 +77,14 @@ async def list_sessions(
 )
 async def get_session(
     thread_id: str,
-    db: AsyncSession = Depends(get_db),
+    service: ChatSessionService = Depends(get_chat_session_service),
 ) -> ApiResponse[ChatSessionResponse]:
     """
     获取会话详情
 
     返回会话元数据。如需获取完整消息历史，请调用 /chat/completions 或使用 LangGraph API。
     """
-    session = await ChatSessionService.get_session_by_thread_id(db=db, thread_id=thread_id)
+    session = await service.get_session_by_thread_id(thread_id=thread_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -102,14 +99,14 @@ async def get_session(
 )
 async def get_session_messages(
     thread_id: str,
-    db: AsyncSession = Depends(get_db),
+    service: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ApiResponse[ChatSessionMessagesResponse]:
     """
     获取单个会话的完整聊天历史信息
 
     从数据库全量历史表中读取所有消息。
     """
-    result = await ChatHistoryService.get_session_messages(db=db, thread_id=thread_id)
+    result = await service.get_session_messages(thread_id=thread_id)
 
     return ApiResponse.ok(
         data=ChatSessionMessagesResponse(
@@ -124,14 +121,14 @@ async def get_session_messages(
 )
 async def delete_session(
     thread_id: str,
-    db: AsyncSession = Depends(get_db),
+    service: ChatSessionService = Depends(get_chat_session_service),
 ) -> ApiResponse[dict]:
     """
     删除会话
 
     删除会话元数据记录，并同步删除 LangGraph Checkpointer 中的消息历史。
     """
-    success = await ChatSessionService.delete_session_by_thread_id(db=db, thread_id=thread_id)
+    success = await service.delete_session_by_thread_id(thread_id=thread_id)
 
     if not success:
         raise HTTPException(status_code=404, detail="会话不存在")

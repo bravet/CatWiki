@@ -12,30 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""会话管理服务 - 会话 CRUD 和统计"""
-
 import logging
 from datetime import datetime, timedelta
 
+from fastapi import Depends
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.utils import Paginator
+from app.db.database import get_db
 from app.models.chat_session import ChatSession
 
 logger = logging.getLogger(__name__)
 
 
 class ChatSessionService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     """会话管理服务
 
     提供会话的 CRUD 操作，与 LangGraph Checkpointer 配合使用。
     """
 
-    @staticmethod
     async def create_or_update(
-        db: AsyncSession,
+        self,
         thread_id: str,
         site_id: int,
         user_message: str,
@@ -51,7 +53,9 @@ class ChatSessionService:
         """
         try:
             # 1. 尝试查找现有会话
-            result = await db.execute(select(ChatSession).where(ChatSession.thread_id == thread_id))
+            result = await self.db.execute(
+                select(ChatSession).where(ChatSession.thread_id == thread_id)
+            )
             session = result.scalar_one_or_none()
 
             if session:
@@ -64,8 +68,8 @@ class ChatSessionService:
                 logger.info(
                     f"📝 [ChatSession] Updated: thread_id={thread_id}, count={session.message_count}"
                 )
-                await db.commit()
-                await db.refresh(session)
+                await self.db.commit()
+                await self.db.refresh(session)
             else:
                 # 创建新会话
                 session = ChatSession(
@@ -78,16 +82,16 @@ class ChatSessionService:
                     message_count=1,
                     tenant_id=tenant_id,
                 )
-                db.add(session)
+                self.db.add(session)
                 try:
-                    await db.commit()
-                    await db.refresh(session)
+                    await self.db.commit()
+                    await self.db.refresh(session)
                     logger.info(
                         f"✨ [ChatSession] Created: thread_id={thread_id}, site_id={site_id}"
                     )
                 except IntegrityError as ie:
                     # 并发冲突：可能在查询后被其他请求创建了，也可能是其他约束冲突
-                    await db.rollback()
+                    await self.db.rollback()
 
                     if _retry_count >= 1:
                         # 超过重试次数，可能是非并发导致的约束错误（如 tenant_id IS NULL）
@@ -99,8 +103,7 @@ class ChatSessionService:
                     logger.warning(
                         f"⚠️ [ChatSession] IntegrityError for {thread_id}, retrying as update. Error: {ie}"
                     )
-                    return await ChatSessionService.create_or_update(
-                        db,
+                    return await self.create_or_update(
                         thread_id,
                         site_id,
                         user_message,
@@ -115,9 +118,8 @@ class ChatSessionService:
             logger.error(f"❌ [ChatSession] Error in create_or_update: {e}")
             raise
 
-    @staticmethod
     async def update_assistant_response(
-        db: AsyncSession,
+        self,
         thread_id: str,
         assistant_message: str,
     ) -> ChatSession | None:
@@ -127,7 +129,6 @@ class ChatSessionService:
         使用原子更新以避免计数器并发问题。
 
         Args:
-            db: 数据库会话
             thread_id: LangGraph thread_id
             assistant_message: 助手回复内容
 
@@ -135,7 +136,7 @@ class ChatSessionService:
             ChatSession 实例，如果不存在返回 None
         """
         # 原子更新 message_count
-        await db.execute(
+        await self.db.execute(
             update(ChatSession)
             .where(ChatSession.thread_id == thread_id)
             .values(
@@ -144,10 +145,12 @@ class ChatSessionService:
                 message_count=ChatSession.message_count + 1,
             )
         )
-        await db.commit()
+        await self.db.commit()
 
         # 获取更新后的对象返回
-        result = await db.execute(select(ChatSession).where(ChatSession.thread_id == thread_id))
+        result = await self.db.execute(
+            select(ChatSession).where(ChatSession.thread_id == thread_id)
+        )
         session = result.scalar_one_or_none()
 
         if session:
@@ -155,9 +158,8 @@ class ChatSessionService:
 
         return session
 
-    @staticmethod
     async def list_sessions(
-        db: AsyncSession,
+        self,
         tenant_id: int | None = None,
         site_id: int | None = None,
         member_id: str | None = None,
@@ -188,7 +190,7 @@ class ChatSessionService:
             )
             count_query = count_query.where(keyword_filter)
 
-        count_result = await db.execute(count_query)
+        count_result = await self.db.execute(count_query)
         total = count_result.scalar() or 0
         paginator = Paginator(page=page, size=size, total=total)
 
@@ -213,48 +215,48 @@ class ChatSessionService:
             .limit(paginator.size)
         )
 
-        result = await db.execute(query)
+        result = await self.db.execute(query)
         sessions = list(result.scalars().all())
 
         return sessions, paginator
 
-    @staticmethod
     async def get_session_by_thread_id(
-        db: AsyncSession,
+        self,
         thread_id: str,
     ) -> ChatSession | None:
         """根据 thread_id 获取会话
 
         Args:
-            db: 数据库会话
             thread_id: LangGraph thread_id
 
         Returns:
             ChatSession 实例，如果不存在返回 None
         """
-        result = await db.execute(select(ChatSession).where(ChatSession.thread_id == thread_id))
+        result = await self.db.execute(
+            select(ChatSession).where(ChatSession.thread_id == thread_id)
+        )
         return result.scalar_one_or_none()
 
-    @staticmethod
     async def delete_session_by_thread_id(
-        db: AsyncSession,
+        self,
         thread_id: str,
     ) -> bool:
         """删除会话
 
         Args:
-            db: 数据库会话
             thread_id: LangGraph thread_id
 
         Returns:
             是否删除成功
         """
-        result = await db.execute(select(ChatSession).where(ChatSession.thread_id == thread_id))
+        result = await self.db.execute(
+            select(ChatSession).where(ChatSession.thread_id == thread_id)
+        )
         session = result.scalar_one_or_none()
 
         if session:
-            await db.delete(session)
-            await db.commit()
+            await self.db.delete(session)
+            await self.db.commit()
             logger.info(f"🗑️ [ChatSession] Deleted: thread_id={thread_id}")
 
             # 同步清理 Checkpointer 中的消息历史，防止数据孤岛
@@ -264,10 +266,10 @@ class ChatSessionService:
                 # 手动删除 LangGraph 系统表中的相关记录
                 # 涉及表: checkpoints, checkpoint_blobs, checkpoint_writes
                 for table in ["checkpoints", "checkpoint_blobs", "checkpoint_writes"]:
-                    await db.execute(
+                    await self.db.execute(
                         text(f"DELETE FROM {table} WHERE thread_id = :tid"), {"tid": thread_id}
                     )
-                await db.commit()
+                await self.db.commit()
                 logger.info(
                     f"🧹 [ChatSession] LangGraph checkpoints cleaned: thread_id={thread_id}"
                 )
@@ -278,31 +280,29 @@ class ChatSessionService:
 
         return False
 
-    @staticmethod
     async def get_stats(
-        db: AsyncSession,
+        self,
         site_id: int | None = None,
     ) -> dict:
         """获取会话统计
 
         Args:
-            db: 数据库会话
             site_id: 站点ID（可选，过滤）
 
         Returns:
             统计数据字典
         """
         # 1. 获取概览数据
-        overview = await ChatSessionService._get_overview_stats(db, site_id)
+        overview = await self._get_overview_stats(site_id)
 
         # 2. 获取趋势数据
-        trends = await ChatSessionService._get_trends(db, site_id)
+        trends = await self._get_trends(site_id)
 
         # 3. 获取今日数据
-        today_stats = await ChatSessionService._get_today_stats(db, site_id)
+        today_stats = await self._get_today_stats(site_id)
 
         # 4. 获取最近会话
-        recent_sessions = await ChatSessionService._get_recent_sessions(db, site_id)
+        recent_sessions = await self._get_recent_sessions(site_id)
 
         return {
             "total_sessions": overview["total_sessions"],
@@ -314,8 +314,7 @@ class ChatSessionService:
             "recent_sessions": recent_sessions,
         }
 
-    @staticmethod
-    async def _get_overview_stats(db: AsyncSession, site_id: int | None) -> dict:
+    async def _get_overview_stats(self, site_id: int | None) -> dict:
         """获取总览统计"""
 
         # 基础查询构建器
@@ -326,27 +325,28 @@ class ChatSessionService:
 
         # 总会话数
         total_sessions = (
-            await db.execute(build_query(select(func.count(ChatSession.id))))
+            await self.db.execute(build_query(select(func.count(ChatSession.id))))
         ).scalar() or 0
 
         # 总消息数
         total_messages = (
-            await db.execute(build_query(select(func.sum(ChatSession.message_count))))
+            await self.db.execute(build_query(select(func.sum(ChatSession.message_count))))
         ).scalar() or 0
 
         # 活跃用户数
         active_users = (
-            await db.execute(build_query(select(func.count(func.distinct(ChatSession.member_id)))))
+            await self.db.execute(
+                build_query(select(func.count(func.distinct(ChatSession.member_id))))
+            )
         ).scalar() or 0
 
         return {
             "total_sessions": total_sessions,
-            "total_messages": int(total_messages),
+            "total_messages": int(total_messages or 0),
             "active_users": active_users,
         }
 
-    @staticmethod
-    async def _get_today_stats(db: AsyncSession, site_id: int | None) -> dict:
+    async def _get_today_stats(self, site_id: int | None) -> dict:
         """获取今日统计"""
         now = datetime.now()
         start_of_day = datetime(now.year, now.month, now.day)
@@ -355,11 +355,10 @@ class ChatSessionService:
         if site_id is not None:
             query = query.where(ChatSession.site_id == site_id)
 
-        new_sessions = (await db.execute(query)).scalar() or 0
+        new_sessions = (await self.db.execute(query)).scalar() or 0
         return {"new_sessions": new_sessions}
 
-    @staticmethod
-    async def _get_trends(db: AsyncSession, site_id: int | None) -> list[dict]:
+    async def _get_trends(self, site_id: int | None) -> list[dict]:
         """获取最近7天趋势"""
         now = datetime.now()
         trends = []
@@ -381,8 +380,8 @@ class ChatSessionService:
                 session_query = session_query.where(ChatSession.site_id == site_id)
                 message_query = message_query.where(ChatSession.site_id == site_id)
 
-            session_count = (await db.execute(session_query)).scalar() or 0
-            message_count = int((await db.execute(message_query)).scalar() or 0)
+            session_count = (await self.db.execute(session_query)).scalar() or 0
+            message_count = int((await self.db.execute(message_query)).scalar() or 0)
 
             trends.append(
                 {
@@ -395,14 +394,13 @@ class ChatSessionService:
         logging.info(f"Calculated AI Stats Trends: {trends}")
         return trends
 
-    @staticmethod
-    async def _get_recent_sessions(db: AsyncSession, site_id: int | None) -> list[dict]:
+    async def _get_recent_sessions(self, site_id: int | None) -> list[dict]:
         """获取最近会话列表"""
         query = select(ChatSession).order_by(desc(ChatSession.created_at)).limit(5)
         if site_id is not None:
             query = query.where(ChatSession.site_id == site_id)
 
-        result = await db.execute(query)
+        result = await self.db.execute(query)
         sessions = result.scalars().all()
 
         return [
@@ -414,3 +412,8 @@ class ChatSessionService:
             }
             for s in sessions
         ]
+
+
+def get_chat_session_service(db: AsyncSession = Depends(get_db)) -> ChatSessionService:
+    """获取 ChatSessionService 实例的依赖注入函数"""
+    return ChatSessionService(db)

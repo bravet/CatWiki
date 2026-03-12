@@ -8,7 +8,15 @@ Client API 不需要身份认证，可以直接访问。
 
 ---
 
+---
+
 ## 📚 API 端点
+
+> [!IMPORTANT]
+> **关于路径中的冒号 (`:`)**
+> 本项目遵循 Google API 设计指南中的自定义方法规范。诸如 `:tree`, `:bySlug`, `:info` 等后缀是直接加在资源路径后的动作标识，**中间没有斜杠**。
+> - ✅ 正确：`/v1/sites:bySlug/my-site`
+> - ❌ 错误：`/v1/sites/bySlug/my-site`
 
 ### 站点信息
 

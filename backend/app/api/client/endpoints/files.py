@@ -20,10 +20,8 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from app.core.infra.rustfs import RustFSService
-from app.core.web.deps import get_rustfs
 from app.schemas.response import ApiResponse
-from app.services.file_service import FileService
+from app.services.file_service import FileService, get_file_service
 
 router = APIRouter()
 
@@ -31,10 +29,10 @@ router = APIRouter()
 @router.get("/{object_name:path}:download", operation_id="downloadClientFile")
 async def download_file(
     object_name: str,
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
 ):
     """下载文件（客户端）"""
-    content, content_type, filename = await FileService.download_file(rustfs, object_name)
+    content, content_type, filename = await service.download_file(object_name)
     return Response(
         content=content,
         media_type=content_type,
@@ -47,10 +45,10 @@ async def download_file(
 )
 async def get_file_info(
     object_name: str,
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
 ) -> ApiResponse[dict]:
     """获取文件信息（客户端）"""
-    data = await FileService.get_client_file_info(rustfs, object_name)
+    data = await service.get_client_file_info(object_name)
     return ApiResponse.ok(data=data, msg="获取成功")
 
 
@@ -65,10 +63,10 @@ async def get_presigned_url(
     # 客户端接口参数 expires_hours 虽然在旧代码里有 Query，但实际上 get_public_url(False) 并不使用它。
     # 这里我们保留参数以保持接口兼容，但不传递给 get_public_url。
     expires_hours: int = Query(1, ge=1, le=24, description="URL 有效期（小时，最长 24 小时）"),
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
 ) -> ApiResponse[dict]:
     """获取文件的访问 URL（客户端）"""
-    url = await FileService.get_public_url(rustfs, object_name)
+    url = await service.get_public_url(object_name)
     return ApiResponse.ok(
         data={
             "object_name": object_name,

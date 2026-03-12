@@ -17,20 +17,23 @@
 import logging
 from datetime import UTC, datetime
 
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.infra.config import settings
 from app.core.infra.rustfs import get_rustfs_service
+from app.db.database import get_db
 
 
 class HealthService:
-    @staticmethod
-    async def get_health_status(db: AsyncSession, detailed: bool = False) -> dict:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def get_health_status(self, detailed: bool = False) -> dict:
         """获取系统健康状态
 
         Args:
-            db: 数据库会话
             detailed: 是否进行详细检查（包含对象存储等）
         """
         logger = logging.getLogger(__name__)
@@ -47,7 +50,7 @@ class HealthService:
 
         # 1. 检查数据库
         try:
-            await db.execute(text("SELECT 1"))
+            await self.db.execute(text("SELECT 1"))
             checks["database"] = "ok"
         except Exception as e:
             checks["database"] = f"error: {str(e)}"
@@ -84,3 +87,8 @@ class HealthService:
             "timestamp": datetime.now(UTC).isoformat(),
             "checks": checks,
         }
+
+
+def get_health_service(db: AsyncSession = Depends(get_db)) -> HealthService:
+    """获取 HealthService 实例的依赖注入函数"""
+    return HealthService(db)

@@ -20,11 +20,10 @@
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
 
-from app.core.infra.rustfs import RustFSService
-from app.core.web.deps import get_current_user_with_tenant, get_rustfs
+from app.core.web.deps import get_current_user_with_tenant
 from app.models.user import User
 from app.schemas.response import ApiResponse, PaginatedResponse
-from app.services.file_service import FileService
+from app.services.file_service import FileService, get_file_service
 
 router = APIRouter()
 
@@ -33,11 +32,11 @@ router = APIRouter()
 async def upload_file(
     file: UploadFile = File(..., description="要上传的文件"),
     folder: str = Query("uploads", description="存储文件夹"),
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """上传文件到 RustFS"""
-    data = await FileService.upload_file(rustfs, file, folder, current_user)
+    data = await service.upload_file(file, folder, current_user)
     return ApiResponse.ok(data=data, msg="文件上传成功")
 
 
@@ -45,11 +44,11 @@ async def upload_file(
 async def upload_multiple_files(
     files: list[UploadFile] = File(..., description="要上传的多个文件"),
     folder: str = Query("uploads", description="存储文件夹"),
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """批量上传文件到 RustFS"""
-    data = await FileService.batch_upload_files(rustfs, files, folder, current_user)
+    data = await service.batch_upload_files(files, folder, current_user)
     return ApiResponse.ok(
         data=data,
         msg=f"批量上传完成，成功 {data['success_count']} 个，失败 {data['error_count']} 个",
@@ -59,11 +58,11 @@ async def upload_multiple_files(
 @router.get("/{object_name:path}:download", operation_id="downloadAdminFile")
 async def download_file(
     object_name: str,
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ):
     """下载文件"""
-    content, content_type, filename = await FileService.download_file(rustfs, object_name)
+    content, content_type, filename = await service.download_file(object_name)
     return Response(
         content=content,
         media_type=content_type,
@@ -76,11 +75,11 @@ async def download_file(
 )
 async def delete_file(
     object_name: str,
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[None]:
     """删除文件"""
-    await FileService.delete_file(rustfs, object_name)
+    await service.delete_file(object_name)
     return ApiResponse.ok(msg="文件删除成功")
 
 
@@ -90,11 +89,11 @@ async def list_files(
     recursive: bool = Query(True, description="是否递归列出"),
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[dict]]:
     """列出文件"""
-    files, paginator = await FileService.list_files(rustfs, prefix, recursive, page, size)
+    files, paginator = await service.list_files(prefix, recursive, page, size)
     return ApiResponse.ok(
         data=PaginatedResponse(list=files, pagination=paginator.to_pagination_info()),
         msg="获取成功",
@@ -106,11 +105,11 @@ async def list_files(
 )
 async def get_file_info(
     object_name: str,
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """获取文件信息"""
-    data = await FileService.get_file_info(rustfs, object_name)
+    data = await service.get_file_info(object_name)
     return ApiResponse.ok(data=data, msg="获取成功")
 
 
@@ -122,11 +121,11 @@ async def get_file_info(
 async def get_presigned_url(
     object_name: str,
     expires_hours: int = Query(1, ge=1, le=168, description="URL 有效期（小时）"),
-    rustfs: RustFSService = Depends(get_rustfs),
+    service: FileService = Depends(get_file_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """获取文件的预签名 URL"""
-    url = await FileService.get_presigned_url(rustfs, object_name, expires_hours)
+    url = await service.get_presigned_url(object_name, expires_hours)
     return ApiResponse.ok(
         data={
             "object_name": object_name,

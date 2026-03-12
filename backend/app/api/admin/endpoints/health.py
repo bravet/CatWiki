@@ -15,11 +15,9 @@
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
 from app.schemas.response import ApiResponse, HealthResponse
-from app.services.health_service import HealthService
+from app.services.health_service import HealthService, get_health_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,11 +28,11 @@ router = APIRouter()
     # 由于 HealthResponse 可能需要匹配 HealthService 返回的结构，如果 schema 有差异可能需要更新。
     response_model=ApiResponse[HealthResponse],
     summary="健康检查",
-    description="检查 API 服务、数据库连接和对象存储状态",
+    description="检查 API 服务、数据库连接 and 对象存储状态",
     operation_id="getAdminHealth",
 )
 async def health_check(
-    db: AsyncSession = Depends(get_db),
+    service: HealthService = Depends(get_health_service),
 ) -> ApiResponse[HealthResponse]:
     """
     增强的健康检查接口 (Admin)
@@ -43,5 +41,5 @@ async def health_check(
     - 检查 RustFS 对象存储状态 (Detailed)
     - 返回版本和环境信息
     """
-    health_status = await HealthService.get_health_status(db, detailed=True)
+    health_status = await service.get_health_status(detailed=True)
     return ApiResponse.ok(data=health_status)

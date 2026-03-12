@@ -28,7 +28,9 @@ from app.schemas.document import DocumentCreate, DocumentUpdate
 class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
     """文档 CRUD 操作（异步版本）"""
 
-    async def create(self, db: AsyncSession, *, obj_in: DocumentCreate) -> Document:
+    async def create(
+        self, db: AsyncSession, *, obj_in: DocumentCreate, auto_commit: bool = True
+    ) -> Document:
         """创建文档（自动计算阅读时间与租户 ID）"""
         from app.core.common.reading_time import calculate_reading_time
         from app.core.infra.tenant import get_current_tenant
@@ -49,8 +51,11 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         # 创建文档对象
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(db_obj)
+        else:
+            await db.flush()
 
         return db_obj
 

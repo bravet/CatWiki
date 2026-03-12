@@ -15,11 +15,9 @@
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
 from app.schemas.response import ApiResponse, HealthResponse
-from app.services.health_service import HealthService
+from app.services.health_service import HealthService, get_health_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,9 +30,11 @@ router = APIRouter()
     description="检查 API 服务状态并返回版本信息",
     operation_id="getClientHealth",
 )
-async def health_check(db: AsyncSession = Depends(get_db)) -> ApiResponse[HealthResponse]:
+async def health_check(
+    service: HealthService = Depends(get_health_service),
+) -> ApiResponse[HealthResponse]:
     """
     客户端专用的健康检查接口
     """
-    health_status = await HealthService.get_health_status(db, detailed=False)
+    health_status = await service.get_health_status(detailed=False)
     return ApiResponse.ok(data=health_status)

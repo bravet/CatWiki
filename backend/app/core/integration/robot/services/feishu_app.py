@@ -219,13 +219,8 @@ class FeishuRobotService:
         )
 
         # 调用统一编排流程
-        # 注意：这里不再需要手动创建 db session，orchestrate_reply 内部会处理推理逻辑
-        from fastapi import BackgroundTasks
-
-        bt = BackgroundTasks()
-        await RobotOrchestrator.orchestrate_reply(
+        # 注意：这里不再需要手动创建 db session，orchestrate_as_task 内部会处理推理逻辑
+        await RobotOrchestrator.orchestrate_as_task(
             adapter=adapter,
             session=session,
-            background_tasks=bt,
         )
-        await bt()

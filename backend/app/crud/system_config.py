@@ -87,7 +87,13 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
         return result.scalar_one()
 
     async def update_by_key(
-        self, db: AsyncSession, *, config_key: str, config_value: dict, tenant_id: int | None = None
+        self,
+        db: AsyncSession,
+        *,
+        config_key: str,
+        config_value: dict,
+        tenant_id: int | None = None,
+        auto_commit: bool = True,
     ) -> SystemConfig:
         """根据配置键更新配置（tenant_id 为 None 时避免重复写入）。"""
         from sqlalchemy.dialects.postgresql import insert
@@ -100,8 +106,11 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
                 existing.config_value = config_value
                 existing.is_active = True
                 db.add(existing)
-                await db.commit()
-                await db.refresh(existing)
+                if auto_commit:
+                    await db.commit()
+                    await db.refresh(existing)
+                else:
+                    await db.flush()
                 return existing
 
             db_obj = SystemConfig(
@@ -111,8 +120,11 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
                 is_active=True,
             )
             db.add(db_obj)
-            await db.commit()
-            await db.refresh(db_obj)
+            if auto_commit:
+                await db.commit()
+                await db.refresh(db_obj)
+            else:
+                await db.flush()
             return db_obj
 
         stmt = insert(SystemConfig).values(
@@ -130,10 +142,16 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
         ).returning(SystemConfig)
 
         result = await db.execute(upsert_stmt)
-        await db.commit()
+        if auto_commit:
+            await db.commit()
+        else:
+            await db.flush()
+
         db_config = result.scalar_one_or_none()
 
         if db_config:
+            if auto_commit:
+                await db.refresh(db_config)
             return db_config
 
         # fallback: 保证一定能够返回内容

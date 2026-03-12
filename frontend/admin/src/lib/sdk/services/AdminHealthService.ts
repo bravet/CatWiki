@@ -9,7 +9,7 @@ export class AdminHealthService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
     /**
      * 健康检查
-     * 检查 API 服务、数据库连接和对象存储状态
+     * 检查 API 服务、数据库连接 and 对象存储状态
      * @returns ApiResponse_HealthResponse_ Successful Response
      * @throws ApiError
      */

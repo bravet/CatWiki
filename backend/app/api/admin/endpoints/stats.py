@@ -17,14 +17,12 @@
 """
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.web.deps import get_current_user_with_tenant
-from app.db.database import get_db
 from app.models.user import User
 from app.schemas.response import ApiResponse
 from app.schemas.stats import SiteStats
-from app.services.stats import StatsService
+from app.services.stats.stats_service import StatsService, get_stats_service
 
 router = APIRouter()
 
@@ -32,7 +30,7 @@ router = APIRouter()
 @router.get(":siteStats", response_model=ApiResponse[SiteStats], operation_id="getAdminSiteStats")
 async def get_site_stats(
     site_id: int = Query(..., description="站点ID"),
-    db: AsyncSession = Depends(get_db),
+    service: StatsService = Depends(get_stats_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[SiteStats]:
     """获取站点统计数据
@@ -42,6 +40,6 @@ async def get_site_stats(
         - total_views: 总访问次数
     """
 
-    stats = await StatsService.get_site_stats(db, site_id=site_id)
+    stats = await service.get_site_stats(site_id=site_id)
 
     return ApiResponse.ok(data=SiteStats(**stats), msg="获取成功")

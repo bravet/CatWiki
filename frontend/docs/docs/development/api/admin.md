@@ -30,7 +30,15 @@ headers: {
 
 ---
 
+---
+
 ## 📚 API 端点
+
+> [!IMPORTANT]
+> **关于路径中的冒号 (`:`)**
+> 本项目遵循 Google API 设计指南中的自定义方法规范。诸如 `:tree`, `:move`, `:upload` 等后缀是直接加在资源路径后的动作标识，**中间没有斜杠**。
+> - ✅ 正确：`/admin/v1/collections:tree`
+> - ❌ 错误：`/admin/v1/collections/tree`
 
 ### 用户管理
 
@@ -81,7 +89,7 @@ headers: {
 
 - `POST /admin/v1/files:upload` - 上传文件
 - `POST /admin/v1/files:batchUpload` - 批量上传
-- `GET /admin/v1/files:list` - 列出文件
+- `GET /admin/v1/files` - 列出文件
 - `GET /admin/v1/files/{path}:download` - 下载文件
 - `GET /admin/v1/files/{path}:info` - 获取文件信息
 - `GET /admin/v1/files/{path}:presignedUrl` - 获取预签名 URL

@@ -5,7 +5,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import BackgroundTasks, UploadFile
+from fastapi import BackgroundTasks, Depends, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.document_utils import build_collection_map, enrich_document_dict
@@ -20,19 +20,23 @@ from app.crud.document import crud_document
 from app.crud.site import crud_site
 from app.crud.system_config import crud_system_config
 from app.crud.tenant import crud_tenant
-from app.db.database import AsyncSessionLocal
+from app.db.database import AsyncSessionLocal, get_db
 from app.models.document import Document as DocumentModel
 from app.models.document import DocumentStatus, VectorStatus
 from app.schemas.document import DocumentCreate
 from app.schemas.system_config import DocProcessorConfig
 from app.services.config.configuration_service import configuration_service
+from app.services.site_service import SiteService, get_site_service
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    @staticmethod
-    def is_vectorizable(document: DocumentModel) -> bool:
+    def __init__(self, db: AsyncSession, site_service: SiteService):
+        self.db = db
+        self.site_service = site_service
+
+    def is_vectorizable(self, document: DocumentModel) -> bool:
         """检查文档是否可以向量化"""
         return document.vector_status in (
             VectorStatus.NONE,
@@ -129,9 +133,8 @@ class DocumentService:
                 except Exception as update_err:
                     logger.warning(f"更新文档 {document_id} 向量化状态失败: {update_err}")
 
-    @staticmethod
     async def import_document(
-        db: AsyncSession,
+        self,
         file: UploadFile,
         site_id: int,
         collection_id: int,
@@ -151,7 +154,7 @@ class DocumentService:
                 detail=f"导入失败：请先在系统设置中完成 Embedding 模型配置。具体原因: {str(e)}"
             )
 
-        site = await crud_site.get(db, id=site_id)
+        site = await crud_site.get(self.db, id=site_id)
         if not site:
             raise BadRequestException(detail=f"站点 {site_id} 不存在")
 
@@ -174,7 +177,7 @@ class DocumentService:
 
             # 获取租户侧配置
             doc_processor_config = await crud_system_config.get_by_key(
-                db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=active_tenant_id
+                self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=active_tenant_id
             )
             if doc_processor_config:
                 tenant_procs = doc_processor_config.config_value.get("processors", [])
@@ -190,14 +193,14 @@ class DocumentService:
             # 检查并拉取平台资源
             platform_fallback_allowed = False
             if active_tenant_id:
-                tenant = await crud_tenant.get(db, id=active_tenant_id)
+                tenant = await crud_tenant.get(self.db, id=active_tenant_id)
                 if tenant and "doc_processors" in (tenant.platform_resources_allowed or []):
                     platform_fallback_allowed = True
 
             if platform_fallback_allowed:
                 with temporary_tenant_context(None):
                     platform_config = await crud_system_config.get_by_key(
-                        db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=None
+                        self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=None
                     )
                 if platform_config:
                     platform_procs = platform_config.config_value.get("processors", [])
@@ -276,9 +279,14 @@ class DocumentService:
                 status=DocumentStatus.DRAFT,
             )
 
-            document = await crud_document.create(db, obj_in=document_in)
-            await crud_site.increment_article_count(db, site_id=site_id)
-            document_dict = await enrich_document_dict(document, db, crud_collection)
+            async with self.db.begin():
+                document = await crud_document.create(
+                    self.db, obj_in=document_in, auto_commit=False
+                )
+                await self.site_service.increment_article_count(site_id=site_id)
+
+            await self.db.refresh(document)
+            document_dict = await enrich_document_dict(document, self.db, crud_collection)
             return document_dict
 
         finally:
@@ -288,12 +296,11 @@ class DocumentService:
                 except Exception as e:
                     logger.warning(f"清理临时文件失败: {tmp_path}, {e}")
 
-    @staticmethod
     async def dispatch_vectorization_tasks(
-        db: AsyncSession, background_tasks: BackgroundTasks, document_ids: list[int]
+        self, background_tasks: BackgroundTasks, document_ids: list[int]
     ) -> tuple[list[int], int]:
         """统一处理向量化任务分发"""
-        documents = await crud_document.get_multi(db, ids=document_ids)
+        documents = await crud_document.get_multi(self.db, ids=document_ids)
         document_map = {doc.id: doc for doc in documents}
 
         success_ids = []
@@ -301,7 +308,7 @@ class DocumentService:
 
         for doc_id in document_ids:
             document = document_map.get(doc_id)
-            if document and DocumentService.is_vectorizable(document):
+            if document and self.is_vectorizable(document):
                 success_ids.append(doc_id)
             else:
                 # 说明不可向量化 (is_vectorizable 返回 False)
@@ -313,7 +320,7 @@ class DocumentService:
 
         # 设置为 PENDING
         await crud_document.batch_update_vector_status(
-            db, document_ids=success_ids, status=VectorStatus.PENDING
+            self.db, document_ids=success_ids, status=VectorStatus.PENDING
         )
 
         try:
@@ -323,7 +330,7 @@ class DocumentService:
             error_msg = str(e)
             logger.debug(f"Sync configuration check failed: {e}")
             await crud_document.batch_update_vector_status(
-                db,
+                self.db,
                 document_ids=success_ids,
                 status=VectorStatus.FAILED,
                 error=f"配置缺失: {error_msg}",
@@ -331,13 +338,13 @@ class DocumentService:
             raise BadRequestException(detail=f"学习失败：{error_msg}")
 
         for doc_id in success_ids:
-            background_tasks.add_task(DocumentService.process_vectorization_task, doc_id)
+            # 这里的 process_vectorization_task 是静态方法，直接通过类或 self 调用均可
+            background_tasks.add_task(self.process_vectorization_task, doc_id)
 
         return success_ids, failed_count
 
-    @staticmethod
     async def list_documents(
-        db: AsyncSession,
+        self,
         page: int,
         size: int,
         site_id: int | None,
@@ -356,13 +363,13 @@ class DocumentService:
 
         if collection_id:
             collection_ids = await crud_collection.get_descendant_ids(
-                db, collection_id=collection_id
+                self.db, collection_id=collection_id
             )
         else:
             collection_ids = None
 
         documents = await crud_document.list(
-            db,
+            self.db,
             site_id=site_id,
             tenant_id=tenant_id,
             collection_ids=collection_ids,
@@ -376,7 +383,7 @@ class DocumentService:
             include_site=include_site,
         )
         paginator.total = await crud_document.count(
-            db,
+            self.db,
             site_id=site_id,
             tenant_id=tenant_id,
             collection_ids=collection_ids,
@@ -389,13 +396,13 @@ class DocumentService:
         doc_collection_ids = list(
             set([doc.collection_id for doc in documents if doc.collection_id])
         )
-        collection_map = await build_collection_map(db, crud_collection, doc_collection_ids)
+        collection_map = await build_collection_map(self.db, crud_collection, doc_collection_ids)
 
         enriched_docs = []
         for doc in documents:
             doc_dict = await enrich_document_dict(
                 doc,
-                db,
+                self.db,
                 crud_collection,
                 collection_map=collection_map,
                 include_site_info=include_site,
@@ -406,76 +413,75 @@ class DocumentService:
 
         return enriched_docs, paginator
 
-    @staticmethod
-    async def get_document(db: AsyncSession, document_id: int) -> dict:
+    async def get_document(self, document_id: int) -> dict:
         """获取文档详情"""
-        document = await crud_document.get_with_related_site(db, id=document_id)
+        document = await crud_document.get_with_related_site(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
-        return await enrich_document_dict(document, db, crud_collection, include_site_info=True)
+        return await enrich_document_dict(
+            document, self.db, crud_collection, include_site_info=True
+        )
 
-    @staticmethod
-    async def create_document(db: AsyncSession, document_in: DocumentCreate) -> dict:
+    async def create_document(self, document_in: DocumentCreate) -> dict:
         """创建文档"""
-        site = await crud_site.get(db, id=document_in.site_id)
+        site = await crud_site.get(self.db, id=document_in.site_id)
         if not site:
             raise BadRequestException(detail=f"站点 {document_in.site_id} 不存在")
 
-        document = await crud_document.create(db, obj_in=document_in)
-        await crud_site.increment_article_count(db, site_id=document_in.site_id)
-        return await enrich_document_dict(document, db, crud_collection)
+        async with self.db.begin():
+            document = await crud_document.create(self.db, obj_in=document_in, auto_commit=False)
+            await self.site_service.increment_article_count(site_id=document_in.site_id)
 
-    @staticmethod
-    async def update_document(db: AsyncSession, document_id: int, document_in: any) -> dict:
+        await self.db.refresh(document)
+        return await enrich_document_dict(document, self.db, crud_collection)
+
+    async def update_document(self, document_id: int, document_in: any) -> dict:
         """更新文档"""
-        document = await crud_document.get(db, id=document_id)
+        document = await crud_document.get(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
-        document = await crud_document.update(db, db_obj=document, obj_in=document_in)
-        return await enrich_document_dict(document, db, crud_collection)
+        document = await crud_document.update(self.db, db_obj=document, obj_in=document_in)
+        return await enrich_document_dict(document, self.db, crud_collection)
 
-    @staticmethod
-    async def delete_document(db: AsyncSession, document_id: int) -> None:
+    async def delete_document(self, document_id: int) -> None:
         """删除文档"""
-        document = await crud_document.get(db, id=document_id)
-        if not document:
+        doc = await crud_document.get(self.db, id=document_id)
+        if not doc:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
-        site_id = document.site_id
+        site_id = doc.site_id
 
-        # 尝试从向量库删除
+        # 1. 删除向量数据 (非强制)
         try:
+            from app.core.vector.vector_store import VectorStoreManager
+
             vector_store = await VectorStoreManager.get_instance()
             await vector_store.delete_by_metadata(key="id", value=str(document_id))
         except Exception as e:
             logger.warning(f"删除文档向量失败: {e}")
 
-        await crud_document.delete(db, id=document_id)
-        await crud_site.decrement_article_count(db, site_id=site_id)
+        async with self.db.begin():
+            await crud_document.delete(self.db, id=document_id, auto_commit=False)
+            await self.site_service.decrement_article_count(site_id=site_id)
 
-    @staticmethod
-    async def remove_document_vector(db: AsyncSession, document_id: int) -> dict:
-        """移除文档向量"""
-        document = await crud_document.get(db, id=document_id)
-        if not document:
+    async def remove_document_vector(self, document_id: int) -> dict:
+        """手动清空文档向量数据"""
+        doc = await crud_document.get(self.db, id=document_id)
+        if not doc:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
-        try:
-            vector_store = await VectorStoreManager.get_instance()
-            await vector_store.delete_by_metadata(key="id", value=str(document_id))
-        except Exception as e:
-            logger.warning(f"删除向量数据失败: {e}")
+        from app.core.vector.vector_store import VectorStoreManager
 
-        document = await crud_document.update_vector_status(
-            db, document_id=document_id, status=VectorStatus.NONE
-        )
-        return await enrich_document_dict(document, db, crud_collection)
+        vector_store = await VectorStoreManager.get_instance()
+        await vector_store.delete_by_metadata(key="id", value=str(document_id))
 
-    @staticmethod
-    async def get_document_chunks(db: AsyncSession, document_id: int) -> list[dict]:
+        await crud_document.update(self.db, db_obj=doc, obj_in={"vector_status": VectorStatus.NONE})
+        return await enrich_document_dict(doc, self.db, crud_collection)
+
+    async def get_document_chunks(self, document_id: int) -> list[dict]:
         """获取文档切片"""
-        document = await crud_document.get(db, id=document_id)
+        document = await crud_document.get(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
@@ -486,19 +492,16 @@ class DocumentService:
             logger.error(f"Failed to get chunks for doc {document_id}: {e}")
             return []
 
-    @staticmethod
     async def vectorize_single_document(
-        db: AsyncSession, background_tasks: BackgroundTasks, document_id: int
+        self, background_tasks: BackgroundTasks, document_id: int
     ) -> dict:
         """向量化单个文档"""
-        document = await crud_document.get(db, id=document_id)
+        document = await crud_document.get(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
         # 使用已有的批量分发逻辑
-        success_ids, _ = await DocumentService.dispatch_vectorization_tasks(
-            db, background_tasks, [document_id]
-        )
+        success_ids, _ = await self.dispatch_vectorization_tasks(background_tasks, [document_id])
 
         if not success_ids:
             # 说明不可向量化 (can_vectorize 返回 False)
@@ -507,25 +510,24 @@ class DocumentService:
             )
 
         # 重新获取文档以返回最新状态
-        document = await crud_document.get(db, id=document_id)
-        return await enrich_document_dict(document, db, crud_collection)
+        document = await crud_document.get(self.db, id=document_id)
+        return await enrich_document_dict(document, self.db, crud_collection)
 
-    @staticmethod
     async def get_client_document(
-        db: AsyncSession,
+        self,
         document_id: int,
         ip_address: str | None = None,
         user_agent: str | None = None,
         referer: str | None = None,
     ) -> dict:
         """获取已发布文档详情（客户端，增加浏览量）"""
-        document = await crud_document.get_with_related_site(db, id=document_id)
+        document = await crud_document.get_with_related_site(self.db, id=document_id)
         if not document or document.status != DocumentStatus.PUBLISHED:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
         # 自动增加浏览量并记录浏览事件
         document = await crud_document.increment_views(
-            db,
+            self.db,
             document_id=document_id,
             site_id=document.site_id,
             tenant_id=document.tenant_id,
@@ -534,4 +536,14 @@ class DocumentService:
             referer=referer,
         )
 
-        return await enrich_document_dict(document, db, crud_collection, include_site_info=True)
+        return await enrich_document_dict(
+            document, self.db, crud_collection, include_site_info=True
+        )
+
+
+def get_document_service(
+    db: AsyncSession = Depends(get_db),
+    site_service: SiteService = Depends(get_site_service),
+) -> DocumentService:
+    """获取 DocumentService 实例的依赖注入函数"""
+    return DocumentService(db, site_service)

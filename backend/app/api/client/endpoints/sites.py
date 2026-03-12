@@ -13,13 +13,11 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.infra.cache import cached_response
-from app.db.database import get_db
 from app.schemas.response import ApiResponse, PaginatedResponse
 from app.schemas.site import ClientSite
-from app.services.site_service import SiteService
+from app.services.site_service import SiteService, get_site_service
 
 router = APIRouter()
 
@@ -33,15 +31,15 @@ async def list_active_sites(
     tenant_id: int | None = Query(None, description="租户ID"),
     tenant_slug: str | None = Query(None, description="租户标识 (Portal 入口有效)"),
     keyword: str | None = Query(None, description="搜索关键词（站点名称或描述）"),
-    db: AsyncSession = Depends(get_db),
+    service: SiteService = Depends(get_site_service),
 ) -> ApiResponse[PaginatedResponse[ClientSite]]:
     """获取激活的站点列表（客户端）
 
     - 不传 tenant_id：返回所有租户的激活站点（站点广场）
     - 传 tenant_id：仅返回该租户下的激活站点
     """
-    client_sites, paginator = await SiteService.list_client_sites(
-        db, page, size, tenant_id, tenant_slug, keyword
+    client_sites, paginator = await service.list_client_sites(
+        page, size, tenant_id, tenant_slug, keyword
     )
 
     return ApiResponse.ok(
@@ -59,10 +57,10 @@ async def list_active_sites(
 @cached_response(ttl=10, key_prefix="client:site:slug")  # 降低缓存时间到 10 秒
 async def get_site_by_slug(
     slug: str,
-    db: AsyncSession = Depends(get_db),
+    service: SiteService = Depends(get_site_service),
 ) -> ApiResponse[ClientSite]:
     """通过 slug 获取站点详情（客户端）"""
-    client_site = await SiteService.get_client_site(db, slug=slug)
+    client_site = await service.get_client_site(slug=slug)
     return ApiResponse.ok(data=client_site, msg="获取成功")
 
 
@@ -70,8 +68,8 @@ async def get_site_by_slug(
 @cached_response(ttl=10, key_prefix="client:site:id")  # 降低缓存时间到 10 秒
 async def get_site(
     site_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: SiteService = Depends(get_site_service),
 ) -> ApiResponse[ClientSite]:
     """获取站点详情（客户端）"""
-    client_site = await SiteService.get_client_site(db, site_id=site_id)
+    client_site = await service.get_client_site(site_id=site_id)
     return ApiResponse.ok(data=client_site, msg="获取成功")

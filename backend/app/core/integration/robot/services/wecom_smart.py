@@ -182,15 +182,11 @@ class WeComSmartService:
         session = RobotSession(event=inbound_event)
 
         # 调用统一编排流程
-        from fastapi import BackgroundTasks
-
-        bt = BackgroundTasks()
-        await RobotOrchestrator.orchestrate_reply(
+        # 调用统一编排流程
+        await RobotOrchestrator.orchestrate_as_task(
             adapter=adapter,
             session=session,
-            background_tasks=bt,
         )
-        await bt()
 
     def _get_worker(self, site_id: int) -> WeComSmartWorkerState | None:
         with self._workers_lock:

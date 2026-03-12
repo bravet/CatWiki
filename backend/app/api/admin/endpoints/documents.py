@@ -19,9 +19,8 @@
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.web.deps import get_current_user_with_tenant, get_db
+from app.core.web.deps import get_current_user_with_tenant
 from app.core.web.exceptions import BadRequestException
 from app.models.user import User
 from app.schemas.document import (
@@ -34,13 +33,10 @@ from app.schemas.document import (
     VectorRetrieveResult,
 )
 from app.schemas.response import ApiResponse, PaginatedResponse
-from app.services.document_service import DocumentService
+from app.services.document_service import DocumentService, get_document_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-# ============ 辅助函数 ============
 
 
 @router.get(
@@ -59,11 +55,10 @@ async def list_documents(
     order_by: str | None = Query(None, description="排序字段: views, created_at, updated_at"),
     order_dir: str | None = Query("desc", description="排序方向: asc, desc"),
     exclude_content: bool = Query(True, description="是否排除文档内容（用于列表展示，提升性能）"),
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[Document]]:
-    enriched_docs, paginator = await DocumentService.list_documents(
-        db,
+    enriched_docs, paginator = await service.list_documents(
         page,
         size,
         site_id,
@@ -88,10 +83,10 @@ async def list_documents(
 @router.get("/{document_id}", response_model=ApiResponse[Document], operation_id="getAdminDocument")
 async def get_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await DocumentService.get_document(db, document_id)
+    document_dict = await service.get_document(document_id)
     return ApiResponse.ok(data=document_dict, msg="获取成功")
 
 
@@ -103,10 +98,10 @@ async def get_document(
 )
 async def create_document(
     document_in: DocumentCreate,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await DocumentService.create_document(db, document_in)
+    document_dict = await service.create_document(document_in)
     return ApiResponse.ok(data=document_dict, msg="创建成功")
 
 
@@ -124,14 +119,13 @@ async def import_document(
     ocr_enabled: bool = Form(False),
     extract_images: bool = Form(False),
     extract_tables: bool = Form(False),
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
     """
     导入文档 (上传 -> 解析 -> 创建)
     """
-    document_dict = await DocumentService.import_document(
-        db=db,
+    document_dict = await service.import_document(
         file=file,
         site_id=site_id,
         collection_id=collection_id,
@@ -150,10 +144,10 @@ async def import_document(
 async def update_document(
     document_id: int,
     document_in: DocumentUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await DocumentService.update_document(db, document_id, document_in)
+    document_dict = await service.update_document(document_id, document_in)
     return ApiResponse.ok(data=document_dict, msg="更新成功")
 
 
@@ -162,10 +156,10 @@ async def update_document(
 )
 async def delete_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[None]:
-    await DocumentService.delete_document(db, document_id)
+    await service.delete_document(document_id)
     return ApiResponse.ok(msg="删除成功")
 
 
@@ -180,15 +174,15 @@ async def delete_document(
 async def vectorize_documents(
     request: VectorizeRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[VectorizeResponse]:
     """批量向量化文档（将文档状态设置为 pending，并启动向量化后台任务）"""
     if not request.document_ids:
         raise BadRequestException(detail="文档ID列表不能为空")
 
-    success_ids, failed_count = await DocumentService.dispatch_vectorization_tasks(
-        db, background_tasks, request.document_ids
+    success_ids, failed_count = await service.dispatch_vectorization_tasks(
+        background_tasks, request.document_ids
     )
 
     return ApiResponse.ok(
@@ -207,12 +201,10 @@ async def vectorize_documents(
 async def vectorize_single_document(
     document_id: int,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await DocumentService.vectorize_single_document(
-        db, background_tasks, document_id
-    )
+    document_dict = await service.vectorize_single_document(background_tasks, document_id)
     return ApiResponse.ok(data=document_dict, msg="已加入学习队列")
 
 
@@ -223,10 +215,10 @@ async def vectorize_single_document(
 )
 async def remove_document_vector(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await DocumentService.remove_document_vector(db, document_id)
+    document_dict = await service.remove_document_vector(document_id)
     return ApiResponse.ok(data=document_dict, msg="已移除向量数据")
 
 
@@ -237,10 +229,10 @@ async def remove_document_vector(
 )
 async def get_document_chunks(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[list[dict]]:
-    chunks = await DocumentService.get_document_chunks(db, document_id)
+    chunks = await service.get_document_chunks(document_id)
     return ApiResponse.ok(data=chunks, msg="获取成功")
 
 
@@ -249,7 +241,6 @@ async def get_document_chunks(
 )
 async def retrieve_vectors(
     request: VectorRetrieveRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[VectorRetrieveResult]:
     """
@@ -257,9 +248,6 @@ async def retrieve_vectors(
     """
     try:
         from app.services.rag import RAGService
-
-        # 转换过滤器格式 (Schema 应该兼容，但为了保险起见，明确这里是 VectorRetrieveRequest.filter -> VectorRetrieveFilter)
-        # 实际上 Pydantic 模型是一致的
 
         results = await RAGService.retrieve(
             query=request.query,

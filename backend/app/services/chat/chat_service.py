@@ -20,10 +20,11 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Literal
 
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai.graph import create_agent_graph
 from app.core.ai.graph.checkpointer import get_checkpointer
@@ -34,8 +35,8 @@ from app.core.vector.rag_utils import (
     convert_tool_call_chunk_to_openai,
     extract_sources_from_messages,
 )
-from app.crud import crud_site
-from app.db.database import AsyncSessionLocal
+from app.crud.site import crud_site
+from app.db.database import AsyncSessionLocal, get_db
 from app.schemas.chat import (
     ChatCompletionChoice,
     ChatCompletionChunk,
@@ -45,15 +46,25 @@ from app.schemas.chat import (
     ChatCompletionResponse,
     ChatMessage,
 )
-from app.services.chat.history_service import ChatHistoryService
-from app.services.chat.session_service import ChatSessionService
+from app.services.chat.history_service import ChatHistoryService, get_chat_history_service
+from app.services.chat.session_service import ChatSessionService, get_chat_session_service
 
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    @staticmethod
+    def __init__(
+        self,
+        db: AsyncSession,
+        session_service: ChatSessionService,
+        history_service: ChatHistoryService,
+    ):
+        self.db = db
+        self.session_service = session_service
+        self.history_service = history_service
+
     def _guard_channel_policy(
+        self,
         *,
         channel: Literal["internal", "bot"],
         emit_tool_status_text: bool,
@@ -84,8 +95,8 @@ class ChatService:
         if not is_licensed:
             raise ForbiddenException("企业版授权无效，bot 渠道不可用")
 
-    @staticmethod
     def _build_chunk(
+        self,
         *,
         chunk_id: str,
         model_name: str,
@@ -110,8 +121,9 @@ class ChatService:
             ],
         )
 
-    @staticmethod
-    def _split_text_for_stream(text: str, target_len: int = 26, max_len: int = 48) -> list[str]:
+    def _split_text_for_stream(
+        self, text: str, target_len: int = 26, max_len: int = 48
+    ) -> list[str]:
         """将最终答案切成更自然的流式片段（优先在标点/换行处断开）。"""
         if not text:
             return []
@@ -134,8 +146,7 @@ class ChatService:
 
         return pieces
 
-    @staticmethod
-    def _extract_openai_tool_calls(messages: list[BaseMessage]) -> list[dict]:
+    def _extract_openai_tool_calls(self, messages: list[BaseMessage]) -> list[dict]:
         """提取最后一轮工具调用（避免将多轮历史 tool_calls 一次性外发导致客户端重复渲染）。"""
         tool_calls: list[dict] = []
         last_tool_call_msg: AIMessage | None = None
@@ -164,9 +175,8 @@ class ChatService:
             )
         return tool_calls
 
-    @classmethod
     async def generate_chat_chunks(
-        cls,
+        self,
         graph,
         input_state: dict,
         config: dict,
@@ -194,7 +204,7 @@ class ChatService:
 
         try:
             # 💡 [亮点] 立即发送一个空的消息增量，用于“打桩”打破代理缓存
-            yield cls._build_chunk(
+            yield self._build_chunk(
                 chunk_id=chunk_id_prefix,
                 model_name=model_name,
                 role="assistant",
@@ -228,7 +238,7 @@ class ChatService:
                     ):
                         for tc_chunk in chunk_data.tool_call_chunks:
                             cleaned_tc = convert_tool_call_chunk_to_openai(tc_chunk)
-                            yield cls._build_chunk(
+                            yield self._build_chunk(
                                 chunk_id=chunk_id_prefix,
                                 model_name=model_name,
                                 tool_calls=[cleaned_tc],
@@ -244,7 +254,7 @@ class ChatService:
                     )
                     if should_emit_content:
                         full_response += delta_content
-                        yield cls._build_chunk(
+                        yield self._build_chunk(
                             chunk_id=chunk_id_prefix,
                             model_name=model_name,
                             content=delta_content,
@@ -266,7 +276,7 @@ class ChatService:
                     # OpenAI 兼容 keep-alive：在仅末尾输出正文的模式下，第三方客户端可能因长时间无 token 触发重试。
                     # 发送空 content 的标准 chunk 保持流活跃，避免重复请求导致的内容重复。
                     if suppress_intermediate_tool_text:
-                        yield cls._build_chunk(
+                        yield self._build_chunk(
                             chunk_id=chunk_id_prefix,
                             model_name=model_name,
                             content="",
@@ -277,7 +287,7 @@ class ChatService:
                             if tool_query
                             else "\n> **`TOOL`** 检索中\n"
                         )
-                        yield cls._build_chunk(
+                        yield self._build_chunk(
                             chunk_id=chunk_id_prefix,
                             model_name=model_name,
                             content=tool_line,
@@ -289,13 +299,13 @@ class ChatService:
                     name = event.get("name", "tool")
                     logger.info(f"✅ [Stream] Tool Node End: {name}")
                     if suppress_intermediate_tool_text:
-                        yield cls._build_chunk(
+                        yield self._build_chunk(
                             chunk_id=chunk_id_prefix,
                             model_name=model_name,
                             content="",
                         )
                     if emit_tool_status_text:
-                        yield cls._build_chunk(
+                        yield self._build_chunk(
                             chunk_id=chunk_id_prefix,
                             model_name=model_name,
                             content="> **`TOOL`** 检索完成\n",
@@ -325,9 +335,9 @@ class ChatService:
 
             # 第三方兼容模式：一次性发送完整 tool_calls，避免客户端对增量 tool_calls 处理异常导致重复正文。
             if buffer_tool_calls_until_end and final_messages:
-                buffered_tool_calls = cls._extract_openai_tool_calls(final_messages)
+                buffered_tool_calls = self._extract_openai_tool_calls(final_messages)
                 if buffered_tool_calls:
-                    yield cls._build_chunk(
+                    yield self._build_chunk(
                         chunk_id=chunk_id_prefix,
                         model_name=model_name,
                         tool_calls=buffered_tool_calls,
@@ -337,19 +347,19 @@ class ChatService:
             if suppress_intermediate_tool_text and persistent_content:
                 full_response = persistent_content
                 # 分段输出（OpenAI chunk）：在标点处优先断开，改善第三方客户端观感。
-                for piece in cls._split_text_for_stream(persistent_content):
+                for piece in self._split_text_for_stream(persistent_content):
                     if not piece:
                         continue
-                    yield cls._build_chunk(
+                    yield self._build_chunk(
                         chunk_id=chunk_id_prefix,
                         model_name=model_name,
                         content=piece,
                     )
-                    # 微小节流，提供“打字”感；根据分片长度自适应，避免过慢。
+                    # 微小节通，提供“打字”感；根据分片长度自适应，避免过慢。
                     await asyncio.sleep(min(0.014, max(0.004, len(piece) * 0.00035)))
 
             # OpenAI 兼容流式结束块：显式发送 finish_reason=stop
-            yield cls._build_chunk(
+            yield self._build_chunk(
                 chunk_id=chunk_id_prefix,
                 model_name=model_name,
                 finish_reason="stop",
@@ -357,13 +367,20 @@ class ChatService:
 
             async def save_history_task(msgs, content):
                 async with AsyncSessionLocal() as db:
+                    # 在背景任务中创建新的 Service 实例，因为主请求的 session 可能会关闭
+                    from app.services.chat.history_service import ChatHistoryService
+                    from app.services.chat.session_service import ChatSessionService
+
+                    bg_session_service = ChatSessionService(db)
+                    bg_history_service = ChatHistoryService(db)
+
                     if content:
-                        await ChatSessionService.update_assistant_response(
-                            db=db, thread_id=thread_id, assistant_message=content
+                        await bg_session_service.update_assistant_response(
+                            thread_id=thread_id, assistant_message=content
                         )
                     if msgs:
-                        await ChatHistoryService.save_history_from_messages(
-                            db=db, thread_id=thread_id, messages=msgs
+                        await bg_history_service.save_history_from_messages(
+                            thread_id=thread_id, messages=msgs
                         )
 
             background_tasks.add_task(save_history_task, final_messages, persistent_content)
@@ -422,8 +439,8 @@ class ChatService:
                 ],
             )
 
-    @staticmethod
     async def stream_graph_events(
+        self,
         graph,
         input_state: dict,
         config: dict,
@@ -436,7 +453,7 @@ class ChatService:
         emit_tool_status_text: bool = False,
     ) -> AsyncGenerator[str, None]:
         """流式响应生成器 - 包装 generate_chat_chunks 并序列化为 SSE 格式"""
-        async for chunk in ChatService.generate_chat_chunks(
+        async for chunk in self.generate_chat_chunks(
             graph,
             input_state,
             config,
@@ -455,9 +472,8 @@ class ChatService:
 
         yield "data: [DONE]\n\n"
 
-    @classmethod
     async def initialize_chat_context(
-        cls,
+        self,
         thread_id: str | None,
         site_id: int,
         user_id: str | None,
@@ -508,10 +524,9 @@ class ChatService:
         # 3. 解析 site_id 和 tenant_id
         resolved_tenant_id = tenant_id  # 默认为传入参数
         if site_id:
-            async with AsyncSessionLocal() as db:
-                site = await crud_site.get(db, id=site_id)
-                if site:
-                    resolved_tenant_id = site.tenant_id
+            site = await crud_site.get(self.db, id=site_id)
+            if site:
+                resolved_tenant_id = site.tenant_id
 
         tenant_id = resolved_tenant_id
 
@@ -534,22 +549,20 @@ class ChatService:
         )
 
         # 6. 持久化 (如果这是该 thread 的新消息)
-        async with AsyncSessionLocal() as db:
-            try:
-                await ChatSessionService.create_or_update(
-                    db=db,
-                    thread_id=thread_id,
-                    site_id=site_id,
-                    user_message=input_message,
-                    member_id=user_id,
-                    tenant_id=tenant_id,
-                )
-                # 仅保存最后一条用户输入到我们的历史表
-                await ChatHistoryService.save_message(
-                    db=db, thread_id=thread_id, role="user", content=input_message
-                )
-            except Exception as e:
-                logger.error(f"❌ [ChatService] Failed to persist chat session: {e}")
+        try:
+            await self.session_service.create_or_update(
+                thread_id=thread_id,
+                site_id=site_id,
+                user_message=input_message,
+                member_id=user_id,
+                tenant_id=tenant_id,
+            )
+            # 仅保存最后一条用户输入到我们的历史表
+            await self.history_service.save_message(
+                thread_id=thread_id, role="user", content=input_message
+            )
+        except Exception as e:
+            logger.error(f"❌ [ChatService] Failed to persist chat session: {e}")
 
         # 6. 准备 Graph 初始状态
         initial_state = {
@@ -564,9 +577,8 @@ class ChatService:
 
         return llm, initial_state, config, tenant_id
 
-    @classmethod
     async def process_chat_request(
-        cls,
+        self,
         request: ChatCompletionRequest,
         background_tasks: BackgroundTasks,
         channel: Literal["internal", "bot"] = "internal",
@@ -578,7 +590,7 @@ class ChatService:
         """核心聊天处理逻辑 (ReAct Agent)"""
         from app.core.web.exceptions import CatWikiError
 
-        cls._guard_channel_policy(
+        self._guard_channel_policy(
             channel=channel,
             emit_tool_status_text=emit_tool_status_text,
         )
@@ -588,7 +600,7 @@ class ChatService:
         tenant_id_val = request.filter.tenant_id if request.filter else None
 
         try:
-            llm, initial_state, config, tenant_id = await cls.initialize_chat_context(
+            llm, initial_state, config, tenant_id = await self.initialize_chat_context(
                 thread_id=request.thread_id,
                 site_id=site_id,
                 user_id=request.user,
@@ -633,7 +645,7 @@ class ChatService:
                     async with get_checkpointer() as cp:
                         graph = create_agent_graph(checkpointer=cp, model=llm)
                         # 调用 SSE 封装层
-                        async for sse_chunk in cls.stream_graph_events(
+                        async for sse_chunk in self.stream_graph_events(
                             graph,
                             initial_state,
                             config,
@@ -665,11 +677,17 @@ class ChatService:
                     # 后台异步保存历史 (已在 site-completions 等场景通过 background_tasks 加速)
                     async def save_history_bg():
                         async with AsyncSessionLocal() as db:
-                            await ChatSessionService.update_assistant_response(
-                                db=db, thread_id=current_thread_id, assistant_message=content
+                            from app.services.chat.history_service import ChatHistoryService
+                            from app.services.chat.session_service import ChatSessionService
+
+                            bg_session_service = ChatSessionService(db)
+                            bg_history_service = ChatHistoryService(db)
+
+                            await bg_session_service.update_assistant_response(
+                                thread_id=current_thread_id, assistant_message=content
                             )
-                            await ChatHistoryService.save_history_from_messages(
-                                db=db, thread_id=current_thread_id, messages=messages
+                            await bg_history_service.save_history_from_messages(
+                                thread_id=current_thread_id, messages=messages
                             )
 
                     background_tasks.add_task(save_history_bg)
@@ -692,3 +710,12 @@ class ChatService:
         except Exception as e:
             logger.error(f"❌ [ChatService] Execution Error: {e}", exc_info=True)
             raise e
+
+
+def get_chat_service(
+    db: AsyncSession = Depends(get_db),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+    history_service: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatService:
+    """获取 ChatService 实例的依赖注入函数"""
+    return ChatService(db, session_service, history_service)

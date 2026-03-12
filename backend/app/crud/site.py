@@ -123,6 +123,43 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
 
         return updated_site
 
+    async def get_with_tenant(self, db: AsyncSession, id: int) -> Site | None:
+        """获取站点详情（预加载租户信息）"""
+        from sqlalchemy.orm import joinedload
+
+        result = await db.execute(
+            select(self.model).where(self.model.id == id).options(joinedload(self.model.tenant))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_slug_with_tenant(self, db: AsyncSession, slug: str) -> Site | None:
+        """根据标识获取站点（预加载租户信息）"""
+        from sqlalchemy.orm import joinedload
+
+        result = await db.execute(
+            select(self.model).where(self.model.slug == slug).options(joinedload(self.model.tenant))
+        )
+        return result.scalar_one_or_none()
+
+    async def list_with_tenant(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        status: str | None = None,
+    ) -> list[Site]:
+        """获取站点列表（预加载租户信息）"""
+        from sqlalchemy.orm import joinedload
+
+        stmt = select(self.model).options(joinedload(self.model.tenant))
+        if status:
+            stmt = stmt.where(self.model.status == status)
+
+        stmt = stmt.offset(skip).limit(limit).order_by(self.model.id.desc())
+        result = await db.execute(stmt)
+        return list(result.scalars())
+
     async def increment_article_count(self, db: AsyncSession, *, site_id: int) -> None:
         """原子增加文章计数（支持租户隔离）"""
         from app.core.infra.tenant import get_current_tenant
@@ -192,6 +229,75 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
 
         await db.commit()
         return True
+
+    async def list_active(
+        self,
+        db: AsyncSession,
+        *,
+        page: int,
+        size: int,
+        tenant_id: int | None = None,
+        tenant_slug: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[Site], int]:
+        """获取激活的站点列表（下沉自 Service 层）"""
+        from sqlalchemy import func, or_, select
+        from sqlalchemy.orm import joinedload
+
+        from app.core.common.utils import Paginator
+
+        # 构建基础查询条件
+        base_filters = [self.model.status == "active"]
+
+        if tenant_id is not None:
+            base_filters.append(self.model.tenant_id == tenant_id)
+        elif tenant_slug:
+            from app.models.tenant import Tenant
+
+            # 这是一个跨表查询，下沉到 CRUD 层处理更合适
+            stmt_tenant = select(Tenant.id).where(Tenant.slug == tenant_slug)
+            tenant_id_res = (await db.execute(stmt_tenant)).scalar_one_or_none()
+            if tenant_id_res:
+                base_filters.append(self.model.tenant_id == tenant_id_res)
+            else:
+                return [], 0
+
+        if keyword:
+            base_filters.append(
+                or_(
+                    self.model.name.icontains(keyword),
+                    self.model.description.icontains(keyword),
+                )
+            )
+
+        # 统计总数
+        count_stmt = select(func.count()).select_from(self.model).where(*base_filters)
+        total = (await db.execute(count_stmt)).scalar_one()
+
+        paginator = Paginator(page=page, size=size, total=total)
+
+        # 查询列表
+        stmt = select(self.model).where(*base_filters).options(joinedload(self.model.tenant))
+        result = await db.execute(stmt.offset(paginator.skip).limit(paginator.size))
+        sites = list(result.scalars())
+
+        return sites, total
+
+    async def get_active(
+        self, db: AsyncSession, *, site_id: int | None = None, slug: str | None = None
+    ) -> Site | None:
+        """获取单个激活的站点详情"""
+        from sqlalchemy import select
+        from sqlalchemy.orm import joinedload
+
+        if site_id:
+            stmt = select(self.model).where(self.model.id == site_id)
+        else:
+            stmt = select(self.model).where(self.model.slug == slug)
+
+        stmt = stmt.where(self.model.status == "active").options(joinedload(self.model.tenant))
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
 
 
 crud_site = CRUDSite(Site)

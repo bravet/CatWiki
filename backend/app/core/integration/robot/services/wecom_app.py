@@ -138,8 +138,7 @@ class WeComAppService:
         )
 
         background_tasks.add_task(
-            RobotOrchestrator.orchestrate_reply,
+            RobotOrchestrator.orchestrate_as_task,
             adapter=adapter,
             session=session,
-            background_tasks=background_tasks,
         )

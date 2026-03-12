@@ -13,12 +13,10 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
 from app.schemas.document import Document
 from app.schemas.response import ApiResponse, PaginatedResponse
-from app.services.document_service import DocumentService
+from app.services.document_service import DocumentService, get_document_service
 
 router = APIRouter()
 
@@ -37,11 +35,10 @@ async def list_published_documents(
     order_dir: str = Query("desc", description="排序方向"),
     include_site_info: bool = Query(False, description="是否包含站点信息"),
     tenant_id: int | None = Query(None, description="租户ID"),
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
 ) -> ApiResponse[PaginatedResponse[Document]]:
     """获取已发布文档列表（客户端）"""
-    enriched_docs, paginator = await DocumentService.list_documents(
-        db,
+    enriched_docs, paginator = await service.list_documents(
         page,
         size,
         site_id,
@@ -70,7 +67,7 @@ async def list_published_documents(
 async def get_document(
     document_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    service: DocumentService = Depends(get_document_service),
 ) -> ApiResponse[Document]:
     """获取文档详情（客户端，自动增加浏览量并记录浏览事件）"""
     # 提取访客信息
@@ -78,7 +75,5 @@ async def get_document(
     user_agent = request.headers.get("user-agent")
     referer = request.headers.get("referer")
 
-    document_dict = await DocumentService.get_client_document(
-        db, document_id, ip_address, user_agent, referer
-    )
+    document_dict = await service.get_client_document(document_id, ip_address, user_agent, referer)
     return ApiResponse.ok(data=document_dict, msg="获取成功")

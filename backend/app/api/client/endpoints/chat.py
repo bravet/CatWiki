@@ -14,7 +14,7 @@
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, Header
 from fastapi.responses import StreamingResponse
 
 from app.schemas.chat import (
@@ -22,7 +22,7 @@ from app.schemas.chat import (
     ChatCompletionResponse,
     InternalChatCompletionRequest,
 )
-from app.services.chat.chat_service import ChatService
+from app.services.chat.chat_service import ChatService, get_chat_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 async def create_chat_completion(
     request: InternalChatCompletionRequest,
     background_tasks: BackgroundTasks,
+    service: ChatService = Depends(get_chat_service),
     origin: str | None = Header(None),
     referer: str | None = Header(None),
 ) -> ChatCompletionResponse | StreamingResponse:
@@ -49,7 +50,7 @@ async def create_chat_completion(
         user=request.user,
         filter=request.filter,
     )
-    return await ChatService.process_chat_request(
+    return await service.process_chat_request(
         service_request,
         background_tasks,
         channel="internal",

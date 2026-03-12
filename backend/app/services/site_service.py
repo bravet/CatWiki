@@ -1,8 +1,7 @@
 import logging
 
-from sqlalchemy import select
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.core.common.masking import mask_bot_config_inplace
 from app.core.common.utils import Paginator, generate_token
@@ -12,17 +11,28 @@ from app.core.integration.robot.services.feishu_app import FeishuRobotService
 from app.core.integration.robot.services.wecom_smart import WeComSmartService
 from app.core.web.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.crud import crud_site, crud_user
+from app.db.database import get_db
 from app.models.site import Site as SiteModel
 from app.models.user import User, UserRole
-from app.schemas.site import ClientSite, SiteCreate, SiteUpdate
+from app.schemas.site import SiteCreate, SiteUpdate
 from app.schemas.user import UserCreate, UserUpdate
 
 logger = logging.getLogger(__name__)
 
 
 class SiteService:
-    @staticmethod
-    async def refresh_bot_stream_services() -> None:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def increment_article_count(self, site_id: int) -> None:
+        """增加站点的文章计数"""
+        await crud_site.increment_article_count(self.db, site_id=site_id)
+
+    async def decrement_article_count(self, site_id: int) -> None:
+        """减少站点的文章计数"""
+        await crud_site.decrement_article_count(self.db, site_id=site_id)
+
+    async def refresh_bot_stream_services(self) -> None:
         """站点机器人配置变更后，刷新飞书/钉钉/企微智能机器人长连接服务。"""
         try:
             await FeishuRobotService.get_instance().refresh()
@@ -37,8 +47,7 @@ class SiteService:
         except Exception as e:
             logger.warning(f"刷新企微智能机器人长连接失败: {e}")
 
-    @staticmethod
-    def ensure_bot_config_valid(bot_config: dict | None) -> None:
+    def ensure_bot_config_valid(self, bot_config: dict | None) -> None:
         """校验站点机器人配置，避免启用后静默失效。"""
         if not bot_config:
             return
@@ -94,20 +103,16 @@ class SiteService:
                     detail="启用企业微信机器人(应用)时，企业 ID、Secret、Token 和 Encoding AES Key 均不能为空。"
                 )
 
-    @staticmethod
     async def list_sites(
-        db: AsyncSession, page: int, size: int, status: str | None, is_demo: bool
+        self, page: int, size: int, status: str | None, is_demo: bool
     ) -> tuple[list[SiteModel], Paginator]:
         """获取站点列表（分页）"""
-        total = await crud_site.count(db, status=status)
+        total = await crud_site.count(self.db, status=status)
         paginator = Paginator(page=page, size=size, total=total)
 
-        stmt = select(SiteModel).options(joinedload(SiteModel.tenant))
-        if status:
-            stmt = stmt.where(SiteModel.status == status)
-
-        result = await db.execute(stmt.offset(paginator.skip).limit(paginator.size))
-        sites = list(result.scalars())
+        sites = await crud_site.list_with_tenant(
+            self.db, skip=paginator.skip, limit=paginator.size, status=status
+        )
 
         if is_demo:
             for s in sites:
@@ -117,14 +122,9 @@ class SiteService:
 
         return sites, paginator
 
-    @staticmethod
-    async def get_site(db: AsyncSession, site_id: int, is_demo: bool) -> SiteModel:
+    async def get_site(self, site_id: int, is_demo: bool) -> SiteModel:
         """获取站点详情"""
-        stmt = (
-            select(SiteModel).where(SiteModel.id == site_id).options(joinedload(SiteModel.tenant))
-        )
-        result = await db.execute(stmt)
-        site = result.scalar_one_or_none()
+        site = await crud_site.get_with_tenant(self.db, id=site_id)
         if not site:
             raise NotFoundException(detail=f"站点 {site_id} 不存在")
 
@@ -135,12 +135,9 @@ class SiteService:
 
         return site
 
-    @staticmethod
-    async def get_site_by_slug(db: AsyncSession, slug: str, is_demo: bool) -> SiteModel:
+    async def get_site_by_slug(self, slug: str, is_demo: bool) -> SiteModel:
         """通过 slug 获取站点详情"""
-        stmt = select(SiteModel).where(SiteModel.slug == slug).options(joinedload(SiteModel.tenant))
-        result = await db.execute(stmt)
-        site = result.scalar_one_or_none()
+        site = await crud_site.get_by_slug_with_tenant(self.db, slug=slug)
         if not site:
             raise NotFoundException(detail=f"站点 {slug} 不存在")
 
@@ -151,22 +148,21 @@ class SiteService:
 
         return site
 
-    @staticmethod
-    async def create_site(db: AsyncSession, site_in: SiteCreate) -> SiteModel:
+    async def create_site(self, site_in: SiteCreate) -> SiteModel:
         # 检查名称是否已存在
-        existing = await crud_site.get_by_name(db, name=site_in.name)
+        existing = await crud_site.get_by_name(self.db, name=site_in.name)
         if existing:
             raise ConflictException(detail=f"站点名称 '{site_in.name}' 已存在")
 
         # 检查标识是否已存在
         if site_in.slug:
-            existing_slug = await crud_site.get_by_slug(db, slug=site_in.slug)
+            existing_slug = await crud_site.get_by_slug(self.db, slug=site_in.slug)
             if existing_slug:
                 raise ConflictException(detail=f"标识 '{site_in.slug}' 已存在")
 
         # 处理机器人配置：如果启用 API Bot 且没填 Key，自动生成一个
         if site_in.bot_config:
-            SiteService.ensure_bot_config_valid(site_in.bot_config)
+            self.ensure_bot_config_valid(site_in.bot_config)
             api_bot = site_in.bot_config.get("api_bot")
             # CE 版本不支持 API Bot（企业版专属功能）
             if api_bot and settings.CATWIKI_EDITION == "community":
@@ -180,7 +176,7 @@ class SiteService:
         existing_user: User | None = None
         if site_in.admin_email:
             admin_email = site_in.admin_email.lower().strip()
-            existing_user = await crud_user.get_by_email(db, email=admin_email)
+            existing_user = await crud_user.get_by_email(self.db, email=admin_email)
             if not existing_user:
                 admin_password = (site_in.admin_password or "").strip()
                 if not admin_password:
@@ -188,8 +184,9 @@ class SiteService:
                         detail="提供管理员邮箱时，必须同时提供管理员密码（至少 8 位）。"
                     )
 
-        try:
-            site = await crud_site.create(db, obj_in=site_in, auto_commit=False)
+        # 使用 db.begin() 自动管理事务：进入时开启，成功走出时提交，异常时自动回滚
+        async with self.db.begin():
+            site = await crud_site.create(self.db, obj_in=site_in, auto_commit=False)
 
             # 如果提供了管理员信息，初始化站点管理员
             if admin_email:
@@ -199,7 +196,7 @@ class SiteService:
                     if site.id not in current_managed_sites:
                         new_managed_sites = current_managed_sites + [site.id]
                         await crud_user.update(
-                            db,
+                            self.db,
                             db_obj=existing_user,
                             obj_in=UserUpdate(
                                 managed_site_ids=new_managed_sites, role=existing_user.role
@@ -209,7 +206,7 @@ class SiteService:
                 else:
                     # 用户不存在，创建新用户
                     await crud_user.create(
-                        db,
+                        self.db,
                         obj_in=UserCreate(
                             email=admin_email,
                             password=admin_password or "",
@@ -220,38 +217,32 @@ class SiteService:
                         auto_commit=False,
                     )
 
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            raise
+        # 刷新对象以填充 tenant_slug
+        await self.db.refresh(site, ["tenant"])
 
-        # 预加载租户信息以填充 tenant_slug
-        await db.refresh(site, ["tenant"])
-
-        await SiteService.refresh_bot_stream_services()
+        await self.refresh_bot_stream_services()
         return site
 
-    @staticmethod
-    async def update_site(db: AsyncSession, site_id: int, site_in: SiteUpdate) -> SiteModel:
-        site = await crud_site.get(db, id=site_id)
+    async def update_site(self, site_id: int, site_in: SiteUpdate) -> SiteModel:
+        site = await crud_site.get(self.db, id=site_id)
         if not site:
             raise NotFoundException(detail=f"站点 {site_id} 不存在")
 
         # 检查名称冲突
         if site_in.name:
-            existing = await crud_site.get_by_name(db, name=site_in.name)
+            existing = await crud_site.get_by_name(self.db, name=site_in.name)
             if existing and existing.id != site_id:
                 raise ConflictException(detail=f"站点名称 '{site_in.name}' 已存在")
 
         # 检查标识冲突
         if site_in.slug:
-            existing_slug = await crud_site.get_by_slug(db, slug=site_in.slug)
+            existing_slug = await crud_site.get_by_slug(self.db, slug=site_in.slug)
             if existing_slug and existing_slug.id != site_id:
                 raise ConflictException(detail=f"标识 '{site_in.slug}' 已存在")
 
         # 处理机器人配置：如果启用 API Bot 且没填 Key，尝试沿用旧的或生成新的
         if site_in.bot_config:
-            SiteService.ensure_bot_config_valid(site_in.bot_config)
+            self.ensure_bot_config_valid(site_in.bot_config)
             api_bot = site_in.bot_config.get("api_bot")
             # CE 版本不支持 API Bot（企业版专属功能）
             if api_bot and settings.CATWIKI_EDITION == "community":
@@ -266,112 +257,73 @@ class SiteService:
                     # 原来也没有，生成一个新的
                     api_bot["api_key"] = f"sk-{generate_token(24)}"
 
-        site = await crud_site.update(db, db_obj=site, obj_in=site_in)
+        site = await crud_site.update(self.db, db_obj=site, obj_in=site_in)
         # 预加载租户信息以填充 tenant_slug
-        await db.refresh(site, ["tenant"])
-        await SiteService.refresh_bot_stream_services()
+        await self.db.refresh(site, ["tenant"])
+        await self.refresh_bot_stream_services()
         return site
 
-    @staticmethod
-    async def delete_site(db: AsyncSession, site_id: int) -> None:
-        # 1. 清理向量数据库中的数据
-        # 为了保证数据完整性，必须先查询出该站点下的所有文档ID
-        from app.models.document import Document
-
-        # 查找站点下所有已向量化的文档或者所有文档（为了安全起见，查所有可能存在的文档）
-        # 这里我们只关心 ID
-        result = await db.execute(select(Document.id).where(Document.site_id == site_id))
-        document_ids = list(result.scalars())
-
-        if document_ids:
-            try:
-                from app.core.vector.vector_store import VectorStoreManager
-
-                vector_store = await VectorStoreManager.get_instance()
-
-                # 逐个文档清理向量（因为每个文档可能有多个 chunk）
-                for doc_id in document_ids:
-                    await vector_store.delete_by_metadata(key="id", value=str(doc_id))
-
-                logger.info(f"✅ 已清理站点 {site_id} 下 {len(document_ids)} 个文档的向量数据")
-            except Exception as e:
-                # 记录错误但不中断删除流程（或者根据需求决定是否中断）
-                # 这里选择不中断，因为站点删除是主要意图，向量残留是次要问题（虽然我们要修复它，但不能阻止用户删除）
-                # 也可以选择 log error
-                logger.warning(f"清理站点 {site_id} 的向量数据失败: {e}")
-
-        # 2. 删除数据库数据
-        success = await crud_site.remove_with_relationships(db, id=site_id)
+    async def delete_site(self, site_id: int) -> None:
+        """删除站点及其关联数据"""
+        success = await crud_site.remove_with_relationships(self.db, id=site_id)
         if not success:
             raise NotFoundException(detail=f"站点 {site_id} 不存在")
 
-        await SiteService.refresh_bot_stream_services()
+        await self.refresh_bot_stream_services()
 
-    @staticmethod
     async def list_client_sites(
-        db: AsyncSession,
+        self,
         page: int,
         size: int,
         tenant_id: int | None,
         tenant_slug: str | None,
         keyword: str | None,
-    ) -> tuple[list[ClientSite], Paginator]:
+    ) -> tuple[list[SiteModel], Paginator]:
         """获取激活的站点列表（客户端）"""
-        from sqlalchemy import func, or_, select
+        from app.core.common.utils import Paginator
 
-        # 构建基础查询条件
-        base_filters = [SiteModel.status == "active"]
-        if tenant_id is not None:
-            base_filters.append(SiteModel.tenant_id == tenant_id)
-        elif tenant_slug:
-            from app.models.tenant import Tenant as TenantModel
+        sites, total = await crud_site.list_active(
+            self.db,
+            page=page,
+            size=size,
+            tenant_id=tenant_id,
+            tenant_slug=tenant_slug,
+            keyword=keyword,
+        )
 
-            # 通过 Join 租户表过滤
-            stmt_tenant = select(TenantModel.id).where(TenantModel.slug == tenant_slug)
-            tenant_id_res = (await db.execute(stmt_tenant)).scalar_one_or_none()
-            if tenant_id_res:
-                base_filters.append(SiteModel.tenant_id == tenant_id_res)
-            else:
-                return [], Paginator(page=page, size=size, total=0)
-
-        if keyword:
-            base_filters.append(
-                or_(
-                    SiteModel.name.icontains(keyword),
-                    SiteModel.description.icontains(keyword),
-                )
-            )
-
-        # 统计总数
-        count_stmt = select(func.count()).select_from(SiteModel).where(*base_filters)
-        total = (await db.execute(count_stmt)).scalar_one()
         paginator = Paginator(page=page, size=size, total=total)
+        return sites, paginator
 
-        # 查询站点列表，预加载租户信息
-        stmt = select(SiteModel).where(*base_filters).options(joinedload(SiteModel.tenant))
-        result = await db.execute(stmt.offset(paginator.skip).limit(paginator.size))
-        sites = list(result.scalars())
-
-        # [Security] 使用 ClientSite Schema 自动过滤敏感字段
-        client_sites = [ClientSite.model_validate(site, from_attributes=True) for site in sites]
-        return client_sites, paginator
-
-    @staticmethod
     async def get_client_site(
-        db: AsyncSession, site_id: int | None = None, slug: str | None = None
-    ) -> ClientSite:
+        self, site_id: int | None = None, slug: str | None = None
+    ) -> SiteModel:
         """获取激活的站点详情（客户端）"""
-        from sqlalchemy import select
-
-        if site_id:
-            stmt = select(SiteModel).where(SiteModel.id == site_id)
-        else:
-            stmt = select(SiteModel).where(SiteModel.slug == slug)
-
-        stmt = stmt.options(joinedload(SiteModel.tenant))
-        result = await db.execute(stmt)
-        site = result.scalar_one_or_none()
-        if not site or site.status != "active":
+        site = await crud_site.get_active(self.db, site_id=site_id, slug=slug)
+        if not site:
             raise NotFoundException(detail=f"站点 {site_id or slug} 不存在")
 
-        return ClientSite.model_validate(site, from_attributes=True)
+        return site
+
+    async def get_site_by_api_token(self, token: str) -> SiteModel:
+        """根据 API Token 获取站点，并进行基础校验。"""
+        site = await crud_site.get_by_api_token(self.db, api_token=token)
+
+        if not site:
+            from app.core.web.exceptions import HTTPException
+
+            raise HTTPException(status_code=401, detail="无效的 API 密钥")
+
+        # 状态校验：检查站点是否被管理员禁用
+        if site.status != "active":
+            from app.core.web.exceptions import HTTPException
+
+            raise HTTPException(status_code=403, detail="该站点已被禁用")
+
+        return site
+
+
+def get_site_service(
+    db: AsyncSession = Depends(get_db),
+) -> SiteService:
+    """获取 SiteService 实例的依赖注入函数"""
+    return SiteService(db)

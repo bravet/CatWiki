@@ -151,7 +151,7 @@ CatWiki 接入 RustFS/MinIO 存储，支持标准对象存储操作。
 | `POST` | `:upload` | 单文件上传 | `file`, `folder` (默认: uploads) |
 | `POST` | `:batchUpload` | 批量上传文件 | `files`, `folder` |
 | `GET` | `/{object_name}:download` | 下载文件 | - |
-| `GET` | `:list` | 列出存储文件 | `prefix`, `recursive` |
+| `GET` | `/` | 列出存储文件 | `prefix`, `recursive` |
 | `GET` | `/{object_name}:info` | 获取文件详细信息 | - |
 | `GET` | `/{object_name}:presignedUrl` | 获取预签名 URL | `expires_hours` (1-168 小时) |
 | `DELETE` | `/{object_name}` | 删除文件 | - |

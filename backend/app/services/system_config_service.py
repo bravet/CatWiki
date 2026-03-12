@@ -4,6 +4,7 @@ import logging
 from typing import Any
 from uuid import uuid4
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.masking import mask_sensitive_data
@@ -12,14 +13,18 @@ from app.core.infra.config import (
 )
 from app.core.infra.config_resolver import MODEL_TYPES, SECTION_TO_KEY
 from app.core.infra.tenant import get_current_tenant, temporary_tenant_context
-from app.core.web.exceptions import BadRequestException
+from app.core.web.exceptions import BadRequestException, NotFoundException
 from app.crud.system_config import crud_system_config
+from app.db.database import get_db
 from app.services.config.configuration_service import configuration_service
 
 logger = logging.getLogger(__name__)
 
 
 class SystemConfigService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     @staticmethod
     def resolve_target_tenant_id(scope: str) -> int | None:
         """根据 scope 确定目标租户 ID"""
@@ -33,8 +38,7 @@ class SystemConfigService:
 
         return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
-    @staticmethod
-    async def get_ai_config(db: AsyncSession, target_tenant_id: int | None) -> dict:
+    async def get_ai_config(self, target_tenant_id: int | None) -> dict:
         """获取 AI 模型配置 (返回结构化数据：configs + meta)"""
         with temporary_tenant_context(target_tenant_id):
             # 1. 初始化模型骨架
@@ -44,7 +48,7 @@ class SystemConfigService:
             for model_type in MODEL_TYPES:
                 config_key = SECTION_TO_KEY[model_type]
                 config = await crud_system_config.get_by_key(
-                    db, config_key=config_key, tenant_id=target_tenant_id
+                    self.db, config_key=config_key, tenant_id=target_tenant_id
                 )
                 if config:
                     val = copy.deepcopy(config.config_value)
@@ -57,7 +61,7 @@ class SystemConfigService:
                 try:
                     from app.crud.tenant import crud_tenant
 
-                    tenant = await crud_tenant.get(db, id=target_tenant_id)
+                    tenant = await crud_tenant.get(self.db, id=target_tenant_id)
                     if tenant and "models" in (tenant.platform_resources_allowed or []):
                         for model_type in MODEL_TYPES:
                             # [✨ 逻辑修正] 只有当租户显式保存了 mode 为 'platform' 时，才视为 Fallback 状态
@@ -69,8 +73,7 @@ class SystemConfigService:
 
             return {"configs": configs, "meta": meta}
 
-    @staticmethod
-    async def resolve_platform_defaults(db: AsyncSession, target_tenant_id: int | None) -> dict:
+    async def resolve_platform_defaults(self, target_tenant_id: int | None) -> dict:
         """解析并聚合平台默认配置 (脱敏后)"""
         if not target_tenant_id:
             return {}
@@ -78,7 +81,7 @@ class SystemConfigService:
         try:
             from app.crud.tenant import crud_tenant
 
-            tenant = await crud_tenant.get(db, id=target_tenant_id)
+            tenant = await crud_tenant.get(self.db, id=target_tenant_id)
             if tenant and "models" in (tenant.platform_resources_allowed or []):
                 from app.core.infra.config_resolver import ConfigResolver
 
@@ -120,45 +123,54 @@ class SystemConfigService:
                 # 3. 递归：处理嵌套结构 (如 extra_body)
                 SystemConfigService._merge_securely(new_dict[k], v)
 
-    @staticmethod
-    async def get_full_ai_state(db: AsyncSession, target_tenant_id: int | None) -> dict:
+    async def get_full_ai_state(self, target_tenant_id: int | None) -> dict:
         """获取全量 AI 状态 (配置 + 元数据 + 平台默认值)"""
-        ai_state = await SystemConfigService.get_ai_config(db, target_tenant_id)
-        platform_defaults = await SystemConfigService.resolve_platform_defaults(
-            db, target_tenant_id
-        )
+        ai_state = await self.get_ai_config(target_tenant_id)
+        platform_defaults = await self.resolve_platform_defaults(target_tenant_id)
         return {
             "configs": ai_state["configs"],
             "meta": ai_state["meta"],
             "platform_defaults": platform_defaults or None,
         }
 
-    @staticmethod
-    async def update_ai_config(
-        db: AsyncSession, target_tenant_id: int | None, update_data: Any
-    ) -> dict:
+    async def delete_config(self, config_key: str, target_tenant_id: int | None) -> None:
+        """删除指定配置"""
+        with temporary_tenant_context(target_tenant_id):
+            db_config = await crud_system_config.get_by_key(
+                self.db, config_key=config_key, tenant_id=target_tenant_id
+            )
+
+        if not db_config:
+            raise NotFoundException(detail=f"配置 {config_key} 不存在")
+
+        await self.db.delete(db_config)
+        await self.db.commit()
+
+    async def update_ai_config(self, target_tenant_id: int | None, update_data: Any) -> dict:
         """更新 AI 模型配置 (保存后返回全量数据)"""
         new_values = update_data.model_dump(exclude_unset=True)
 
-        for model_type in MODEL_TYPES:
-            if model_type in new_values:
-                config_key = SECTION_TO_KEY[model_type]
-                new_config_val = new_values[model_type]
+        async with self.db.begin():
+            for model_type in MODEL_TYPES:
+                if model_type in new_values:
+                    config_key = SECTION_TO_KEY[model_type]
+                    new_config_val = new_values[model_type]
 
-                # [✨ 亮点] 深度合并逻辑：保护真实密钥不被脱敏占位符 (****) 覆盖
-                existing = await crud_system_config.get_by_key(
-                    db, config_key=config_key, tenant_id=target_tenant_id
-                )
+                    # [✨ 亮点] 深度合并逻辑：保护真实密钥不被脱敏占位符 (****) 覆盖
+                    existing = await crud_system_config.get_by_key(
+                        self.db, config_key=config_key, tenant_id=target_tenant_id
+                    )
 
-                if existing and isinstance(existing.config_value, dict):
-                    SystemConfigService._merge_securely(new_config_val, existing.config_value)
+                    if existing and isinstance(existing.config_value, dict):
+                        self._merge_securely(new_config_val, existing.config_value)
 
-                await crud_system_config.update_by_key(
-                    db,
-                    config_key=config_key,
-                    config_value=new_config_val,
-                    tenant_id=target_tenant_id,
-                )
+                    await crud_system_config.update_by_key(
+                        self.db,
+                        config_key=config_key,
+                        config_value=new_config_val,
+                        tenant_id=target_tenant_id,
+                        auto_commit=False,
+                    )
 
         # 2. 清理配置缓存
         try:
@@ -185,18 +197,17 @@ class SystemConfigService:
             asyncio.create_task(_reload_vector_store())
 
         # 4. 返回全量状态
-        return await SystemConfigService.get_full_ai_state(db, target_tenant_id)
+        return await self.get_full_ai_state(target_tenant_id)
 
-    @staticmethod
     async def _resolve_connection_params(
-        db: AsyncSession, target_tenant_id: int | None, model_type: str, config: Any
+        self, target_tenant_id: int | None, model_type: str, config: Any
     ) -> tuple[str, str, str]:
         """解析最终用于连接的 (api_key, base_url, model)"""
         api_key = config.api_key
         base_url = config.base_url
         model = config.model
 
-        is_masked = SystemConfigService._is_masked(api_key)
+        is_masked = self._is_masked(api_key)
         is_platform = config.mode == "platform"
 
         if is_masked or is_platform:
@@ -204,7 +215,7 @@ class SystemConfigService:
             config_key = SECTION_TO_KEY[model_type]
 
             existing = await crud_system_config.get_by_key(
-                db, config_key=config_key, tenant_id=lookup_tenant_id
+                self.db, config_key=config_key, tenant_id=lookup_tenant_id
             )
             if existing and isinstance(existing.config_value, dict):
                 old_val = existing.config_value
@@ -217,24 +228,21 @@ class SystemConfigService:
 
         return api_key, base_url, model
 
-    @staticmethod
     async def test_model_connection(
-        db: AsyncSession, target_tenant_id: int | None, model_type: str, config: Any
+        self, target_tenant_id: int | None, model_type: str, config: Any
     ) -> dict:
         """测试模型连接性 (支持自动从数据库恢复 **** 占位符)"""
-        api_key, base_url, model = await SystemConfigService._resolve_connection_params(
-            db, target_tenant_id, model_type, config
+        api_key, base_url, model = await self._resolve_connection_params(
+            target_tenant_id, model_type, config
         )
 
         try:
             if model_type in ["chat", "vl"]:
-                return await SystemConfigService._test_chat_connection(api_key, base_url, model)
+                return await self._test_chat_connection(api_key, base_url, model)
             elif model_type == "embedding":
-                return await SystemConfigService._test_embedding_connection(
-                    api_key, base_url, model
-                )
+                return await self._test_embedding_connection(api_key, base_url, model)
             elif model_type == "rerank":
-                return await SystemConfigService._test_rerank_connection(api_key, base_url, model)
+                return await self._test_rerank_connection(api_key, base_url, model)
         except Exception as e:
             logger.error(f"❌ {model_type.upper()} connection test failed: {e}")
             raise BadRequestException(detail=f"连接失败: {str(e)}")
@@ -279,24 +287,21 @@ class SystemConfigService:
                 raise Exception(f"HTTP {resp.status_code}: {resp.text[:100]}")
             return {"status": "ok"}
 
-    @staticmethod
-    async def get_doc_processor_config(
-        db: AsyncSession, target_tenant_id: int | None, scope: str
-    ) -> dict:
+    async def get_doc_processor_config(self, target_tenant_id: int | None, scope: str) -> dict:
         """获取文档处理服务配置 (带平台回退合并逻辑)"""
         # 1. 检查平台回退权限
         platform_fallback_allowed = False
         if scope == "tenant" and target_tenant_id:
             from app.crud.tenant import crud_tenant
 
-            tenant = await crud_tenant.get(db, id=target_tenant_id)
+            tenant = await crud_tenant.get(self.db, id=target_tenant_id)
             if tenant and "doc_processors" in (tenant.platform_resources_allowed or []):
                 platform_fallback_allowed = True
 
         tenant_processors = []
         with temporary_tenant_context(target_tenant_id):
             config = await crud_system_config.get_by_key(
-                db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=target_tenant_id
+                self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=target_tenant_id
             )
             if config:
                 tenant_processors = config.config_value.get("processors", [])
@@ -310,7 +315,7 @@ class SystemConfigService:
         if platform_fallback_allowed:
             with temporary_tenant_context(None):
                 platform_config = await crud_system_config.get_by_key(
-                    db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=None
+                    self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=None
                 )
                 if platform_config:
                     platform_processors = platform_config.config_value.get("processors", [])
@@ -326,9 +331,8 @@ class SystemConfigService:
 
         return {"processors": tenant_processors + platform_processors}
 
-    @staticmethod
     async def update_doc_processor_config(
-        db: AsyncSession, target_tenant_id: int | None, update_data: Any
+        self, target_tenant_id: int | None, update_data: Any
     ) -> dict:
         """更新文档处理服务配置 (自动过滤平台来源，并持久化 ID)"""
         config_value = update_data.model_dump(mode="json")
@@ -347,16 +351,17 @@ class SystemConfigService:
 
             config_value["processors"] = filtered_procs
 
-        db_config = await crud_system_config.update_by_key(
-            db,
-            config_key=DOC_PROCESSOR_CONFIG_KEY,
-            config_value=config_value,
-            tenant_id=target_tenant_id,
-        )
+        async with self.db.begin():
+            db_config = await crud_system_config.update_by_key(
+                self.db,
+                config_key=DOC_PROCESSOR_CONFIG_KEY,
+                config_value=config_value,
+                tenant_id=target_tenant_id,
+                auto_commit=False,
+            )
         return copy.deepcopy(db_config.config_value)
 
-    @staticmethod
-    async def test_doc_processor_connection(config: Any) -> dict:
+    async def test_doc_processor_connection(self, config: Any) -> dict:
         """测试文档处理服务连接性"""
         try:
             from app.core.doc_processor import DocProcessorFactory
@@ -370,3 +375,8 @@ class SystemConfigService:
         except Exception as e:
             logger.error(f"❌ Doc processor test failed: {e}")
             raise BadRequestException(detail=f"连接失败: {str(e)}")
+
+
+def get_system_config_service(db: AsyncSession = Depends(get_db)) -> SystemConfigService:
+    """获取 SystemConfigService 实例的依赖注入函数"""
+    return SystemConfigService(db)

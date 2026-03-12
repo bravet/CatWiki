@@ -5,18 +5,32 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.integration.robot.base import BaseRobotAdapter, RobotSession
+from app.db.database import AsyncSessionLocal, get_db
 from app.schemas.chat import ChatCompletionRequest
 from app.schemas.document import VectorRetrieveFilter
-from app.services.chat.chat_service import ChatService
+from app.services.chat.chat_service import ChatService, get_chat_service
+from app.services.chat.history_service import ChatHistoryService
+from app.services.chat.session_service import ChatSessionService, get_chat_session_service
 
 logger = logging.getLogger(__name__)
 
 
 class RobotOrchestrator:
     """机器人通用消息处理（充当 Orchestrator 角色）。"""
+
+    def __init__(
+        self,
+        db: AsyncSession,
+        chat_service: ChatService,
+        session_service: ChatSessionService,
+    ):
+        self.db = db
+        self.chat_service = chat_service
+        self.session_service = session_service
 
     DEFAULT_ERROR_REPLY = "服务暂时繁忙，请稍后再试。"
     DEFAULT_TIMEOUT_REPLY = "服务响应超时，请稍后再试。"
@@ -26,8 +40,21 @@ class RobotOrchestrator:
     _global_lock_mutex = threading.Lock()
 
     @classmethod
-    async def orchestrate_reply(
+    async def orchestrate_as_task(
         cls,
+        adapter: BaseRobotAdapter,
+        session: RobotSession,
+    ) -> None:
+        """后台任务入口：创建独立的数据库会话和服务实例。"""
+        async with AsyncSessionLocal() as db:
+            session_service = ChatSessionService(db)
+            history_service = ChatHistoryService(db)
+            chat_service = ChatService(db, session_service, history_service)
+            orchestrator = cls(db, chat_service, session_service)
+            await orchestrator.orchestrate_reply(adapter=adapter, session=session)
+
+    async def orchestrate_reply(
+        self,
         *,
         adapter: BaseRobotAdapter,
         session: RobotSession,
@@ -38,21 +65,17 @@ class RobotOrchestrator:
         """
         provider = adapter.get_provider_name()
         provider_id = adapter.get_provider_id()
-        thread_id = cls._get_thread_id(provider_id, session.event.from_user, session.event.chat_id)
+        thread_id = self._get_thread_id(provider_id, session.event.from_user, session.event.chat_id)
         content = session.event.content.strip()
 
         # 1. 指令预处理 (全局通用)
         if content.lower() in ["/clear", "重置", "清空对话"]:
             logger.info("🧹 [%s] 指令触发: 重置对话 thread_id=%s", provider, thread_id)
             # 强制清理锁
-            with cls._global_lock_mutex:
-                cls._global_locks.pop(thread_id, None)
+            with self._global_lock_mutex:
+                self._global_locks.pop(thread_id, None)
 
-            from app.db.database import AsyncSessionLocal
-            from app.services.chat.session_service import ChatSessionService
-
-            async with AsyncSessionLocal() as db:
-                await ChatSessionService.delete_session_by_thread_id(db, thread_id)
+            await self.session_service.delete_session_by_thread_id(thread_id)
 
             await adapter.reply(
                 session, "✅ 已为您清空对话上下文，现在可以开始新的咨询了。", is_finish=True
@@ -60,14 +83,14 @@ class RobotOrchestrator:
             return
 
         # 2. 全局并发锁：防止同一线程并发 AI 任务
-        with cls._global_lock_mutex:
+        with self._global_lock_mutex:
             # 清理过期的锁 (超过 10 分钟认为已挂掉)
             now = time.time()
-            expired_threads = [tid for tid, ts in cls._global_locks.items() if now - ts > 600]
+            expired_threads = [tid for tid, ts in self._global_locks.items() if now - ts > 600]
             for tid in expired_threads:
-                cls._global_locks.pop(tid, None)
+                self._global_locks.pop(tid, None)
 
-            if thread_id in cls._global_locks:
+            if thread_id in self._global_locks:
                 logger.warning(
                     "⏳ [%s] 并发任务拦截: thread_id=%s 已有任务在运行", provider, thread_id
                 )
@@ -80,7 +103,7 @@ class RobotOrchestrator:
                 return
 
             # 加锁
-            cls._global_locks[thread_id] = now
+            self._global_locks[thread_id] = now
 
         full_answer = ""
         start_time = time.time()
@@ -96,7 +119,7 @@ class RobotOrchestrator:
 
             if adapter.is_streaming_supported(session):
                 # 2. 启动流式推理
-                async for chunk in cls.stream_ask(
+                async for chunk in self.stream_ask(
                     provider=provider,
                     site_id=session.event.site_id,
                     thread_id=thread_id,
@@ -118,7 +141,7 @@ class RobotOrchestrator:
                             logger.warning("%s 流式更新失败 (待下次重试): %s", provider, e)
             else:
                 # 不支持流式的平台（如企微内部应用/企微客服），走非流式一次性拉取，速度更快
-                full_answer = await cls.ask(
+                full_answer = await self.ask(
                     provider=provider,
                     site_id=session.event.site_id,
                     thread_id=thread_id,
@@ -150,12 +173,11 @@ class RobotOrchestrator:
         finally:
             # Note: background_tasks is handled by FastAPI, no need to await/call it here.
             # 释放锁
-            with cls._global_lock_mutex:
-                cls._global_locks.pop(thread_id, None)
+            with self._global_lock_mutex:
+                self._global_locks.pop(thread_id, None)
 
-    @classmethod
     async def ask(
-        cls,
+        self,
         *,
         provider: str,
         site_id: int,
@@ -173,28 +195,27 @@ class RobotOrchestrator:
             filter=VectorRetrieveFilter(site_id=site_id),
         )
 
-        answer = cls.DEFAULT_EMPTY_REPLY
+        answer = self.DEFAULT_EMPTY_REPLY
         try:
             response = await asyncio.wait_for(
-                ChatService.process_chat_request(
+                self.chat_service.process_chat_request(
                     chat_request, background_tasks or BackgroundTasks()
                 ),
                 timeout=timeout_seconds,
             )
-            msg = cls._extract_first_message_content(response)
+            msg = self._extract_first_message_content(response)
             if msg:
                 answer = msg
         except TimeoutError:
             logger.error("%s AI 推理超时（%ss）: site_id=%s", provider, timeout_seconds, site_id)
-            answer = cls.DEFAULT_TIMEOUT_REPLY
+            answer = self.DEFAULT_TIMEOUT_REPLY
         except Exception as e:
             logger.error("%s AI 推理失败: %s", provider, e, exc_info=True)
-            answer = cls.DEFAULT_ERROR_REPLY
+            answer = self.DEFAULT_ERROR_REPLY
         return answer
 
-    @classmethod
     async def stream_ask(
-        cls,
+        self,
         *,
         provider: str,
         site_id: int,
@@ -212,7 +233,7 @@ class RobotOrchestrator:
 
         try:
             # 1. 使用 ChatService 统一初始化上下文 (llm, 初始状态, 数据库持久化等)
-            llm, initial_state, config, _ = await ChatService.initialize_chat_context(
+            llm, initial_state, config, _ = await self.chat_service.initialize_chat_context(
                 thread_id=thread_id,
                 site_id=site_id,
                 user_id=user,
@@ -223,7 +244,7 @@ class RobotOrchestrator:
 
             async with get_checkpointer() as cp:
                 graph = create_agent_graph(checkpointer=cp, model=llm)
-                async for chunk in ChatService.generate_chat_chunks(
+                async for chunk in self.chat_service.generate_chat_chunks(
                     graph, initial_state, config, llm.model_name, thread_id, background_tasks
                 ):
                     if isinstance(chunk, ChatCompletionChunk):
@@ -233,19 +254,26 @@ class RobotOrchestrator:
                             yield content_piece
         except Exception as e:
             logger.error("%s AI 流式推理失败: %s", provider, e, exc_info=True)
-            yield cls.DEFAULT_ERROR_REPLY
+            yield self.DEFAULT_ERROR_REPLY
 
-    @staticmethod
-    def _get_thread_id(provider_id: str, from_user: str, chat_id: str | None = None) -> str:
+    def _get_thread_id(self, provider_id: str, from_user: str, chat_id: str | None = None) -> str:
         """统一生成机器人会话 ID"""
         target = chat_id or from_user
         return f"{provider_id}-robot-{target}"
 
-    @staticmethod
-    def _extract_first_message_content(response: Any) -> str | None:
+    def _extract_first_message_content(self, response: Any) -> str | None:
         if not hasattr(response, "choices") or not response.choices:
             return None
         msg = response.choices[0].message
         if not msg or not msg.content:
             return None
         return msg.content
+
+
+def get_robot_orchestrator(
+    db: AsyncSession = Depends(get_db),
+    chat_service: ChatService = Depends(get_chat_service),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+) -> RobotOrchestrator:
+    """获取 RobotOrchestrator 实例的依赖注入函数"""
+    return RobotOrchestrator(db, chat_service, session_service)

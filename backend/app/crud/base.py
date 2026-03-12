@@ -179,13 +179,16 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await db.refresh(db_obj)
         return db_obj
 
-    async def delete(self, db: AsyncSession, *, id: Any) -> ModelType | None:
+    async def delete(
+        self, db: AsyncSession, *, id: Any, auto_commit: bool = True
+    ) -> ModelType | None:
         """
         删除记录
 
         参数:
             db: 数据库会话
             id: 记录 ID
+            auto_commit: 是否自动提交
 
         返回:
             删除的模型实例或 None
@@ -193,7 +196,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         obj = await self.get(db, id=id)
         if obj:
             await db.delete(obj)
-            await db.commit()
+            if auto_commit:
+                await db.commit()
         return obj
 
     async def delete_by_tenant(self, db: AsyncSession, *, tenant_id: int) -> int:

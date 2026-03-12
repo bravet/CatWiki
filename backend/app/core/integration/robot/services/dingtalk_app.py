@@ -233,12 +233,7 @@ class DingTalkRobotService:
             )
 
             # 调用统一编排流程
-            from fastapi import BackgroundTasks
-
-            bt = BackgroundTasks()
-            await RobotOrchestrator.orchestrate_reply(
+            await RobotOrchestrator.orchestrate_as_task(
                 adapter=adapter,
                 session=session,
-                background_tasks=bt,
             )
-            await bt()

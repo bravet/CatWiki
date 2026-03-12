@@ -19,14 +19,8 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.web.deps import get_current_user_with_tenant
-from app.core.web.exceptions import (
-    NotFoundException,
-)
-from app.crud.user import crud_user
-from app.db.database import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.response import ApiResponse, PaginatedResponse
 from app.schemas.user import (
@@ -39,7 +33,7 @@ from app.schemas.user import (
     UserUpdate,
     UserUpdatePassword,
 )
-from app.services.user_service import UserService
+from app.services.user_service import UserService, get_user_service
 
 router = APIRouter()
 
@@ -56,7 +50,7 @@ async def list_users(
     site_id: int | None = Query(None, description="站点ID筛选"),
     order_by: str = Query("created_at", description="排序字段"),
     order_dir: Literal["asc", "desc"] = Query("desc", description="排序方向"),
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[PaginatedResponse[UserListItem]]:
     """
@@ -71,8 +65,7 @@ async def list_users(
     - **order_by**: 排序字段
     - **order_dir**: 排序方向 (asc/desc)
     """
-    users, paginator = await UserService.list_users(
-        db,
+    users, paginator = await service.list_users(
         current_user,
         page=page,
         size=size,
@@ -93,17 +86,14 @@ async def list_users(
 @router.get("/{user_id}", response_model=ApiResponse[UserResponse], operation_id="getAdminUser")
 async def get_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[UserResponse]:
     """获取用户详情"""
     # get_current_user_with_tenant 已确保基本访问权
 
-    user = await crud_user.get(db, id=user_id)
-    if not user:
-        raise NotFoundException(detail=f"用户 {user_id} 不存在")
-
-    UserService.ensure_user_access(current_user, user, action="查看")
+    user = await service.get_user(user_id)
+    service.ensure_user_access(current_user, user, action="查看")
 
     return ApiResponse.ok(data=user, msg="获取成功")
 
@@ -116,7 +106,7 @@ async def get_user(
 )
 async def create_user(
     user_in: UserCreate,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[UserResponse]:
     """
@@ -131,14 +121,14 @@ async def create_user(
     """
     # get_current_user_with_tenant 已确保基本访问权
 
-    user = await UserService.create_user(db, current_user, user_in)
+    user = await service.create_user(current_user, user_in)
     return ApiResponse.ok(data=user, msg="创建成功")
 
 
 @router.post(":invite", status_code=status.HTTP_201_CREATED, operation_id="inviteAdminUser")
 async def invite_user(
     user_in: UserInvite,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ):
     """
@@ -152,7 +142,7 @@ async def invite_user(
     """
     # get_current_user_with_tenant 已确保基本访问权
 
-    user, password = await UserService.invite_user(db, current_user, user_in)
+    user, password = await service.invite_user(current_user, user_in)
     user_response = UserResponse.model_validate(user)
     return ApiResponse.ok(data={"user": user_response, "password": password}, msg="用户创建成功")
 
@@ -161,7 +151,7 @@ async def invite_user(
 async def update_user(
     user_id: int,
     user_in: UserUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[UserResponse]:
     """
@@ -176,7 +166,7 @@ async def update_user(
     """
     # get_current_user_with_tenant 已确保基本访问权
 
-    user = await UserService.update_user(db, current_user, user_id, user_in)
+    user = await service.update_user(current_user, user_id, user_in)
     return ApiResponse.ok(data=user, msg="更新成功")
 
 
@@ -186,12 +176,12 @@ async def update_user(
 async def update_user_password(
     user_id: int,
     password_in: UserUpdatePassword,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """更新用户密码"""
     # get_current_user_with_tenant 已允许普通用户修改自己
-    await UserService.update_password(db, current_user, user_id, password_in)
+    await service.update_password(current_user, user_id, password_in)
 
     return ApiResponse.ok(data={"message": "密码更新成功"}, msg="密码更新成功")
 
@@ -199,7 +189,7 @@ async def update_user_password(
 @router.post("/{user_id}:resetPassword", operation_id="resetAdminUserPassword")
 async def reset_user_password(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ):
     """
@@ -208,7 +198,7 @@ async def reset_user_password(
     - Admin can reset password for any user
     - Returns randomly generated temporary password
     """
-    user, new_password = await UserService.reset_password(db, current_user, user_id)
+    user, new_password = await service.reset_password(current_user, user_id)
 
     return ApiResponse.ok(
         data={"user": UserResponse.model_validate(user), "password": new_password},
@@ -219,13 +209,13 @@ async def reset_user_password(
 @router.delete("/{user_id}", response_model=ApiResponse[dict], operation_id="deleteAdminUser")
 async def delete_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """删除用户"""
     # get_current_user_with_tenant 已确保基本访问权
 
-    await UserService.delete_user(db, current_user, user_id)
+    await service.delete_user(current_user, user_id)
 
     return ApiResponse.ok(data={"message": "删除成功"}, msg="删除成功")
 
@@ -233,7 +223,7 @@ async def delete_user(
 @router.post(":login", response_model=ApiResponse[UserLoginResponse], operation_id="loginAdmin")
 async def login(
     login_in: UserLogin,
-    db: AsyncSession = Depends(get_db),
+    service: UserService = Depends(get_user_service),
 ) -> ApiResponse[UserLoginResponse]:
     """
     用户登录
@@ -241,6 +231,6 @@ async def login(
     - **email**: 邮箱
     - **password**: 密码
     """
-    user, token = await UserService.authenticate(db, login_in)
+    user, token = await service.authenticate(login_in)
 
     return ApiResponse.ok(data=UserLoginResponse(token=token, user=user), msg="登录成功")

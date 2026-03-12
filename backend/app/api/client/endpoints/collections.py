@@ -13,12 +13,10 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import get_db
 from app.schemas.collection import CollectionTree
 from app.schemas.response import ApiResponse
-from app.services.collection_service import CollectionService
+from app.services.collection_service import CollectionService, get_collection_service
 
 router = APIRouter()
 
@@ -32,11 +30,10 @@ async def get_collection_tree(
     site_id: int = Query(..., description="站点ID"),
     include_documents: bool = Query(False, description="是否包含文档节点"),
     tenant_id: int | None = Query(None, description="租户ID"),
-    db: AsyncSession = Depends(get_db),
+    service: CollectionService = Depends(get_collection_service),
 ) -> ApiResponse[list[CollectionTree]]:
     """获取合集树形结构（客户端）"""
-    tree = await CollectionService.get_collection_tree(
-        db,
+    tree = await service.get_collection_tree(
         site_id=site_id,
         show_type="all" if include_documents else "collection",
         tenant_id=tenant_id,

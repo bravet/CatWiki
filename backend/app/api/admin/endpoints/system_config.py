@@ -20,13 +20,8 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.infra.tenant import temporary_tenant_context
 from app.core.web.deps import get_current_user_with_tenant
-from app.core.web.exceptions import NotFoundException
-from app.crud.system_config import crud_system_config
-from app.db.database import get_db
 from app.models.user import User
 from app.schemas.response import ApiResponse
 from app.schemas.system_config import (
@@ -37,7 +32,7 @@ from app.schemas.system_config import (
     TestConnectionRequest,
     TestDocProcessorRequest,
 )
-from app.services.system_config_service import SystemConfigService
+from app.services.system_config_service import SystemConfigService, get_system_config_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,14 +45,14 @@ logger = logging.getLogger(__name__)
 )
 async def get_ai_config(
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[AIConfigResponse]:
     """获取 AI 模型配置"""
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
 
     # 1. 直接获取全量状态 (含 configs, meta, platform_defaults)
-    full_state = await SystemConfigService.get_full_ai_state(db, target_tenant_id)
+    full_state = await service.get_full_ai_state(target_tenant_id)
 
     return ApiResponse.ok(
         data=AIConfigResponse(**full_state),
@@ -73,14 +68,14 @@ async def get_ai_config(
 async def update_ai_config(
     config_in: AIConfigUpdate,
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[AIConfigResponse]:
     """更新 AI 模型配置 (仅更新传入部分，返回全量状态)"""
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
 
     # 1. 执行更新，Service 层现在直接返回全量状态
-    full_state = await SystemConfigService.update_ai_config(db, target_tenant_id, config_in)
+    full_state = await service.update_ai_config(target_tenant_id, config_in)
 
     return ApiResponse.ok(
         data=AIConfigResponse(**full_state),
@@ -92,13 +87,13 @@ async def update_ai_config(
 async def delete_config(
     config_key: str,
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     删除指定配置
     """
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
     logger.info(
         "🧭 [SystemConfig] delete_config scope=%s target_tenant_id=%s key=%s",
         scope,
@@ -106,16 +101,7 @@ async def delete_config(
         config_key,
     )
 
-    with temporary_tenant_context(target_tenant_id):
-        db_config = await crud_system_config.get_by_key(
-            db, config_key=config_key, tenant_id=target_tenant_id
-        )
-
-    if not db_config:
-        raise NotFoundException(detail=f"配置 {config_key} 不存在")
-
-    await db.delete(db_config)
-    await db.commit()
+    await service.delete_config(config_key, target_tenant_id)
 
     return ApiResponse.ok(data={"deleted": True}, msg="配置删除成功")
 
@@ -128,13 +114,13 @@ async def delete_config(
 async def test_model_connection(
     request: TestConnectionRequest,
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     测试模型连接性
     """
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
     logger.info(
         "🧭 [SystemConfig] test_model_connection scope=%s target_tenant_id=%s model_type=%s",
         scope,
@@ -142,8 +128,8 @@ async def test_model_connection(
         request.model_type,
     )
 
-    result = await SystemConfigService.test_model_connection(
-        db, target_tenant_id, request.model_type, request.config
+    result = await service.test_model_connection(
+        target_tenant_id, request.model_type, request.config
     )
     return ApiResponse.ok(data=result, msg="连接成功")
 
@@ -158,13 +144,13 @@ async def test_model_connection(
 )
 async def get_doc_processor_config(
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[DocProcessorResponse]:
     """获取文档处理服务配置 (自动合并平台资源)"""
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
 
-    response_val = await SystemConfigService.get_doc_processor_config(db, target_tenant_id, scope)
+    response_val = await service.get_doc_processor_config(target_tenant_id, scope)
     return ApiResponse.ok(data=DocProcessorResponse(**response_val), msg="获取成功")
 
 
@@ -176,18 +162,18 @@ async def get_doc_processor_config(
 async def update_doc_processor_config(
     config_in: DocProcessorsUpdate,
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[DocProcessorResponse]:
     """更新文档处理服务配置 (仅保存租户私有配置)"""
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
 
     # 1. 更新并获取全量状态 (含合并后的平台资源)
     # 注意：service 层 update 后应当返回最新的全量列表，以配合前端更新
-    await SystemConfigService.update_doc_processor_config(db, target_tenant_id, config_in)
+    await service.update_doc_processor_config(target_tenant_id, config_in)
 
     # 2. 重新加载最新全量配置 (含 origin 标记)
-    response_val = await SystemConfigService.get_doc_processor_config(db, target_tenant_id, scope)
+    response_val = await service.get_doc_processor_config(target_tenant_id, scope)
 
     return ApiResponse.ok(data=DocProcessorResponse(**response_val), msg="保存成功")
 
@@ -200,18 +186,18 @@ async def update_doc_processor_config(
 async def test_doc_processor_connection(
     request: TestDocProcessorRequest,
     scope: Literal["platform", "tenant"] = "tenant",
-    db: AsyncSession = Depends(get_db),
+    service: SystemConfigService = Depends(get_system_config_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[dict]:
     """
     测试文档处理服务连接性
     """
-    target_tenant_id = SystemConfigService.resolve_target_tenant_id(scope)
+    target_tenant_id = service.resolve_target_tenant_id(scope)
     logger.info(
         "🧭 [SystemConfig] test_doc_processor_connection scope=%s target_tenant_id=%s",
         scope,
         target_tenant_id,
     )
 
-    result = await SystemConfigService.test_doc_processor_connection(request.config)
+    result = await service.test_doc_processor_connection(request.config)
     return ApiResponse.ok(data=result, msg="连接成功")

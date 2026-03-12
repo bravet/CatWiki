@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.auth import create_access_token
@@ -13,6 +14,7 @@ from app.core.web.exceptions import (
     NotFoundException,
 )
 from app.crud.user import crud_user
+from app.db.database import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.user import (
     UserCreate,
@@ -26,8 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 class UserService:
-    @staticmethod
-    def ensure_user_access(current_user: User, target_user: User, action: str = "view") -> None:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    def ensure_user_access(
+        self, current_user: User, target_user: User, action: str = "view"
+    ) -> None:
         """
         检查当前用户是否有权操作目标用户（无权则抛出异常）
         """
@@ -62,9 +68,17 @@ class UserService:
                 # 如果 target_user.managed_sites 为空，intersection 也是空。
                 raise ForbiddenException(detail=f"无权{action}该用户")
 
-    @staticmethod
+    async def get_user(self, user_id: int) -> User:
+        """
+        获取用户详情
+        """
+        user = await crud_user.get(self.db, id=user_id)
+        if not user:
+            raise NotFoundException(detail=f"用户 {user_id} 不存在")
+        return user
+
     async def list_users(
-        db: AsyncSession,
+        self,
         current_user: User,
         page: int = 1,
         size: int = 10,
@@ -100,7 +114,7 @@ class UserService:
                 filter_site_ids = [site_id]
 
         total = await crud_user.count(
-            db,
+            self.db,
             role=role,
             status=status,
             search=search,
@@ -110,7 +124,7 @@ class UserService:
         paginator = Paginator(page=page, size=size, total=total)
 
         users = await crud_user.list(
-            db,
+            self.db,
             skip=paginator.skip,
             limit=paginator.size,
             role=role,
@@ -123,8 +137,7 @@ class UserService:
         )
         return users, paginator
 
-    @staticmethod
-    async def create_user(db: AsyncSession, current_user: User, user_in: UserCreate) -> User:
+    async def create_user(self, current_user: User, user_in: UserCreate) -> User:
         """
         创建用户（带权限校验）
         """
@@ -143,16 +156,13 @@ class UserService:
                     raise ForbiddenException(detail="无法分配您未管理的站点")
 
         # 检查邮箱是否已存在
-        existing_user = await crud_user.get_by_email(db, email=user_in.email)
+        existing_user = await crud_user.get_by_email(self.db, email=user_in.email)
         if existing_user:
             raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        return await crud_user.create(db, obj_in=user_in)
+        return await crud_user.create(self.db, obj_in=user_in)
 
-    @staticmethod
-    async def invite_user(
-        db: AsyncSession, current_user: User, user_in: UserInvite
-    ) -> tuple[User, str]:
+    async def invite_user(self, current_user: User, user_in: UserInvite) -> tuple[User, str]:
         """
         邀请用户（带权限校验）
         """
@@ -174,25 +184,22 @@ class UserService:
                     raise ForbiddenException(detail="无法分配您未管理的站点")
 
         # 检查邮箱是否已存在
-        existing_user = await crud_user.get_by_email(db, email=user_in.email)
+        existing_user = await crud_user.get_by_email(self.db, email=user_in.email)
         if existing_user:
             raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        user, password = await crud_user.invite(db, obj_in=user_in)
+        user, password = await crud_user.invite(self.db, obj_in=user_in)
         return user, password
 
-    @staticmethod
-    async def update_user(
-        db: AsyncSession, current_user: User, user_id: int, user_in: UserUpdate
-    ) -> User:
+    async def update_user(self, current_user: User, user_id: int, user_in: UserUpdate) -> User:
         """
         更新用户（带权限校验）
         """
-        db_user = await crud_user.get(db, id=user_id)
+        db_user = await crud_user.get(self.db, id=user_id)
         if not db_user:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-        UserService.ensure_user_access(current_user, db_user, action="修改")
+        self.ensure_user_access(current_user, db_user, action="修改")
 
         if current_user.role == UserRole.TENANT_ADMIN:
             if user_in.role == UserRole.ADMIN:
@@ -212,18 +219,19 @@ class UserService:
 
         # 如果更新邮箱，检查是否已被其他用户使用
         if user_in.email and user_in.email != db_user.email:
-            existing_user = await crud_user.get_by_email(db, email=user_in.email)
+            existing_user = await crud_user.get_by_email(self.db, email=user_in.email)
             if existing_user:
                 raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        return await crud_user.update(db, db_obj=db_user, obj_in=user_in)
+        return await crud_user.update(self.db, db_obj=db_user, obj_in=user_in)
 
-    @staticmethod
-    async def authenticate(db: AsyncSession, login_in: UserLogin) -> tuple[User, str]:
+    async def authenticate(self, login_in: UserLogin) -> tuple[User, str]:
         """
         用户登录验证并生成 Token
         """
-        user = await crud_user.authenticate(db, email=login_in.email, password=login_in.password)
+        user = await crud_user.authenticate(
+            self.db, email=login_in.email, password=login_in.password
+        )
         if not user:
             raise BadRequestException(detail="邮箱或密码错误")
 
@@ -236,45 +244,40 @@ class UserService:
 
         # 更新最后登录时间
         user.last_login_at = datetime.utcnow()
-        db.add(user)
-        await db.commit()
+        self.db.add(user)
+        await self.db.commit()
 
         return user, token
 
-    @staticmethod
-    async def reset_password(
-        db: AsyncSession, current_user: User, user_id: int
-    ) -> tuple[User, str]:
+    async def reset_password(self, current_user: User, user_id: int) -> tuple[User, str]:
         """
         重置用户密码（带权限校验）
         """
-        db_user = await crud_user.get(db, id=user_id)
+        db_user = await crud_user.get(self.db, id=user_id)
         if not db_user:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-        UserService.ensure_user_access(current_user, db_user, action="重置密码")
+        self.ensure_user_access(current_user, db_user, action="重置密码")
 
-        user, new_password = await crud_user.reset_password(db, db_obj=db_user)
+        user, new_password = await crud_user.reset_password(self.db, db_obj=db_user)
         return user, new_password
 
-    @staticmethod
-    async def delete_user(db: AsyncSession, current_user: User, user_id: int) -> None:
+    async def delete_user(self, current_user: User, user_id: int) -> None:
         """
         删除用户（带权限校验）
         """
-        db_user = await crud_user.get(db, id=user_id)
+        db_user = await crud_user.get(self.db, id=user_id)
         if not db_user:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-        UserService.ensure_user_access(current_user, db_user, action="删除")
+        self.ensure_user_access(current_user, db_user, action="删除")
 
-        success = await crud_user.delete(db, id=user_id)
+        success = await crud_user.delete(self.db, id=user_id)
         if not success:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-    @staticmethod
     async def update_password(
-        db: AsyncSession,
+        self,
         current_user: User,
         user_id: int,
         password_in: UserUpdatePassword,
@@ -282,15 +285,22 @@ class UserService:
         """
         更新用户密码（带权限校验）
         """
-        db_user = await crud_user.get(db, id=user_id)
+        db_user = await crud_user.get(self.db, id=user_id)
         if not db_user:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
-        UserService.ensure_user_access(current_user, db_user, action="修改密码")
+        self.ensure_user_access(current_user, db_user, action="修改密码")
 
         from app.crud.user import verify_password
 
         if not verify_password(password_in.old_password, db_user.password_hash):
             raise BadRequestException(detail="旧密码错误")
 
-        await crud_user.update_password(db, db_obj=db_user, new_password=password_in.new_password)
+        await crud_user.update_password(
+            self.db, db_obj=db_user, new_password=password_in.new_password
+        )
+
+
+def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
+    """获取 UserService 实例的依赖注入函数"""
+    return UserService(db)

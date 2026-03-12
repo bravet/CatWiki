@@ -14,6 +14,7 @@
 
 import logging
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.utils import Paginator
@@ -23,6 +24,7 @@ from app.core.web.exceptions import (
     NotFoundException,
 )
 from app.crud import crud_collection, crud_document, crud_site
+from app.db.database import get_db
 from app.models.collection import Collection as CollectionModel
 from app.schemas.collection import (
     CollectionCreate,
@@ -34,9 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 class CollectionService:
-    @staticmethod
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     async def get_collection_tree(
-        db: AsyncSession,
+        self,
         site_id: int,
         show_type: str | None = None,
         tenant_id: int | None = None,
@@ -51,7 +55,7 @@ class CollectionService:
         documents_by_collection = {}
         if include_documents:
             all_documents = await crud_document.list(
-                db, site_id=site_id, tenant_id=tenant_id, status=status, skip=0, limit=None
+                self.db, site_id=site_id, tenant_id=tenant_id, status=status, skip=0, limit=None
             )
             for doc in all_documents:
                 cid = doc.collection_id
@@ -61,7 +65,7 @@ class CollectionService:
 
         async def build_tree(parent_id: int | None = None) -> list[CollectionTree]:
             collections = await crud_collection.list(
-                db, site_id=site_id, tenant_id=tenant_id, parent_id=parent_id
+                self.db, site_id=site_id, tenant_id=tenant_id, parent_id=parent_id
             )
             tree = []
             for collection in collections:
@@ -94,9 +98,8 @@ class CollectionService:
 
         return await build_tree()
 
-    @staticmethod
     async def list_collections(
-        db: AsyncSession,
+        self,
         site_id: int,
         tenant_id: int | None = None,
         parent_id: int | None = None,
@@ -105,11 +108,11 @@ class CollectionService:
     ) -> tuple[list[CollectionModel], Paginator]:
         """获取合集列表（带分页）"""
         total = await crud_collection.count(
-            db, site_id=site_id, tenant_id=tenant_id, parent_id=parent_id
+            self.db, site_id=site_id, tenant_id=tenant_id, parent_id=parent_id
         )
         paginator = Paginator(page=page, size=size, total=total)
         collections = await crud_collection.list(
-            db,
+            self.db,
             site_id=site_id,
             tenant_id=tenant_id,
             parent_id=parent_id,
@@ -118,32 +121,30 @@ class CollectionService:
         )
         return collections, paginator
 
-    @staticmethod
     async def get_collection(
-        db: AsyncSession, collection_id: int, tenant_id: int | None = None
+        self, collection_id: int, tenant_id: int | None = None
     ) -> CollectionModel:
         """获取合集详情"""
-        collection = await crud_collection.get(db, id=collection_id)
+        collection = await crud_collection.get(self.db, id=collection_id)
         if not collection:
             raise NotFoundException(detail=f"合集 {collection_id} 不存在")
         if tenant_id is not None and collection.tenant_id != tenant_id:
             raise ForbiddenException(detail="无权访问该租户的合集")
         return collection
 
-    @staticmethod
     async def create_collection(
-        db: AsyncSession, collection_in: CollectionCreate, tenant_id: int | None = None
+        self, collection_in: CollectionCreate, tenant_id: int | None = None
     ) -> CollectionModel:
         """
         创建合集（带一致性校验）
         """
-        site = await crud_site.get(db, id=collection_in.site_id)
+        site = await crud_site.get(self.db, id=collection_in.site_id)
         if not site:
             raise BadRequestException(detail=f"站点 {collection_in.site_id} 不存在")
 
         if collection_in.parent_id:
-            parent = await CollectionService.get_collection(
-                db, collection_id=collection_in.parent_id, tenant_id=tenant_id
+            parent = await self.get_collection(
+                collection_id=collection_in.parent_id, tenant_id=tenant_id
             )
             if parent.site_id != collection_in.site_id:
                 raise BadRequestException(detail="父合集必须属于同一站点")
@@ -153,11 +154,10 @@ class CollectionService:
         if tenant_id is not None:
             obj_in_dict["tenant_id"] = tenant_id
 
-        return await crud_collection.create(db, obj_in=obj_in_dict)
+        return await crud_collection.create(self.db, obj_in=obj_in_dict)
 
-    @staticmethod
     async def update_collection(
-        db: AsyncSession,
+        self,
         collection_id: int,
         collection_in: CollectionUpdate,
         tenant_id: int | None = None,
@@ -165,47 +165,43 @@ class CollectionService:
         """
         更新合集（带一致性校验）
         """
-        collection = await CollectionService.get_collection(
-            db, collection_id=collection_id, tenant_id=tenant_id
-        )
+        collection = await self.get_collection(collection_id=collection_id, tenant_id=tenant_id)
 
         if collection_in.parent_id:
             if collection_in.parent_id == collection_id:
                 raise BadRequestException(detail="不能将合集设置为自己的子合集")
 
-            parent = await CollectionService.get_collection(
-                db, collection_id=collection_in.parent_id, tenant_id=tenant_id
+            parent = await self.get_collection(
+                collection_id=collection_in.parent_id, tenant_id=tenant_id
             )
             if parent.site_id != collection.site_id:
                 raise BadRequestException(detail="父合集必须属于同一站点")
 
-        return await crud_collection.update(db, db_obj=collection, obj_in=collection_in)
+        return await crud_collection.update(self.db, db_obj=collection, obj_in=collection_in)
 
-    @staticmethod
-    async def delete_collection(
-        db: AsyncSession, collection_id: int, tenant_id: int | None = None
-    ) -> None:
+    async def delete_collection(self, collection_id: int, tenant_id: int | None = None) -> None:
         """
         删除合集（带级联检查）
         """
-        _ = await CollectionService.get_collection(
-            db, collection_id=collection_id, tenant_id=tenant_id
-        )
+        _ = await self.get_collection(collection_id=collection_id, tenant_id=tenant_id)
 
-        collection_ids = await crud_collection.get_descendant_ids(db, collection_id=collection_id)
-        documents = await crud_document.list(db, collection_ids=collection_ids, skip=0, limit=1)
+        collection_ids = await crud_collection.get_descendant_ids(
+            self.db, collection_id=collection_id
+        )
+        documents = await crud_document.list(
+            self.db, collection_ids=collection_ids, skip=0, limit=1
+        )
         if documents:
             raise BadRequestException(detail="无法删除合集，该合集下还有文档。")
 
-        children = await crud_collection.list(db, parent_id=collection_id)
+        children = await crud_collection.list(self.db, parent_id=collection_id)
         if children:
             raise BadRequestException(detail="无法删除合集，该合集下还有子合集。")
 
-        await crud_collection.delete(db, id=collection_id)
+        await crud_collection.delete(self.db, id=collection_id)
 
-    @staticmethod
     async def move_collection(
-        db: AsyncSession,
+        self,
         collection_id: int,
         target_parent_id: int | None,
         target_position: int,
@@ -214,9 +210,7 @@ class CollectionService:
         """
         移动合集到新位置（带一致性重排逻辑）
         """
-        collection = await CollectionService.get_collection(
-            db, collection_id=collection_id, tenant_id=tenant_id
-        )
+        collection = await self.get_collection(collection_id=collection_id, tenant_id=tenant_id)
 
         site_id = collection.site_id
 
@@ -224,35 +218,40 @@ class CollectionService:
             if target_parent_id == collection_id:
                 raise BadRequestException(detail="不能将合集移动到自己下面")
 
-            target_parent = await CollectionService.get_collection(
-                db, collection_id=target_parent_id, tenant_id=tenant_id
+            target_parent = await self.get_collection(
+                collection_id=target_parent_id, tenant_id=tenant_id
             )
             if target_parent.site_id != site_id:
                 raise BadRequestException(detail="目标父合集必须属于同一站点")
 
             descendant_ids = await crud_collection.get_descendant_ids(
-                db, collection_id=collection_id
+                self.db, collection_id=collection_id
             )
             if target_parent_id in descendant_ids:
                 raise BadRequestException(detail="不能将合集移动到自己的后代节点下")
 
-        siblings = await crud_collection.list(db, site_id=site_id, parent_id=target_parent_id)
+        siblings = await crud_collection.list(self.db, site_id=site_id, parent_id=target_parent_id)
         siblings = [s for s in siblings if s.id != collection_id]
 
         if target_position > len(siblings):
             target_position = len(siblings)
 
-        collection.parent_id = target_parent_id
-        db.add(collection)
-        await db.commit()
-        await db.refresh(collection)
+        async with self.db.begin():
+            collection.parent_id = target_parent_id
+            self.db.add(collection)
 
-        siblings.insert(target_position, collection)
-        for index, sibling in enumerate(siblings):
-            if sibling.order != index:
-                sibling.order = index
-                db.add(sibling)
+            siblings.insert(target_position, collection)
+            for index, sibling in enumerate(siblings):
+                if sibling.order != index:
+                    sibling.order = index
+                    self.db.add(sibling)
 
-        await db.commit()
-        await db.refresh(collection)
+        await self.db.refresh(collection)
         return collection
+
+
+def get_collection_service(
+    db: AsyncSession = Depends(get_db),
+) -> CollectionService:
+    """获取 CollectionService 实例的依赖注入函数"""
+    return CollectionService(db)

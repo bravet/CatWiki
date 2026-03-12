@@ -14,16 +14,21 @@
 
 """统计服务"""
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import crud_document
 from app.crud.document_view_event import crud_document_view_event
-from app.services.chat.session_service import ChatSessionService
+from app.db.database import get_db
+from app.services.chat.session_service import ChatSessionService, get_chat_session_service
 
 
 class StatsService:
-    @staticmethod
-    async def get_site_stats(db: AsyncSession, site_id: int) -> dict:
+    def __init__(self, db: AsyncSession, session_service: ChatSessionService):
+        self.db = db
+        self.session_service = session_service
+
+    async def get_site_stats(self, site_id: int) -> dict:
         """获取站点聚合统计数据
 
         包含：
@@ -33,16 +38,20 @@ class StatsService:
         """
         # 1. 基础文档统计
         # 返回: {total_documents, total_views}
-        doc_stats = await crud_document.get_site_stats(db, site_id=site_id)
+        doc_stats = await crud_document.get_site_stats(self.db, site_id=site_id)
 
         # 2. 浏览事件统计 (NEW)
-        views_today = await crud_document_view_event.get_views_today(db, site_id=site_id)
-        unique_ips_today = await crud_document_view_event.get_unique_ips_today(db, site_id=site_id)
-        total_unique_ips = await crud_document_view_event.get_total_unique_ips(db, site_id=site_id)
+        views_today = await crud_document_view_event.get_views_today(self.db, site_id=site_id)
+        unique_ips_today = await crud_document_view_event.get_unique_ips_today(
+            self.db, site_id=site_id
+        )
+        total_unique_ips = await crud_document_view_event.get_total_unique_ips(
+            self.db, site_id=site_id
+        )
 
         # 3. AI 会话统计
         # 返回: {total_sessions, total_messages, active_users, new_sessions_today}
-        ai_stats = await ChatSessionService.get_stats(db, site_id=site_id)
+        ai_stats = await self.session_service.get_stats(site_id=site_id)
 
         return {
             "total_documents": doc_stats.get("total_documents", 0),
@@ -58,3 +67,11 @@ class StatsService:
             "daily_trends": ai_stats.get("daily_trends", []),
             "recent_sessions": ai_stats.get("recent_sessions", []),
         }
+
+
+def get_stats_service(
+    db: AsyncSession = Depends(get_db),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+) -> StatsService:
+    """获取 StatsService 实例的依赖注入函数"""
+    return StatsService(db, session_service)
