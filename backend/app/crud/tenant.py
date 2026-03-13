@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,13 +26,49 @@ from app.schemas.tenant import TenantCreate, TenantUpdate
 class CRUDTenant(CRUDBase[Tenant, TenantCreate, TenantUpdate]):
     """租户 CRUD 操作"""
 
+    async def get(self, db: AsyncSession, id: Any) -> Tenant | None:
+        """获取租户 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"tenant:id:{id}"
+
+        async def _fetch():
+            return await super(CRUDTenant, self).get(db, id)
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=3600)
+
     async def get_by_slug(self, db: AsyncSession, *, slug: str) -> Tenant | None:
-        """根据 slug 获取租户"""
-        result = await db.execute(select(Tenant).where(Tenant.slug == slug))
-        return result.scalar_one_or_none()
+        """根据 slug 获取租户 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"tenant:slug:{slug}"
+
+        async def _fetch():
+            result = await db.execute(select(Tenant).where(Tenant.slug == slug))
+            return result.scalar_one_or_none()
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=3600)
+
+    async def update(
+        self, db: AsyncSession, *, db_obj: Tenant, obj_in: TenantUpdate | dict[str, Any]
+    ) -> Tenant:
+        """更新租户 (带缓存失效)"""
+        tenant = await super().update(db, db_obj=db_obj, obj_in=obj_in)
+
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        await cache.delete(f"tenant:id:{tenant.id}")
+        await cache.delete(f"tenant:slug:{tenant.slug}")
+        return tenant
 
     async def remove(self, db: AsyncSession, *, id: int) -> Tenant:
-        """删除租户并清理相关向量数据"""
+        """删除租户并清理相关向量数据及缓存"""
+        # 先获取旧数据用于清理缓存键
+        tenant = await self.get(db, id=id)
+
         # 1. 清理该租户下所有站点的向量数据
         try:
             from app.core.vector.vector_store import VectorStoreManager
@@ -43,7 +81,19 @@ class CRUDTenant(CRUDBase[Tenant, TenantCreate, TenantUpdate]):
             logger.warning(f"⚠️ [Cleanup] 租户 {id} 向量清理失败: {e}")
 
         # 2. 执行数据库删除
-        return await super().remove(db, id=id)
+        tenant = await super().remove(db, id=id)
+
+        # 3. 清理缓存
+        if tenant:
+            from app.core.infra.cache import get_cache
+
+            cache = get_cache()
+            await cache.delete(f"tenant:id:{tenant.id}")
+            await cache.delete(f"tenant:slug:{tenant.slug}")
+            # 同时清理该租户相关的配置缓存
+            await cache.delete_by_prefix(f"config:tenant:{tenant.id}")
+
+        return tenant
 
 
 crud_tenant = CRUDTenant(Tenant)

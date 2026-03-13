@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.masking import mask_bot_config_inplace
 from app.core.common.utils import Paginator, generate_token
+from app.core.infra.cache import cached, get_cache
 from app.core.infra.config import settings
 from app.core.integration.robot.services.dingtalk_app import DingTalkRobotService
 from app.core.integration.robot.services.feishu_app import FeishuRobotService
@@ -221,6 +222,9 @@ class SiteService:
         await self.db.refresh(site, ["tenant"])
 
         await self.refresh_bot_stream_services()
+        # Clear client site caches as a new site might affect the list
+        cache = get_cache()
+        await cache.delete_by_prefix("service:sites:client_list")
         return site
 
     async def update_site(self, site_id: int, site_in: SiteUpdate) -> SiteModel:
@@ -261,6 +265,11 @@ class SiteService:
         # 预加载租户信息以填充 tenant_slug
         await self.db.refresh(site, ["tenant"])
         await self.refresh_bot_stream_services()
+
+        # Clear client site caches as site data has changed
+        cache = get_cache()
+        await cache.delete_by_prefix("service:sites:client_list")
+        await cache.delete_by_prefix("service:sites:client_detail")
         return site
 
     async def delete_site(self, site_id: int) -> None:
@@ -271,6 +280,12 @@ class SiteService:
 
         await self.refresh_bot_stream_services()
 
+        # Clear client site caches as a site has been deleted
+        cache = get_cache()
+        await cache.delete_by_prefix("service:sites:client_list")
+        await cache.delete_by_prefix("service:sites:client_detail")
+
+    @cached(ttl=60, key_prefix="service:sites:client_list")
     async def list_client_sites(
         self,
         page: int,
@@ -280,8 +295,6 @@ class SiteService:
         keyword: str | None,
     ) -> tuple[list[SiteModel], Paginator]:
         """获取激活的站点列表（客户端）"""
-        from app.core.common.utils import Paginator
-
         sites, total = await crud_site.list_active(
             self.db,
             page=page,
@@ -294,6 +307,7 @@ class SiteService:
         paginator = Paginator(page=page, size=size, total=total)
         return sites, paginator
 
+    @cached(ttl=60, key_prefix="service:sites:client_detail")
     async def get_client_site(
         self, site_id: int | None = None, slug: str | None = None
     ) -> SiteModel:

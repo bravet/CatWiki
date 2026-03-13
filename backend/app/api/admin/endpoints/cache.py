@@ -46,7 +46,7 @@ async def clear_cache(
 ) -> ApiResponse[dict]:
     """清空所有缓存"""
     cache = get_cache()
-    cache.clear()
+    await cache.clear()
     logger.info("管理员清空了所有缓存")
 
     return ApiResponse.ok(data={"message": "缓存已清空"}, msg="清空缓存成功")

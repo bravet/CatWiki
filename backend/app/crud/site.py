@@ -56,46 +56,58 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         await db.refresh(db_obj)
         return db_obj
 
+    async def get(self, db: AsyncSession, id: Any) -> Site | None:
+        """获取站点 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"site:id:{id}"
+
+        async def _fetch():
+            return await super(CRUDSite, self).get(db, id)
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=600)
+
     async def get_by_name(self, db: AsyncSession, *, name: str) -> Site | None:
         """根据名称获取站点"""
         result = await db.execute(select(self.model).where(self.model.name == name))
         return result.scalar_one_or_none()
 
     async def get_by_slug(self, db: AsyncSession, *, slug: str) -> Site | None:
-        """根据标识获取站点"""
-        result = await db.execute(select(self.model).where(self.model.slug == slug))
-        return result.scalar_one_or_none()
+        """根据标识获取站点 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"site:slug:{slug}"
+
+        async def _fetch():
+            result = await db.execute(select(self.model).where(self.model.slug == slug))
+            return result.scalar_one_or_none()
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=600)
 
     async def get_by_api_token(self, db: AsyncSession, *, api_token: str) -> Site | None:
         """根据 API Token 获取站点 (查询 bot_config->api_bot->api_key)"""
-        # 1. 尝试从缓存获取
-        # TODO: 未来考虑使用 Redis 替代内存缓存，以支持多实例部署和防止容器重启导致缓存失效
+        # 1. 使用 get_or_set 自动处理 缓存读取/数据库查询/回写逻辑
         from app.core.infra.cache import get_cache
 
         cache = get_cache()
         cache_key = f"site_by_token:{api_token}"
 
-        cached_site = cache.get(cache_key)
-        if cached_site:
-            return cached_site
-
-        # 2. 从数据库查询
-        # 使用 func.json_extract_path_text 提取 JSON 文本值
-        # 这种方式比 cast 更稳健，避免了不同 SQLAlchemy/Driver 版本生成的 SQL 语法不兼容问题 ([...])
-        result = await db.execute(
-            select(self.model).where(
-                func.json_extract_path_text(self.model.bot_config, "api_bot", "api_key")
-                == api_token,
-                func.json_extract_path_text(self.model.bot_config, "api_bot", "enabled") == "true",
+        async def _fetch_from_db():
+            # 使用 func.json_extract_path_text 提取 JSON 文本值
+            # 这种方式比 cast 更稳健，避免了不同 SQLAlchemy/Driver 版本生成的 SQL 语法不兼容问题 ([...])
+            result = await db.execute(
+                select(self.model).where(
+                    func.json_extract_path_text(self.model.bot_config, "api_bot", "api_key")
+                    == api_token,
+                    func.json_extract_path_text(self.model.bot_config, "api_bot", "enabled")
+                    == "true",
+                )
             )
-        )
-        site = result.scalar_one_or_none()
+            return result.scalar_one_or_none()
 
-        # 3. 写入缓存 (有效期 1 小时)
-        if site:
-            cache.set(cache_key, site, ttl=3600)
-
-        return site
+        return await cache.get_or_set(cache_key, _fetch_from_db, ttl=3600)
 
     async def update(
         self, db: AsyncSession, *, db_obj: Site, obj_in: SiteUpdate | dict[str, Any]
@@ -109,17 +121,15 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         # 2. 执行更新
         updated_site = await super().update(db, db_obj=db_obj, obj_in=obj_in)
 
-        # 3. 清除旧 Key 的缓存
-        # 无论是 Key 变了，还是 Site 其他信息变了，都需要清除旧 Key 指向的缓存，
-        # 也就是让下一次请求强制刷新
+        # 3. 清理缓存
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+
+        await cache.delete(f"site:id:{updated_site.id}")
+        await cache.delete(f"site:slug:{updated_site.slug}")
         if old_api_key:
-            from app.core.infra.cache import get_cache
-
-            cache = get_cache()
-            cache_key = f"site_by_token:{old_api_key}"
-            cache.delete(cache_key)
-
-        # 4. 如果 Key 更新了，新 Key 自然没有缓存，无需处理
+            await cache.delete(f"site_by_token:{old_api_key}")
 
         return updated_site
 
@@ -226,8 +236,19 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
 
         # 5. 删除站点
         await db.delete(site)
-
         await db.commit()
+
+        # 6. 清理缓存
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        await cache.delete(f"site:id:{id}")
+        await cache.delete(f"site:slug:{site.slug}")
+        if site.bot_config and "api_bot" in site.bot_config:
+            k = site.bot_config["api_bot"].get("api_key")
+            if k:
+                await cache.delete(f"site_by_token:{k}")
+
         return True
 
     async def list_active(
@@ -306,18 +327,28 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
     async def get_active(
         self, db: AsyncSession, *, site_id: int | None = None, slug: str | None = None
     ) -> Site | None:
-        """获取单个激活的站点详情"""
-        from sqlalchemy import select
-        from sqlalchemy.orm import joinedload
+        """获取单个激活的站点详情 (带缓存)"""
+        from app.core.infra.cache import get_cache
 
-        if site_id:
-            stmt = select(self.model).where(self.model.id == site_id)
-        else:
-            stmt = select(self.model).where(self.model.slug == slug)
+        cache = get_cache()
 
-        stmt = stmt.where(self.model.status == "active").options(joinedload(self.model.tenant))
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        target = f"id:{site_id}" if site_id else f"slug:{slug}"
+        cache_key = f"site:active:{target}"
+
+        async def _fetch():
+            from sqlalchemy import select
+            from sqlalchemy.orm import joinedload
+
+            if site_id:
+                stmt = select(self.model).where(self.model.id == site_id)
+            else:
+                stmt = select(self.model).where(self.model.slug == slug)
+
+            stmt = stmt.where(self.model.status == "active").options(joinedload(self.model.tenant))
+            result = await db.execute(stmt)
+            return result.scalar_one_or_none()
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=600)
 
 
 crud_site = CRUDSite(Site)

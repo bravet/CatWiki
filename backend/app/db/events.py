@@ -12,11 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sqlalchemy import event, literal, true
+from sqlalchemy import event, true
 from sqlalchemy.orm import Session, with_loader_criteria
 
 from app.core.infra.tenant import get_current_tenant
 from app.db.base import Base
+
+
+def _tenant_filter_criteria(cls):
+    """
+    租户过滤准则函数（全局具名以支持序列化）
+    """
+
+    tenant_id = get_current_tenant()
+    if tenant_id is not None:
+        if hasattr(cls, "tenant_id"):
+            return cls.tenant_id == tenant_id
+    return true()
+
+
+def apply_tenant_filter(execute_state):
+    """
+    在 ORM 执行前拦截并注入 tenant_id 过滤条件
+    """
+
+    tenant_id = get_current_tenant()
+    if tenant_id is not None:
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                Base,
+                _tenant_filter_criteria,
+                include_aliases=True,
+            )
+        )
+
+
+@event.listens_for(Base, "before_insert", propagate=True)
+def apply_tenant_on_insert(mapper, connection, target):
+    """
+    在数据入库前自动填充 tenant_id
+    """
+    if hasattr(target, "tenant_id") and getattr(target, "tenant_id") is None:
+        from app.core.infra.tenant import get_current_tenant
+
+        tenant_id = get_current_tenant()  # In OSS, this returns 1
+        if tenant_id is not None:
+            setattr(target, "tenant_id", tenant_id)
 
 
 def register_core_db_events():
@@ -24,32 +65,4 @@ def register_core_db_events():
     Register core database events.
     In Community Edition, this handles basic tenant_id population and filtration (defaulting to 1).
     """
-
-    @event.listens_for(Session, "do_orm_execute")
-    def apply_tenant_filter(execute_state):
-        """
-        在 ORM 执行前拦截并注入 tenant_id 过滤条件
-        """
-        tenant_id = get_current_tenant()
-        if tenant_id is not None:
-            tid_literal = literal(tenant_id)
-            execute_state.statement = execute_state.statement.options(
-                with_loader_criteria(
-                    Base,
-                    lambda cls: cls.tenant_id == tid_literal
-                    if hasattr(cls, "tenant_id")
-                    else true(),
-                    include_aliases=True,
-                )
-            )
-        return
-
-    @event.listens_for(Base, "before_insert", propagate=True)
-    def apply_tenant_on_insert(mapper, connection, target):
-        """
-        在数据入库前自动填充 tenant_id
-        """
-        if hasattr(target, "tenant_id") and getattr(target, "tenant_id") is None:
-            tenant_id = get_current_tenant()  # In OSS, this returns 1
-            if tenant_id is not None:
-                setattr(target, "tenant_id", tenant_id)
+    event.listen(Session, "do_orm_execute", apply_tenant_filter)

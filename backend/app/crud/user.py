@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import secrets
 import string
+from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -96,7 +97,6 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
         if site_ids:
             # 筛选管理特定站点的用户
-            # 只要用户管理的站点中包含传入的 site_ids 中的任意一个，就符合条件
             site_conditions = []
             for sid in site_ids:
                 s_str = str(sid)
@@ -119,10 +119,30 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
 
         return query
 
+    async def get(self, db: AsyncSession, id: Any) -> User | None:
+        """获取用户 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"user:id:{id}"
+
+        async def _fetch():
+            return await super(CRUDUser, self).get(db, id)
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=600)
+
     async def get_by_email(self, db: AsyncSession, *, email: str) -> User | None:
-        """根据邮箱获取用户"""
-        result = await db.execute(select(self.model).where(self.model.email == email))
-        return result.scalar_one_or_none()
+        """根据邮箱获取用户 (带缓存)"""
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        cache_key = f"user:email:{email}"
+
+        async def _fetch():
+            result = await db.execute(select(self.model).where(self.model.email == email))
+            return result.scalar_one_or_none()
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=600)
 
     async def list(
         self,
@@ -253,43 +273,53 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         """更新用户信息"""
         update_data = obj_in.model_dump(exclude_unset=True)
 
-        # 处理管理的站点
+        # 处理管理的站点 (由于模型层是字符串，Schema 层是列表，需要特殊转换)
         if "managed_site_ids" in update_data:
             managed_site_ids = update_data.pop("managed_site_ids")
             if managed_site_ids is not None:
                 db_obj.set_managed_sites(managed_site_ids)
 
-        # 更新其他字段
-        for field, value in update_data.items():
-            setattr(db_obj, field, value)
+        # 更新并清理缓存
+        user = await super().update(db, db_obj=db_obj, obj_in=update_data, auto_commit=auto_commit)
 
-        db.add(db_obj)
-        if auto_commit:
-            await db.commit()
-        else:
-            await db.flush()
-        await db.refresh(db_obj)
+        from app.core.infra.cache import get_cache
 
-        return db_obj
+        cache = get_cache()
+        await cache.delete(f"user:id:{user.id}")
+        await cache.delete(f"user:email:{user.email}")
+        return user
 
     async def update_password(self, db: AsyncSession, *, db_obj: User, new_password: str) -> User:
         """更新用户密码"""
         db_obj.password_hash = get_password_hash(new_password)
-
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
 
+        # 清理缓存
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        await cache.delete(f"user:id:{db_obj.id}")
+        await cache.delete(f"user:email:{db_obj.email}")
+
         return db_obj
 
     async def reset_password(self, db: AsyncSession, *, db_obj: User) -> tuple[User, str]:
-        """重置用户密码（生成随机临时密码）"""
+        """重置用户密码（并清理缓存）"""
         generated_password = generate_random_password()
         db_obj.password_hash = get_password_hash(generated_password)
 
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
+
+        # 清理缓存
+        from app.core.infra.cache import get_cache
+
+        cache = get_cache()
+        await cache.delete(f"user:id:{db_obj.id}")
+        await cache.delete(f"user:email:{db_obj.email}")
 
         return db_obj, generated_password
 
@@ -312,7 +342,29 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             db.add(user)
             await db.commit()
 
+            # 清理缓存以保证一致性
+            from app.core.infra.cache import get_cache
+
+            cache = get_cache()
+            await cache.delete(f"user:id:{user.id}")
+            await cache.delete(f"user:email:{user.email}")
+
         return user
+
+    async def delete(self, db: AsyncSession, *, id: Any, auto_commit: bool = True) -> User | None:
+        """删除用户并清理缓存"""
+        user = await self.get(db, id=id)
+        if user:
+            email = user.email
+            res = await super().delete(db, id=id, auto_commit=auto_commit)
+            if res:
+                from app.core.infra.cache import get_cache
+
+                cache = get_cache()
+                await cache.delete(f"user:id:{id}")
+                await cache.delete(f"user:email:{email}")
+            return res
+        return None
 
 
 crud_user = CRUDUser(User)

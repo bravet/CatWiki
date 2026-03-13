@@ -113,7 +113,17 @@ class LifecycleManager:
         try:
             await WeComSmartService.get_instance().shutdown()
         except Exception as e:
-            logger.warning(f"⚠️ [Lifecycle] WeCom Smart shutdown failed: {e}")
+            logger.warning(f"⚠️ [Lifecycle] WeCom Smart LongConn shutdown failed: {e}")
+
+        # 5. 关闭缓存服务
+        try:
+            from app.core.infra.cache import _cache_instance
+
+            if _cache_instance:
+                await _cache_instance.close()
+                logger.info("✅ [Lifecycle] Cache service closed.")
+        except Exception as e:
+            logger.warning(f"⚠️ [Lifecycle] Cache close failed: {e}")
 
         logger.info("🏁 [Lifecycle] All core components stopped.")
 
@@ -128,6 +138,7 @@ class LifecycleManager:
         results = {
             "database": "unknown",
             "vector_store": "unknown",
+            "cache": "unknown",
             "rustfs": "unknown",
             "llm": "unknown",
         }
@@ -148,7 +159,16 @@ class LifecycleManager:
         except Exception as e:
             results["vector_store"] = f"unhealthy: {str(e)}"
 
-        # 3. RustFS 检查
+        # 3. Cache 检查
+        try:
+            from app.core.infra.cache import get_cache
+
+            cache = get_cache()
+            results["cache"] = cache.stats()
+        except Exception as e:
+            results["cache"] = f"unhealthy: {str(e)}"
+
+        # 4. RustFS 检查
         try:
             rustfs = get_rustfs_service()
             rustfs.client.list_buckets()
@@ -156,7 +176,7 @@ class LifecycleManager:
         except Exception as e:
             results["rustfs"] = f"unhealthy: {str(e)}"
 
-        # 4. LLM 检查 (仅检查连通性/配置加载)
+        # 5. LLM 检查 (仅检查连通性/配置加载)
         try:
             from app.core.ai.providers.llm_manager import llm_manager
 

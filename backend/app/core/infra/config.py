@@ -13,11 +13,27 @@
 # limitations under the License.
 
 import os
+import tomllib
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus
 
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_project_version() -> str:
+    """从 pyproject.toml 读取版本号"""
+    try:
+        # pyproject.toml 位于 backend 根目录，即 app/core/infra/config.py 的上三级
+        pyproject_path = Path(__file__).parents[3] / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+                return pyproject_data.get("project", {}).get("version", "1.0.1")
+    except Exception:
+        pass
+    return "1.0.1"
 
 
 class Settings(BaseSettings):
@@ -33,9 +49,7 @@ class Settings(BaseSettings):
     # 环境配置
     ENVIRONMENT: str = Field(default="local", pattern="^(local|dev|prod)$")
     DEBUG: bool = Field(default=False)
-    CATWIKI_EDITION: str = Field(
-        default="community", validation_alias="CATWIKI_EDITION_DISABLE_ENV_OVERRIDE"
-    )  # CE: hardcoded
+    CATWIKI_EDITION: str = Field(default="community", validation_alias="CATWIKI_EDITION_DISABLE_ENV_OVERRIDE")  # CE: hardcoded
     CATWIKI_LICENSE_KEY: str | None = Field(default=None)
 
     # 数据库配置
@@ -264,6 +278,11 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # 强制以 pyproject.toml 为版本真相，防止用户本地 .env 包含陈旧版本号
+        self.VERSION = get_project_version()
 
 
 def get_env_files() -> list[str]:

@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import json
+import tomllib
 
 def update_file(file_path, pattern, replacement):
     if not os.path.exists(file_path):
@@ -23,13 +24,15 @@ def update_file(file_path, pattern, replacement):
     return True
 
 def get_current_version():
-    config_path = 'backend/app/core/infra/config.py'
-    if os.path.exists(config_path):
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            match = re.search(r'VERSION: str = "([^"]+)"', content)
-            if match:
-                return match.group(1)
+    """从 pyproject.toml 获取当前版本号"""
+    pyproject_path = 'backend/pyproject.toml'
+    if os.path.exists(pyproject_path):
+        try:
+            with open(pyproject_path, 'rb') as f:
+                data = tomllib.load(f)
+                return data.get('project', {}).get('version', 'unknown')
+        except Exception:
+            pass
     return "unknown"
 
 def set_version(version):
@@ -38,21 +41,21 @@ def set_version(version):
 
     print(f"🚀 Aligning project version to {v_num} (Docker tag: {v_tag})")
 
-    # 1. backend/app/core/infra/config.py
-    update_file(
-        'backend/app/core/infra/config.py',
-        r'VERSION: str = "[^"]+"',
-        f'VERSION: str = "{v_num}"'
-    )
-
-    # 2. backend/pyproject.toml
+    # 1. backend/pyproject.toml (唯一真实来源)
     update_file(
         'backend/pyproject.toml',
         r'(?m)^version = "[^"]+"',
         f'version = "{v_num}"'
     )
 
-    # 3. frontend package.json files (Target specific project files)
+    # 2. backend/app/core/infra/config.py (更新默认值作为后备)
+    update_file(
+        'backend/app/core/infra/config.py',
+        r'VERSION: str = "[^"]+"',
+        f'VERSION: str = "{v_num}"'
+    )
+
+    # 3. frontend package.json files
     pkg_files = [
         'frontend/admin/package.json',
         'frontend/client/package.json',
@@ -74,27 +77,16 @@ def set_version(version):
             except Exception as e:
                 print(f"❌ Error updating {pkg_path}: {e}")
 
-    # 4. .env files
-    env_files = [
-        '.env',
-        'backend/.env',
-        'backend/.env.example',
-        'deploy/docker/.env'
-    ]
-    for env_f in env_files:
-        # Match VERSION=x.x.x or VERSION="x.x.x"
-        update_file(env_f, r'VERSION=[^\s#]+', f'VERSION={v_num}')
-        update_file(env_f, r'VERSION="[^"]+"', f'VERSION="{v_num}"')
-
-    # 5. docker-compose files
+    # 4. docker-compose files (仅更新镜像标签)
     compose_files = [
         'deploy/docker/docker-compose.yml',
+        'deploy/docker-ee/docker-compose.yml',
         'docker-compose.dev.yml'
     ]
     for compose_path in compose_files:
         update_file(
             compose_path,
-            r'(image: bulolo/catwiki-[^:]+):[^\s]+',
+            r'(image: [^:]+):[^\s]+',
             r'\1:' + v_tag
         )
 

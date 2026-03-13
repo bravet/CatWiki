@@ -14,18 +14,16 @@
 
 """全局配置服务 (Configuration Service)
 
-负责管理系统级与租户级的动态配置，核心职责：
-1. 配置路由：根据 mode (Custom/Platform) 决定配置源。
-2. 缓存管理：基于 TTL 的多级缓存策略。
-3. 安全审计：敏感信息脱敏与访问日志。
+负责管理系统级与租户级的动态配置。
+现已接入系统统一缓存层，支持多机环境下的配置同步。
 """
 
 import json
 import logging
-import time
 from typing import Any, Optional
 
 from app.core.common.masking import mask_sensitive_data
+from app.core.infra.cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -34,46 +32,30 @@ class ConfigurationService:
     """配置服务 (单例模式)
 
     职责：
-    1. 缓存管理：基于 TTL (默认 60s) 的本地内存缓存。
-    2. 模式路由：根据 mode 分支，定向到租户或平台配置，无隐式回退。
-    3. 安全日志：脱敏处理 API Key，并区分“新鲜加载”与“缓存命中”日志。
-    4. 配置身份标识 (Hash/Fingerprint):
-       - 系统的物理实例（如向量库连接、Chat 客户端、Reranker 实例等）通过解析后的配置哈希来识别。
-       - 哈希组成核心字段：{ "model", "api_key", "base_url", "dimension"(仅向量) }。
-       - 当这些核心字段发生变化时，代表该模块的“身份”改变，将触发后端对应实例的重置或重新初始化。
+    1. 配置获取：作为业务层访问 AI 模型、系统组件配置的统一入口。
+    2. 多级路由：根据 mode 分支，定向到租户或平台配置。
+    3. 集群缓存：利用系统 BaseCache 实现配置缓存，支持 Redis 下的单点更新、全网生效。
     """
 
     _instance: Optional["ConfigurationService"] = None
 
     def __init__(self, cache_ttl: int = 60):
-        self._config_cache: dict[str, dict[str, Any]] = {}
-        self._last_update_map: dict[str, float] = {}
         self._cache_ttl = cache_ttl
 
     @classmethod
     def get_instance(cls) -> "ConfigurationService":
-        """获取服务单例实例"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    def _mask_config(self, config: dict[str, Any]) -> dict[str, Any]:
-        """对敏感字段进行脱敏处理"""
-        return mask_sensitive_data(config)
-
-    def _compute_config_hash(self, config: dict[str, Any]) -> str:
-        """计算配置指纹 (Identity Hash) - 已统一使用 ConfigResolver"""
-        from app.core.infra.config_resolver import ConfigResolver
-
-        return ConfigResolver.compute_config_hash(config)
+    def _get_cache_key(self, section: str, tenant_id: int | None) -> str:
+        """生成配置专用的缓存键"""
+        target = f"tenant:{tenant_id}" if tenant_id else "platform"
+        return f"config:{section}:{target}"
 
     def _log_resolved_config(self, section: str, target: str, config: dict[str, Any]):
-        """打印全量可视化卡片 (仅在数据库加载时触发，内部调试用)"""
-        from app.core.common.masking import mask_sensitive_data
-
+        """打印配置加载可视化日志（仅在缓存失效重新加载时触发）"""
         masked = mask_sensitive_data(config)
-        model = masked.get("model", "N/A")
-        provider = masked.get("provider", "N/A")
 
         try:
             pretty_json = json.dumps(masked, indent=4, ensure_ascii=False)
@@ -82,85 +64,89 @@ class ConfigurationService:
 
         log_msg = (
             f"\n{'=' * 70}\n"
-            f"🔍 [Config Service] -> 🔄 从数据库新鲜加载\n"
+            f"🔍 [Configuration] -> 🔄 从数据库重新加载配置\n"
             f"   - 模块阶段: {section}\n"
             f"   - 目标对象: {target}\n"
-            f"   - 指纹标识: {config.get('_hash', 'N/A')}\n"
-            f"   - 模型模式 (mode): {config.get('mode', 'N/A')} (运行状态)\n"
-            f"   - 核心模型: {provider} | {model}\n"
-            f"   - 完整脱敏快照:\n{pretty_json}\n"
+            f"   - 哈希指纹: {config.get('_hash', 'N/A')[:12]}\n"
+            f"   - 配置快照:\n{pretty_json}\n"
             f"{'=' * 70}"
         )
         logger.info(log_msg)
 
     def clear_cache(self, tenant_id: int | None = -1):
-        """清除缓存
-
-        Args:
-            tenant_id:
-                - 指定 ID: 清除该租户的缓存
-                - None: 清除平台(全局)缓存
-                - -1 (默认): 清除所有缓存
         """
-        if tenant_id == -1:
-            self._config_cache.clear()
-            self._last_update_map.clear()
-            logger.info("🧹 [ConfigService] 已清空全部配置缓存")
-        else:
-            cache_key = f"tenant:{tenant_id}" if tenant_id else "platform"
-            self._config_cache.pop(cache_key, None)
-            self._last_update_map.pop(cache_key, None)
-            logger.info(f"🧹 [ConfigService] 已清除 {cache_key} 的配置缓存")
+        清空配置缓存。
+        调用此方法后，系统缓存（内存或 Redis）中相关的配置项将被移除。
+        """
+        cache = get_cache()
+        # 注意：BaseCache.clear 是清空所有，这里我们其实需要根据前缀清理
+        # 但目前可以通过 delete 逐个清理重要的 Section，或者如果是租户更新，直接 clear 也是一种策略。
+        # 这里为了保持精细度，我们可以调用 delete。
+        sections = ["chat", "embedding", "rerank", "vl"]
+
+        async def _do_clear():
+            if tenant_id == -1:
+                # 如果是全局清理，目前 BaseCache 只提供了 clear（全库清理）
+                # 考虑到配置的重要性，直接 clear 是最稳妥的
+                await cache.clear()
+                logger.info("🧹 已清空系统全部缓存（含配置）")
+            else:
+                for sec in sections:
+                    key = self._get_cache_key(sec, tenant_id)
+                    await cache.delete(key)
+                logger.info(f"🧹 已清除租户 {tenant_id} 的模型配置缓存")
+
+        # 由于 clear_cache 目前在多处是同步调用（历史遗留），我们起一个 task 或直接执行
+        # 建议业务层逐渐迁移到异步调用清理
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_do_clear())
+        except RuntimeError:
+            # 兼容非异步环境（如初始化脚本）
+            asyncio.run(_do_clear())
 
     async def _resolve_config(
         self, section: str, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """统一配置解析逻辑 (带缓存层)"""
+        """统一配置解析逻辑 (接入 BaseCache)"""
         from app.core.infra.config_resolver import ConfigResolver
 
-        cache_key = f"{section}:tenant:{tenant_id}" if tenant_id else f"{section}:platform"
-        now = time.time()
+        cache = get_cache()
+        cache_key = self._get_cache_key(section, tenant_id)
 
-        # 1. 尝试从缓存获取
-        if not force:
-            last_update = self._last_update_map.get(cache_key, 0)
-            if now - last_update < self._cache_ttl and cache_key in self._config_cache:
-                return self._config_cache[cache_key]
+        if force:
+            await cache.delete(cache_key)
 
-        # 2. 缓存失效，调用底层 ConfigResolver (逻辑唯一源)
-        resolved_config = await ConfigResolver.resolve_section(section, tenant_id=tenant_id)
+        async def _fetcher():
+            # 实际搬砖逻辑
+            config = await ConfigResolver.resolve_section(section, tenant_id=tenant_id)
+            target_display = f"Tenant {tenant_id}" if tenant_id else "Platform"
+            self._log_resolved_config(section, target_display, config)
+            return config
 
-        # 3. 打印日志并存回缓存
-        target_display = f"Tenant {tenant_id}" if tenant_id else "Platform"
-        self._log_resolved_config(section, target_display, resolved_config)
-
-        self._config_cache[cache_key] = resolved_config
-        self._last_update_map[cache_key] = now
-
-        return resolved_config
+        # 使用 get_or_set 极简实现
+        return await cache.get_or_set(cache_key, _fetcher, ttl=self._cache_ttl)
 
     async def get_chat_config(
         self, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """获取 Chat 模型配置"""
         return await self._resolve_config("chat", tenant_id, force=force)
 
     async def get_embedding_config(
         self, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """获取 Embedding 模型配置"""
         return await self._resolve_config("embedding", tenant_id, force=force)
 
     async def get_rerank_config(
         self, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """获取 Rerank 模型配置"""
         return await self._resolve_config("rerank", tenant_id, force=force)
 
     async def get_vl_config(
         self, tenant_id: int | None = None, force: bool = False
     ) -> dict[str, Any]:
-        """获取视觉语言模型配置"""
         return await self._resolve_config("vl", tenant_id, force=force)
 
 

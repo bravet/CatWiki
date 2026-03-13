@@ -57,7 +57,22 @@ class HealthService:
             status = "unhealthy"
             logger.error(f"健康检查: 数据库连接失败 - {e}")
 
-        # 2. 详细检查 (仅在需要时)
+        # 2. 检查缓存
+        try:
+            from app.core.infra.cache import get_cache
+
+            cache = get_cache()
+            stats = cache.stats()
+            # 获取后端名称 (如 redis 或 memory)
+            backend_type = stats.get("backend", "unknown")
+            checks["cache"] = backend_type
+        except Exception as e:
+            checks["cache"] = f"error: {str(e)}"
+            if status == "healthy":
+                status = "degraded"
+            logger.error(f"健康检查: 缓存检查失败 - {e}")
+
+        # 3. 详细检查 (仅在需要时)
         if detailed:
             try:
                 rustfs = get_rustfs_service()

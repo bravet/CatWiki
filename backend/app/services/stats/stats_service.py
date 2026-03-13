@@ -17,6 +17,7 @@
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.infra.cache import cached
 from app.crud import crud_document
 from app.crud.document_view_event import crud_document_view_event
 from app.db.database import get_db
@@ -28,6 +29,7 @@ class StatsService:
         self.db = db
         self.session_service = session_service
 
+    @cached(ttl=300, key_prefix="service:stats:site")
     async def get_site_stats(self, site_id: int) -> dict:
         """获取站点聚合统计数据
 
