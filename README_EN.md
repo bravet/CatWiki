@@ -405,7 +405,7 @@ We've adopted a model similar to Dify.ai to provide better enterprise flexibilit
 
 ## 📮 Contact
 
-**💬 Feedback**: [GitHub Issues](https://github.com/bulolo/CatWiki/issues) &nbsp; | &nbsp; **📧 Business**: 82607314@qq.com / bulolo (WeChat) &nbsp; | &nbsp; **🌐 Website**: [catwiki.ai](https://catwiki.ai)
+**💬 Feedback**: [GitHub Issues](https://github.com/bulolo/CatWiki/issues) &nbsp; | &nbsp; **📧 Business**: support@catwiki.ai / bulolo (WeChat) &nbsp; | &nbsp; **🌐 Website**: [catwiki.ai](https://catwiki.ai)
 
 <br>
 

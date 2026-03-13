@@ -413,7 +413,7 @@ A: 确保你的访问路径包含站点域名后缀，例如：`http://localhost
 
 ## 📮 联系方式
 
-**💬 问题反馈**: [GitHub Issues](https://github.com/bulolo/CatWiki/issues) &nbsp; | &nbsp; **📧 商务合作**: 82607314@qq.com / bulolo (微信) &nbsp; | &nbsp; **🌐 官方网站**: [catwiki.ai](https://catwiki.ai)
+**💬 问题反馈**: [GitHub Issues](https://github.com/bulolo/CatWiki/issues) &nbsp; | &nbsp; **📧 商务合作**: support@catwiki.ai / bulolo (微信) &nbsp; | &nbsp; **🌐 官方网站**: [catwiki.ai](https://catwiki.ai)
 
 <br>
 

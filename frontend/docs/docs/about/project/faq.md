@@ -232,7 +232,7 @@ make down  # 停止并移除容器，保留数据
 **A:** 
 1. 查看 [GitHub Issues](https://github.com/bulolo/CatWiki/issues)
 2. 提交新的 Issue
-3. 联系开发团队：82607314@qq.com
+3. 联系开发团队：support@catwiki.ai
 
 ---
 

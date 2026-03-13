@@ -13,7 +13,7 @@
 
 如果你对 CatWiki 有商业合作意向，欢迎联系我们：
 
-- **邮箱**: 82607314@qq.com
+- **邮件**: support@catwiki.ai
 - **微信**: bulolo
 
 ### 👥 交流社群
@@ -50,9 +50,10 @@
 
 1. Fork 本仓库
 2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交你的修改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启一个 Pull Request
+3. 联系开发团队：support@catwiki.ai
+4. 提交你的修改 (`git commit -m 'Add some AmazingFeature'`)
+5. 推送到分支 (`git push origin feature/AmazingFeature`)
+6. 开启一个 Pull Request
 
 ---
 
