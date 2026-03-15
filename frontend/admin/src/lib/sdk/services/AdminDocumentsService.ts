@@ -6,6 +6,7 @@ import type { ApiResponse_Document_ } from '../models/ApiResponse_Document_';
 import type { ApiResponse_list_dict__ } from '../models/ApiResponse_list_dict__';
 import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_PaginatedResponse_Document__ } from '../models/ApiResponse_PaginatedResponse_Document__';
+import type { ApiResponse_Task_ } from '../models/ApiResponse_Task_';
 import type { ApiResponse_VectorizeResponse_ } from '../models/ApiResponse_VectorizeResponse_';
 import type { ApiResponse_VectorRetrieveResult_ } from '../models/ApiResponse_VectorRetrieveResult_';
 import type { Body_importDocument } from '../models/Body_importDocument';
@@ -178,15 +179,15 @@ export class AdminDocumentsService {
     }
     /**
      * Import Document
-     * 导入文档 (上传 -> 解析 -> 创建)
-     * @returns ApiResponse_Document_ Successful Response
+     * 导入文档 (上传 -> 异步解析 -> 创建)
+     * @returns ApiResponse_Task_ Successful Response
      * @throws ApiError
      */
     public importDocument({
         formData,
     }: {
         formData: Body_importDocument,
-    }): CancelablePromise<ApiResponse_Document_> {
+    }): CancelablePromise<ApiResponse_Task_> {
         return this.httpRequest.request({
             method: 'POST',
             url: '/admin/v1/documents/import',

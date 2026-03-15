@@ -28,6 +28,7 @@ from app.schemas.response import (
     PaginationInfo,
     Response,  # 向后兼容别名
 )
+from app.schemas.task import Task as TaskSchema  # noqa
 
 __all__ = [
     "BaseSchema",

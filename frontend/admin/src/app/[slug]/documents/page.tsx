@@ -1613,11 +1613,13 @@ export default function DocumentsPage() {
               <AlertCircle className="h-5 w-5" />
               确认删除文档?
             </DialogTitle>
-            <DialogDescription className="pt-2 space-y-2">
-              <p>您即将删除文档 <span className="font-bold text-slate-900">&quot;{deleteDocTarget?.title}&quot;</span>。</p>
-              <p className="text-red-500 bg-red-50 p-2 rounded text-xs">
-                ⚠️ 此操作将永久删除该文档及其所有历史记录，无法恢复。
-              </p>
+            <DialogDescription asChild className="pt-2 space-y-2">
+              <div>
+                <p>您即将删除文档 <span className="font-bold text-slate-900">&quot;{deleteDocTarget?.title}&quot;</span>。</p>
+                <p className="text-red-500 bg-red-50 p-2 rounded text-xs">
+                  ⚠️ 此操作将永久删除该文档及其所有历史记录，无法恢复。
+                </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -1642,11 +1644,13 @@ export default function DocumentsPage() {
               <AlertCircle className="h-5 w-5" />
               确认批量删除?
             </DialogTitle>
-            <DialogDescription className="pt-2 space-y-2">
-              <p>您即将删除选中的 <span className="font-bold text-slate-900">{selectedDocIds.length}</span> 个文档。</p>
-              <p className="text-red-500 bg-red-50 p-2 rounded text-xs">
-                ⚠️ 此操作将永久删除这些文档，无法恢复。
-              </p>
+            <DialogDescription asChild className="pt-2 space-y-2">
+              <div>
+                <p>您即将删除选中的 <span className="font-bold text-slate-900">{selectedDocIds.length}</span> 个文档。</p>
+                <p className="text-red-500 bg-red-50 p-2 rounded text-xs">
+                  ⚠️ 此操作将永久删除这些文档，无法恢复。
+                </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -1671,11 +1675,13 @@ export default function DocumentsPage() {
               <AlertCircle className="h-5 w-5" />
               确认删除合集?
             </DialogTitle>
-            <DialogDescription className="pt-2 space-y-2">
-              <p>您即将删除合集 <span className="font-bold text-slate-900">&quot;{deleteCollectionTarget?.name}&quot;</span>。</p>
-              <p className="text-red-500 bg-red-50 p-2 rounded text-xs border border-red-100">
-                ⚠️ 警告：该合集下的所有文档和子合集也将被一并删除，且无法恢复！
-              </p>
+            <DialogDescription asChild className="pt-2 space-y-2">
+              <div>
+                <p>您即将删除合集 <span className="font-bold text-slate-900">&quot;{deleteCollectionTarget?.name}&quot;</span>。</p>
+                <p className="text-red-500 bg-red-50 p-2 rounded text-xs border border-red-100">
+                  ⚠️ 警告：该合集下的所有文档和子合集也将被一并删除，且无法恢复！
+                </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

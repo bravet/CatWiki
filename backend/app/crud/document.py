@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +61,12 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         return db_obj
 
     async def update(
-        self, db: AsyncSession, *, db_obj: Document, obj_in: DocumentUpdate | dict[str, any]
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Document,
+        obj_in: DocumentUpdate | dict[str, Any],
+        auto_commit: bool = True,
     ) -> Document:
         """更新文档（自动计算阅读时间）"""
         from app.core.common.reading_time import calculate_reading_time
@@ -81,8 +87,11 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
                 setattr(db_obj, field, value)
 
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(db_obj)
+        else:
+            await db.flush()
 
         return db_obj
 
@@ -292,7 +301,13 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
         return {"total_documents": total_documents, "total_views": total_views}
 
     async def update_vector_status(
-        self, db: AsyncSession, *, document_id: int, status: str, error: str | None = None
+        self,
+        db: AsyncSession,
+        *,
+        document_id: int,
+        status: str,
+        error: str | None = None,
+        auto_commit: bool = True,
     ) -> Document | None:
         """更新文档的向量化状态
 
@@ -313,8 +328,11 @@ class CRUDDocument(CRUDBase[Document, DocumentCreate, DocumentUpdate]):
             document.vectorized_at = datetime.now(UTC)
 
         db.add(document)
-        await db.commit()
-        await db.refresh(document)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(document)
+        else:
+            await db.flush()
         return document
 
     async def batch_update_vector_status(

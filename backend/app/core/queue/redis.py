@@ -12,21 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.crud.collection import crud_collection
-from app.crud.document import crud_document
-from app.crud.document_view_event import crud_document_view_event
-from app.crud.site import crud_site  # noqa
-from app.crud.system_config import crud_system_config  # noqa
-from app.crud.task import crud_task  # noqa
-from app.crud.tenant import crud_tenant  # noqa
-from app.crud.user import crud_user  # noqa
+from arq.connections import RedisSettings
 
-__all__ = [
-    "crud_user",
-    "crud_site",
-    "crud_collection",
-    "crud_document",
-    "crud_document_view_event",
-    "crud_system_config",
-    "crud_tenant",
-]
+from app.core.infra.config import settings
+
+# Arq Redis 配置
+redis_settings = (
+    RedisSettings.from_dsn(settings.REDIS_URL) if settings.REDIS_URL else RedisSettings()
+)

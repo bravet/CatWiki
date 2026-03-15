@@ -133,7 +133,10 @@ class CollectionService:
         return collection
 
     async def create_collection(
-        self, collection_in: CollectionCreate, tenant_id: int | None = None
+        self,
+        collection_in: CollectionCreate,
+        tenant_id: int | None = None,
+        auto_commit: bool = True,
     ) -> CollectionModel:
         """
         创建合集（带一致性校验）
@@ -154,13 +157,14 @@ class CollectionService:
         if tenant_id is not None:
             obj_in_dict["tenant_id"] = tenant_id
 
-        return await crud_collection.create(self.db, obj_in=obj_in_dict)
+        return await crud_collection.create(self.db, obj_in=obj_in_dict, auto_commit=auto_commit)
 
     async def update_collection(
         self,
         collection_id: int,
         collection_in: CollectionUpdate,
         tenant_id: int | None = None,
+        auto_commit: bool = True,
     ) -> CollectionModel:
         """
         更新合集（带一致性校验）
@@ -177,9 +181,13 @@ class CollectionService:
             if parent.site_id != collection.site_id:
                 raise BadRequestException(detail="父合集必须属于同一站点")
 
-        return await crud_collection.update(self.db, db_obj=collection, obj_in=collection_in)
+        return await crud_collection.update(
+            self.db, db_obj=collection, obj_in=collection_in, auto_commit=auto_commit
+        )
 
-    async def delete_collection(self, collection_id: int, tenant_id: int | None = None) -> None:
+    async def delete_collection(
+        self, collection_id: int, tenant_id: int | None = None, auto_commit: bool = True
+    ) -> None:
         """
         删除合集（带级联检查）
         """
@@ -198,7 +206,7 @@ class CollectionService:
         if children:
             raise BadRequestException(detail="无法删除合集，该合集下还有子合集。")
 
-        await crud_collection.delete(self.db, id=collection_id)
+        await crud_collection.delete(self.db, id=collection_id, auto_commit=auto_commit)
 
     async def move_collection(
         self,
@@ -206,6 +214,7 @@ class CollectionService:
         target_parent_id: int | None,
         target_position: int,
         tenant_id: int | None = None,
+        auto_commit: bool = True,
     ) -> CollectionModel:
         """
         移动合集到新位置（带一致性重排逻辑）
@@ -236,17 +245,21 @@ class CollectionService:
         if target_position > len(siblings):
             target_position = len(siblings)
 
-        async with self.db.begin():
-            collection.parent_id = target_parent_id
-            self.db.add(collection)
+        # 执行移动排队逻辑并手动提交
+        collection.parent_id = target_parent_id
+        self.db.add(collection)
 
-            siblings.insert(target_position, collection)
-            for index, sibling in enumerate(siblings):
-                if sibling.order != index:
-                    sibling.order = index
-                    self.db.add(sibling)
+        siblings.insert(target_position, collection)
+        for index, sibling in enumerate(siblings):
+            if sibling.order != index:
+                sibling.order = index
+                self.db.add(sibling)
 
-        await self.db.refresh(collection)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(collection)
+        else:
+            await self.db.flush()
         return collection
 
 

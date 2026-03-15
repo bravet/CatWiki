@@ -133,7 +133,9 @@ class SystemConfigService:
             "platform_defaults": platform_defaults or None,
         }
 
-    async def delete_config(self, config_key: str, target_tenant_id: int | None) -> None:
+    async def delete_config(
+        self, config_key: str, target_tenant_id: int | None, auto_commit: bool = True
+    ) -> None:
         """删除指定配置"""
         with temporary_tenant_context(target_tenant_id):
             db_config = await crud_system_config.get_by_key(
@@ -144,33 +146,37 @@ class SystemConfigService:
             raise NotFoundException(detail=f"配置 {config_key} 不存在")
 
         await self.db.delete(db_config)
-        await self.db.commit()
+        if auto_commit:
+            await self.db.commit()
 
     async def update_ai_config(self, target_tenant_id: int | None, update_data: Any) -> dict:
         """更新 AI 模型配置 (保存后返回全量数据)"""
         new_values = update_data.model_dump(exclude_unset=True)
 
-        async with self.db.begin():
-            for model_type in MODEL_TYPES:
-                if model_type in new_values:
-                    config_key = SECTION_TO_KEY[model_type]
-                    new_config_val = new_values[model_type]
+        # 1. 执行数据库更新
+        for model_type in MODEL_TYPES:
+            if model_type in new_values:
+                config_key = SECTION_TO_KEY[model_type]
+                new_config_val = new_values[model_type]
 
-                    # [✨ 亮点] 深度合并逻辑：保护真实密钥不被脱敏占位符 (****) 覆盖
-                    existing = await crud_system_config.get_by_key(
-                        self.db, config_key=config_key, tenant_id=target_tenant_id
-                    )
+                # [✨ 亮点] 深度合并逻辑：保护真实密钥不被脱敏占位符 (****) 覆盖
+                existing = await crud_system_config.get_by_key(
+                    self.db, config_key=config_key, tenant_id=target_tenant_id
+                )
 
-                    if existing and isinstance(existing.config_value, dict):
-                        self._merge_securely(new_config_val, existing.config_value)
+                if existing and isinstance(existing.config_value, dict):
+                    self._merge_securely(new_config_val, existing.config_value)
 
-                    await crud_system_config.update_by_key(
-                        self.db,
-                        config_key=config_key,
-                        config_value=new_config_val,
-                        tenant_id=target_tenant_id,
-                        auto_commit=False,
-                    )
+                await crud_system_config.update_by_key(
+                    self.db,
+                    config_key=config_key,
+                    config_value=new_config_val,
+                    tenant_id=target_tenant_id,
+                    auto_commit=False,
+                )
+
+        # 显式提交事务 (兼容 FastAPI 依赖项已开启的事务)
+        await self.db.commit()
 
         # 2. 清理配置缓存
         try:
@@ -332,7 +338,7 @@ class SystemConfigService:
         return {"processors": tenant_processors + platform_processors}
 
     async def update_doc_processor_config(
-        self, target_tenant_id: int | None, update_data: Any
+        self, target_tenant_id: int | None, update_data: Any, auto_commit: bool = True
     ) -> dict:
         """更新文档处理服务配置 (自动过滤平台来源，并持久化 ID)"""
         config_value = update_data.model_dump(mode="json")
@@ -351,14 +357,19 @@ class SystemConfigService:
 
             config_value["processors"] = filtered_procs
 
-        async with self.db.begin():
-            db_config = await crud_system_config.update_by_key(
-                self.db,
-                config_key=DOC_PROCESSOR_CONFIG_KEY,
-                config_value=config_value,
-                tenant_id=target_tenant_id,
-                auto_commit=False,
-            )
+        # 触发数据库更新
+        db_config = await crud_system_config.update_by_key(
+            self.db,
+            config_key=DOC_PROCESSOR_CONFIG_KEY,
+            config_value=config_value,
+            tenant_id=target_tenant_id,
+            auto_commit=False,
+        )
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(db_config)
+        else:
+            await self.db.flush()
         return copy.deepcopy(db_config.config_value)
 
     async def test_doc_processor_connection(self, config: Any) -> dict:

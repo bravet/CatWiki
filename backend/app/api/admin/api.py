@@ -23,6 +23,7 @@ from app.api.admin.endpoints import (
     sites,
     stats,
     system_config,
+    tasks,
     tenants,
     users,
 )
@@ -32,6 +33,7 @@ api_router = APIRouter()
 # 注册业务路由（Admin API）
 api_router.include_router(sites.router, prefix="/sites", tags=["admin-sites"])
 api_router.include_router(documents.router, prefix="/documents", tags=["admin-documents"])
+api_router.include_router(tasks.router, prefix="/tasks", tags=["admin-tasks"])
 api_router.include_router(collections.router, prefix="/collections", tags=["admin-collections"])
 api_router.include_router(users.router, prefix="/users", tags=["admin-users"])
 api_router.include_router(

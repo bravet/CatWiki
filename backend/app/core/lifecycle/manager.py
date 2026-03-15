@@ -24,6 +24,7 @@ from app.core.integration.robot.services.feishu_app import FeishuRobotService
 from app.core.integration.robot.services.wecom_smart import WeComSmartService
 from app.core.lifecycle.config import init_system_configs
 from app.core.vector.vector_store import VectorStoreManager
+from app.services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,9 @@ class LifecycleManager:
                 logger.info("✅ [Lifecycle] Cache service closed.")
         except Exception as e:
             logger.warning(f"⚠️ [Lifecycle] Cache close failed: {e}")
+
+        # 6. 关闭任务服务池
+        await TaskService.close()
 
         logger.info("🏁 [Lifecycle] All core components stopped.")
 

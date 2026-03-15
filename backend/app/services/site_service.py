@@ -25,13 +25,13 @@ class SiteService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def increment_article_count(self, site_id: int) -> None:
+    async def increment_article_count(self, site_id: int, auto_commit: bool = True) -> None:
         """增加站点的文章计数"""
-        await crud_site.increment_article_count(self.db, site_id=site_id)
+        await crud_site.increment_article_count(self.db, site_id=site_id, auto_commit=auto_commit)
 
-    async def decrement_article_count(self, site_id: int) -> None:
+    async def decrement_article_count(self, site_id: int, auto_commit: bool = True) -> None:
         """减少站点的文章计数"""
-        await crud_site.decrement_article_count(self.db, site_id=site_id)
+        await crud_site.decrement_article_count(self.db, site_id=site_id, auto_commit=auto_commit)
 
     async def refresh_bot_stream_services(self) -> None:
         """站点机器人配置变更后，刷新飞书/钉钉/企微智能机器人长连接服务。"""
@@ -185,38 +185,40 @@ class SiteService:
                         detail="提供管理员邮箱时，必须同时提供管理员密码（至少 8 位）。"
                     )
 
-        # 使用 db.begin() 自动管理事务：进入时开启，成功走出时提交，异常时自动回滚
-        async with self.db.begin():
-            site = await crud_site.create(self.db, obj_in=site_in, auto_commit=False)
+        # 初始化站点及其管理员
+        site = await crud_site.create(self.db, obj_in=site_in, auto_commit=False)
 
-            # 如果提供了管理员信息，初始化站点管理员
-            if admin_email:
-                if existing_user:
-                    # 用户已存在，追加站点管理权限
-                    current_managed_sites = existing_user.managed_sites
-                    if site.id not in current_managed_sites:
-                        new_managed_sites = current_managed_sites + [site.id]
-                        await crud_user.update(
-                            self.db,
-                            db_obj=existing_user,
-                            obj_in=UserUpdate(
-                                managed_site_ids=new_managed_sites, role=existing_user.role
-                            ),
-                            auto_commit=False,
-                        )
-                else:
-                    # 用户不存在，创建新用户
-                    await crud_user.create(
+        # 如果提供了管理员信息，初始化站点管理员
+        if admin_email:
+            if existing_user:
+                # 用户已存在，追加站点管理权限
+                current_managed_sites = existing_user.managed_sites
+                if site.id not in current_managed_sites:
+                    new_managed_sites = current_managed_sites + [site.id]
+                    await crud_user.update(
                         self.db,
-                        obj_in=UserCreate(
-                            email=admin_email,
-                            password=admin_password or "",
-                            name=site_in.admin_name or admin_email.split("@")[0],
-                            role=UserRole.SITE_ADMIN,
-                            managed_site_ids=[site.id],
+                        db_obj=existing_user,
+                        obj_in=UserUpdate(
+                            managed_site_ids=new_managed_sites, role=existing_user.role
                         ),
                         auto_commit=False,
                     )
+            else:
+                # 用户不存在，创建新用户
+                await crud_user.create(
+                    self.db,
+                    obj_in=UserCreate(
+                        email=admin_email,
+                        password=admin_password or "",
+                        name=site_in.admin_name or admin_email.split("@")[0],
+                        role=UserRole.SITE_ADMIN,
+                        managed_site_ids=[site.id],
+                    ),
+                    auto_commit=False,
+                )
+
+        # 显式提交事务
+        await self.db.commit()
 
         # 刷新对象以填充 tenant_slug
         await self.db.refresh(site, ["tenant"])
@@ -272,9 +274,11 @@ class SiteService:
         await cache.delete_by_prefix("service:sites:client_detail")
         return site
 
-    async def delete_site(self, site_id: int) -> None:
+    async def delete_site(self, site_id: int, auto_commit: bool = True) -> None:
         """删除站点及其关联数据"""
-        success = await crud_site.remove_with_relationships(self.db, id=site_id)
+        success = await crud_site.remove_with_relationships(
+            self.db, id=site_id, auto_commit=auto_commit
+        )
         if not success:
             raise NotFoundException(detail=f"站点 {site_id} 不存在")
 

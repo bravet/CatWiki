@@ -137,7 +137,9 @@ class UserService:
         )
         return users, paginator
 
-    async def create_user(self, current_user: User, user_in: UserCreate) -> User:
+    async def create_user(
+        self, current_user: User, user_in: UserCreate, auto_commit: bool = True
+    ) -> User:
         """
         创建用户（带权限校验）
         """
@@ -160,9 +162,11 @@ class UserService:
         if existing_user:
             raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        return await crud_user.create(self.db, obj_in=user_in)
+        return await crud_user.create(self.db, obj_in=user_in, auto_commit=auto_commit)
 
-    async def invite_user(self, current_user: User, user_in: UserInvite) -> tuple[User, str]:
+    async def invite_user(
+        self, current_user: User, user_in: UserInvite, auto_commit: bool = True
+    ) -> tuple[User, str]:
         """
         邀请用户（带权限校验）
         """
@@ -188,10 +192,12 @@ class UserService:
         if existing_user:
             raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        user, password = await crud_user.invite(self.db, obj_in=user_in)
+        user, password = await crud_user.invite(self.db, obj_in=user_in, auto_commit=auto_commit)
         return user, password
 
-    async def update_user(self, current_user: User, user_id: int, user_in: UserUpdate) -> User:
+    async def update_user(
+        self, current_user: User, user_id: int, user_in: UserUpdate, auto_commit: bool = True
+    ) -> User:
         """
         更新用户（带权限校验）
         """
@@ -223,7 +229,9 @@ class UserService:
             if existing_user:
                 raise ConflictException(detail=f"邮箱 {user_in.email} 已被使用")
 
-        return await crud_user.update(self.db, db_obj=db_user, obj_in=user_in)
+        return await crud_user.update(
+            self.db, db_obj=db_user, obj_in=user_in, auto_commit=auto_commit
+        )
 
     async def authenticate(self, login_in: UserLogin) -> tuple[User, str]:
         """
@@ -249,7 +257,9 @@ class UserService:
 
         return user, token
 
-    async def reset_password(self, current_user: User, user_id: int) -> tuple[User, str]:
+    async def reset_password(
+        self, current_user: User, user_id: int, auto_commit: bool = True
+    ) -> tuple[User, str]:
         """
         重置用户密码（带权限校验）
         """
@@ -259,10 +269,12 @@ class UserService:
 
         self.ensure_user_access(current_user, db_user, action="重置密码")
 
-        user, new_password = await crud_user.reset_password(self.db, db_obj=db_user)
+        user, new_password = await crud_user.reset_password(
+            self.db, db_obj=db_user, auto_commit=auto_commit
+        )
         return user, new_password
 
-    async def delete_user(self, current_user: User, user_id: int) -> None:
+    async def delete_user(self, current_user: User, user_id: int, auto_commit: bool = True) -> None:
         """
         删除用户（带权限校验）
         """
@@ -272,7 +284,7 @@ class UserService:
 
         self.ensure_user_access(current_user, db_user, action="删除")
 
-        success = await crud_user.delete(self.db, id=user_id)
+        success = await crud_user.delete(self.db, id=user_id, auto_commit=auto_commit)
         if not success:
             raise NotFoundException(detail=f"用户 {user_id} 不存在")
 
@@ -281,6 +293,7 @@ class UserService:
         current_user: User,
         user_id: int,
         password_in: UserUpdatePassword,
+        auto_commit: bool = True,
     ) -> None:
         """
         更新用户密码（带权限校验）
@@ -297,7 +310,7 @@ class UserService:
             raise BadRequestException(detail="旧密码错误")
 
         await crud_user.update_password(
-            self.db, db_obj=db_user, new_password=password_in.new_password
+            self.db, db_obj=db_user, new_password=password_in.new_password, auto_commit=auto_commit
         )
 
 

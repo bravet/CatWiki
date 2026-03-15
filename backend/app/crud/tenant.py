@@ -52,10 +52,15 @@ class CRUDTenant(CRUDBase[Tenant, TenantCreate, TenantUpdate]):
         return await cache.get_or_set(cache_key, _fetch, ttl=3600)
 
     async def update(
-        self, db: AsyncSession, *, db_obj: Tenant, obj_in: TenantUpdate | dict[str, Any]
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Tenant,
+        obj_in: TenantUpdate | dict[str, Any],
+        auto_commit: bool = True,
     ) -> Tenant:
         """更新租户 (带缓存失效)"""
-        tenant = await super().update(db, db_obj=db_obj, obj_in=obj_in)
+        tenant = await super().update(db, db_obj=db_obj, obj_in=obj_in, auto_commit=auto_commit)
 
         from app.core.infra.cache import get_cache
 
@@ -81,7 +86,7 @@ class CRUDTenant(CRUDBase[Tenant, TenantCreate, TenantUpdate]):
             logger.warning(f"⚠️ [Cleanup] 租户 {id} 向量清理失败: {e}")
 
         # 2. 执行数据库删除
-        tenant = await super().remove(db, id=id)
+        tenant = await super().delete(db, id=id)
 
         # 3. 清理缓存
         if tenant:

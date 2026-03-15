@@ -234,6 +234,39 @@ services:
     tty: true
     restart: unless-stopped
 
+  # 后端 Worker 服务（处理异步任务：解析、向量化等）
+  worker:
+    image: catwiki-backend-dev
+    container_name: catwiki-worker-dev
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app:delegated
+      - /app/.venv
+      - /app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      backend-init:
+        condition: service_completed_successfully
+    networks:
+      - catwiki-network
+    # 启动 Arq Worker (使用 watchfiles 支持开发环境热更新)
+    command: uv run watchfiles --filter python "arq app.core.queue.worker_config.WorkerSettings" app
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
+ 
   # Admin 前端服务（管理后台，支持热更新）
   admin-frontend:
     build:

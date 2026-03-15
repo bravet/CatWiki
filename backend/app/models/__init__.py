@@ -21,6 +21,7 @@ from app.models.user import User, UserRole, UserStatus  # noqa
 from app.models.site import Site  # noqa
 from app.models.chat_session import ChatSession  # noqa
 from app.models.chat_message import ChatMessage  # noqa
+from app.models.task import Task, TaskStatus as GlobalTaskStatus, TaskType  # noqa
 
 __all__ = [
     "BaseModel",
@@ -37,4 +38,7 @@ __all__ = [
     "SystemConfig",
     "ChatSession",
     "ChatMessage",
+    "Task",
+    "GlobalTaskStatus",
+    "TaskType",
 ]

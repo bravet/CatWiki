@@ -12,21 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.crud.collection import crud_collection
-from app.crud.document import crud_document
-from app.crud.document_view_event import crud_document_view_event
-from app.crud.site import crud_site  # noqa
-from app.crud.system_config import crud_system_config  # noqa
-from app.crud.task import crud_task  # noqa
-from app.crud.tenant import crud_tenant  # noqa
-from app.crud.user import crud_user  # noqa
+from datetime import datetime
 
-__all__ = [
-    "crud_user",
-    "crud_site",
-    "crud_collection",
-    "crud_document",
-    "crud_document_view_event",
-    "crud_system_config",
-    "crud_tenant",
-]
+from pydantic import BaseModel
+
+
+class TaskBase(BaseModel):
+    task_type: str
+    status: str
+    progress: float = 0.0
+    job_id: str | None = None
+    site_id: int | None = None
+
+
+class TaskCreate(TaskBase):
+    tenant_id: int
+    created_by: str
+    payload: dict | None = None
+
+
+class Task(TaskBase):
+    id: int
+    tenant_id: int
+    payload: dict | None = None
+    result: dict | None = None
+    error: str | None = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

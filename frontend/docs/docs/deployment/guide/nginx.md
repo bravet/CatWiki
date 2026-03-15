@@ -120,7 +120,7 @@ server {
         proxy_pass http://127.0.0.1:3000;
         
         # 兼容旧配置中的遥测包含 (如有)
-        # include /home/docker/catWiki/telemetry-backend/nginx/telemetry.conf;
+        # include /home/docker/catWiki/telemetry_backend/nginx/telemetry.conf;
     }
 }
 

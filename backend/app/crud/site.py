@@ -110,7 +110,12 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         return await cache.get_or_set(cache_key, _fetch_from_db, ttl=3600)
 
     async def update(
-        self, db: AsyncSession, *, db_obj: Site, obj_in: SiteUpdate | dict[str, Any]
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Site,
+        obj_in: SiteUpdate | dict[str, Any],
+        auto_commit: bool = True,
     ) -> Site:
         """更新站点 (重写以处理缓存失效)"""
         # 1. 获取旧的 API Key (用于清除缓存)
@@ -119,7 +124,9 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
             old_api_key = db_obj.bot_config["api_bot"].get("api_key")
 
         # 2. 执行更新
-        updated_site = await super().update(db, db_obj=db_obj, obj_in=obj_in)
+        updated_site = await super().update(
+            db, db_obj=db_obj, obj_in=obj_in, auto_commit=auto_commit
+        )
 
         # 3. 清理缓存
         from app.core.infra.cache import get_cache
@@ -170,7 +177,9 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
         result = await db.execute(stmt)
         return list(result.scalars())
 
-    async def increment_article_count(self, db: AsyncSession, *, site_id: int) -> None:
+    async def increment_article_count(
+        self, db: AsyncSession, *, site_id: int, auto_commit: bool = True
+    ) -> None:
         """原子增加文章计数（支持租户隔离）"""
         from app.core.infra.tenant import get_current_tenant
 
@@ -180,9 +189,12 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
             stmt = stmt.where(Site.tenant_id == tenant_id)
 
         await db.execute(stmt.values(article_count=Site.article_count + 1))
-        await db.commit()
+        if auto_commit:
+            await db.commit()
 
-    async def decrement_article_count(self, db: AsyncSession, *, site_id: int) -> None:
+    async def decrement_article_count(
+        self, db: AsyncSession, *, site_id: int, auto_commit: bool = True
+    ) -> None:
         """原子减少文章计数（支持租户隔离）"""
         from app.core.infra.tenant import get_current_tenant
 
@@ -192,9 +204,12 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
             stmt = stmt.where(Site.tenant_id == tenant_id)
 
         await db.execute(stmt.values(article_count=Site.article_count - 1))
-        await db.commit()
+        if auto_commit:
+            await db.commit()
 
-    async def remove_with_relationships(self, db: AsyncSession, *, id: int) -> bool:
+    async def remove_with_relationships(
+        self, db: AsyncSession, *, id: int, auto_commit: bool = True
+    ) -> bool:
         """删除站点及其所有关联数据（高性能批量删除，支持租户隔离）"""
         from app.core.infra.tenant import get_current_tenant
         from app.models.collection import Collection
@@ -236,7 +251,10 @@ class CRUDSite(CRUDBase[Site, SiteCreate, SiteUpdate]):
 
         # 5. 删除站点
         await db.delete(site)
-        await db.commit()
+        if auto_commit:
+            await db.commit()
+        else:
+            await db.flush()
 
         # 6. 清理缓存
         from app.core.infra.cache import get_cache

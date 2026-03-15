@@ -158,14 +158,17 @@ class CRUDSystemConfig(CRUDBase[SystemConfig, SystemConfigCreate, SystemConfigUp
         db_config = await self.get_by_key(db, config_key=config_key, tenant_id=tenant_id)
         return db_config
 
-    async def delete_by_key(self, db: AsyncSession, *, config_key: str) -> bool:
+    async def delete_by_key(
+        self, db: AsyncSession, *, config_key: str, auto_commit: bool = True
+    ) -> bool:
         """根据配置键删除配置"""
         db_config = await self.get_by_key(db, config_key=config_key)
         if not db_config:
             return False
 
         await db.delete(db_config)
-        await db.commit()
+        if auto_commit:
+            await db.commit()
         return True
 
 

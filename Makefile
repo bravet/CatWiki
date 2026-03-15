@@ -101,7 +101,7 @@ dev-rebuild:
 
 # 重启后端服务
 dev-restart:
-	docker compose -f docker-compose.dev.yml restart backend
+	docker compose -f docker-compose.dev.yml restart backend worker
 
 # 查看后端日志
 dev-logs:

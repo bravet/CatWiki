@@ -33,6 +33,7 @@ from app.schemas.document import (
     VectorRetrieveResult,
 )
 from app.schemas.response import ApiResponse, PaginatedResponse
+from app.schemas.task import Task as TaskSchema
 from app.services.document_service import DocumentService, get_document_service
 
 router = APIRouter()
@@ -107,7 +108,7 @@ async def create_document(
 
 @router.post(
     "/import",
-    response_model=ApiResponse[Document],
+    response_model=ApiResponse[TaskSchema],
     status_code=status.HTTP_201_CREATED,
     operation_id="importDocument",
 )
@@ -121,11 +122,11 @@ async def import_document(
     extract_tables: bool = Form(False),
     service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
-) -> ApiResponse[Document]:
+) -> ApiResponse[TaskSchema]:
     """
-    导入文档 (上传 -> 解析 -> 创建)
+    导入文档 (上传 -> 异步解析 -> 创建)
     """
-    document_dict = await service.import_document(
+    task = await service.import_document(
         file=file,
         site_id=site_id,
         collection_id=collection_id,
@@ -135,7 +136,7 @@ async def import_document(
         extract_tables=extract_tables,
         current_username=current_user.name or current_user.email,
     )
-    return ApiResponse.ok(data=document_dict, msg="文档导入成功")
+    return ApiResponse.ok(data=task, msg="已加入导入队列")
 
 
 @router.put(
@@ -182,7 +183,7 @@ async def vectorize_documents(
         raise BadRequestException(detail="文档ID列表不能为空")
 
     success_ids, failed_count = await service.dispatch_vectorization_tasks(
-        background_tasks, request.document_ids
+        background_tasks, request.document_ids, current_user.name
     )
 
     return ApiResponse.ok(
@@ -204,7 +205,9 @@ async def vectorize_single_document(
     service: DocumentService = Depends(get_document_service),
     current_user: User = Depends(get_current_user_with_tenant),
 ) -> ApiResponse[Document]:
-    document_dict = await service.vectorize_single_document(background_tasks, document_id)
+    document_dict = await service.vectorize_single_document(
+        background_tasks, document_id, current_user.name
+    )
     return ApiResponse.ok(data=document_dict, msg="已加入学习队列")
 
 

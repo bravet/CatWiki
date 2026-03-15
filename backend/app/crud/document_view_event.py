@@ -36,6 +36,7 @@ class CRUDDocumentViewEvent:
         member_id: int | None = None,  # 预留：未来会员系统
         user_agent: str | None = None,
         referer: str | None = None,
+        auto_commit: bool = True,
     ) -> DocumentViewEvent:
         """记录一次文档浏览事件（支持租户 ID 自动填充）"""
         event = DocumentViewEvent(
@@ -48,8 +49,11 @@ class CRUDDocumentViewEvent:
             referer=referer,
         )
         db.add(event)
-        await db.commit()
-        await db.refresh(event)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(event)
+        else:
+            await db.flush()
         return event
 
     async def get_views_today(self, db: AsyncSession, *, site_id: int) -> int:

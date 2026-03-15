@@ -1,40 +1,44 @@
 import logging
 import shutil
-import tempfile
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import BackgroundTasks, Depends, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.common.document_utils import build_collection_map, enrich_document_dict
 from app.core.common.utils import NAMESPACE_CATWIKI, Paginator
-from app.core.doc_processor import DocProcessorFactory
-from app.core.infra.config import DOC_PROCESSOR_CONFIG_KEY
 from app.core.infra.tenant import get_current_tenant, temporary_tenant_context
 from app.core.vector.vector_store import VectorStoreManager
 from app.core.web.exceptions import BadRequestException, NotFoundException
 from app.crud.collection import crud_collection
 from app.crud.document import crud_document
 from app.crud.site import crud_site
-from app.crud.system_config import crud_system_config
-from app.crud.tenant import crud_tenant
 from app.db.database import AsyncSessionLocal, get_db
 from app.models.document import Document as DocumentModel
 from app.models.document import DocumentStatus, VectorStatus
+from app.models.task import TaskType
 from app.schemas.document import DocumentCreate
-from app.schemas.system_config import DocProcessorConfig
 from app.services.config.configuration_service import configuration_service
 from app.services.site_service import SiteService, get_site_service
+from app.services.system_config_service import SystemConfigService, get_system_config_service
+from app.services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    def __init__(self, db: AsyncSession, site_service: SiteService):
+    def __init__(
+        self,
+        db: AsyncSession,
+        site_service: SiteService,
+        system_config_service: SystemConfigService,
+    ):
         self.db = db
         self.site_service = site_service
+        self.system_config_service = system_config_service
 
     def is_vectorizable(self, document: DocumentModel) -> bool:
         """检查文档是否可以向量化"""
@@ -42,6 +46,7 @@ class DocumentService:
             VectorStatus.NONE,
             VectorStatus.FAILED,
             VectorStatus.COMPLETED,
+            VectorStatus.PENDING,  # 允许重新排队，处理可能卡住的任务
             None,
         )
 
@@ -143,7 +148,7 @@ class DocumentService:
         extract_images: bool,
         extract_tables: bool,
         current_username: str,
-    ) -> dict:
+    ) -> Any:
         """导入文档（上传 -> 解析 -> 创建）并返回 enriched dictionary"""
         try:
             active_tenant_id = get_current_tenant()
@@ -163,141 +168,63 @@ class DocumentService:
         if suffix not in [".pdf", ".jpg", ".jpeg", ".png"]:
             raise BadRequestException(detail="目前仅支持 PDF 和图片文件")
 
+        # 2. 获取处理器配置 (显式获取，解决 F821 错误)
+        processor_config_list = await self.system_config_service.get_doc_processor_config(
+            active_tenant_id, scope="tenant"
+        )
+        target_processor_config = next(
+            (p for p in processor_config_list.get("processors", []) if p["type"] == processor_type),
+            None,
+        )
+        if not target_processor_config:
+            raise BadRequestException(detail=f"处理器 {processor_type} 未配置或无效")
+
+        # 3. 保存文件到持久化目录供 Worker 读取
+        upload_dir = Path("data/uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        saved_filename = f"{uuid.uuid4()}{suffix}"
+        permanent_path = upload_dir / saved_filename
+
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                shutil.copyfileobj(file.file, tmp)
-                tmp_path = Path(tmp.name)
+            with open(permanent_path, "wb") as f:
+                file.file.seek(0)
+                shutil.copyfileobj(file.file, f)
         except Exception as e:
             logger.error(f"保存上传文件失败: {e}")
-            raise BadRequestException(detail="文件上传失败")
+            raise BadRequestException(detail="文件存盘失败")
 
-        try:
-            # 1. 确定授权范围：租户自己的资源 + (如果授权了) 平台共享资源
-            accessible_processors = []
+        # 4. 组装任务参数并分发
+        task_payload = {
+            "filename": filename,
+            "file_path": str(permanent_path),
+            "site_id": site_id,
+            "tenant_id": active_tenant_id,
+            "collection_id": collection_id,
+            "processor_type": processor_type,
+            "ocr_enabled": ocr_enabled,
+            "extract_images": extract_images,
+            "extract_tables": extract_tables,
+            "author": current_username,
+            "processor_config": target_processor_config,
+        }
 
-            # 获取租户侧配置
-            doc_processor_config = await crud_system_config.get_by_key(
-                self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=active_tenant_id
-            )
-            if doc_processor_config:
-                tenant_procs = doc_processor_config.config_value.get("processors", [])
-                logger.debug(
-                    f"🔍 租户侧配置 (T:{active_tenant_id}): found {len(tenant_procs)} processors"
-                )
-                for p in tenant_procs:
-                    p["_source"] = "tenant"
-                accessible_processors.extend(tenant_procs)
-            else:
-                logger.debug(f"🔍 租户侧配置 (T:{active_tenant_id}): None")
+        task = await TaskService.enqueue_task(
+            self.db,
+            task_type=TaskType.IMPORT_PARSING,
+            tenant_id=active_tenant_id,
+            site_id=site_id,
+            created_by=current_username,
+            payload=task_payload,
+        )
 
-            # 检查并拉取平台资源
-            platform_fallback_allowed = False
-            if active_tenant_id:
-                tenant = await crud_tenant.get(self.db, id=active_tenant_id)
-                if tenant and "doc_processors" in (tenant.platform_resources_allowed or []):
-                    platform_fallback_allowed = True
-
-            if platform_fallback_allowed:
-                with temporary_tenant_context(None):
-                    platform_config = await crud_system_config.get_by_key(
-                        self.db, config_key=DOC_PROCESSOR_CONFIG_KEY, tenant_id=None
-                    )
-                if platform_config:
-                    platform_procs = platform_config.config_value.get("processors", [])
-                    logger.debug(f"🔍 平台侧配置: found {len(platform_procs)} processors")
-                    for p in platform_procs:
-                        # 只有当租户侧没配置同名处理器时，才加入平台配置 (覆盖逻辑)
-                        if not any(tp.get("name") == p.get("name") for tp in accessible_processors):
-                            p["_source"] = "platform"
-                            accessible_processors.append(p)
-                else:
-                    logger.debug("🔍 平台侧配置 (T:None): None")
-
-            # 2. 精确匹配目标处理器 (必须类型/名称匹配且已启用)
-            target_processor_config = None
-            for p in accessible_processors:
-                # 兼容性处理：如果 type 为枚举对象，先转 string
-                p_type = str(p.get("type") or "")
-                p_name = str(p.get("name") or "")
-
-                if (p_type == processor_type or p_name == processor_type) and p.get(
-                    "enabled", True
-                ):
-                    target_processor_config = p
-                    break
-
-            if not target_processor_config:
-                logger.warning(
-                    f"❌ 未找到匹配的处理器: type={processor_type}, tenant={active_tenant_id}, "
-                    f"platform_allowed={platform_fallback_allowed}, pool_size={len(accessible_processors)}"
-                )
-                # 记录更多详细信息以便排查
-                if accessible_processors:
-                    available = [
-                        f"{p.get('name')}({p.get('type')}, enabled={p.get('enabled')})"
-                        for p in accessible_processors
-                    ]
-                    logger.warning(f"   可用处理器: {available}")
-
-                raise BadRequestException(
-                    detail=f"未找到类型为 {processor_type} 且已启用的文档处理器配置。请前往 [系统设置] 确认相关服务已正确配置并开启。"
-                )
-
-            if "config" not in target_processor_config:
-                target_processor_config["config"] = {}
-
-            target_processor_config["config"]["is_ocr"] = ocr_enabled
-            target_processor_config["config"]["extract_images"] = extract_images
-            target_processor_config["config"]["extract_tables"] = extract_tables
-
-            try:
-                processor_config_obj = DocProcessorConfig(**target_processor_config)
-                processor = DocProcessorFactory.create(processor_config_obj)
-
-                logger.info(
-                    f"🚀 开始解析文档: {filename} using {processor_config_obj.type} (Name: {processor_config_obj.name}, OCR={ocr_enabled})"
-                )
-                start_time = time.time()
-                result = await processor.process(tmp_path)
-                elapsed = time.time() - start_time
-                logger.info(
-                    f"✅ 文档解析完成 ({elapsed:.2f}s). Markdown length: {len(result.markdown)}"
-                )
-
-            except ValueError as e:
-                raise BadRequestException(detail=str(e))
-            except Exception as e:
-                logger.error(f"文档解析失败: {e}", exc_info=True)
-                raise BadRequestException(detail=f"文档解析失败: {str(e)}")
-
-            document_in = DocumentCreate(
-                title=filename.replace(suffix, ""),
-                content=result.markdown,
-                site_id=site_id,
-                collection_id=collection_id,
-                author=current_username,
-                status=DocumentStatus.DRAFT,
-            )
-
-            async with self.db.begin():
-                document = await crud_document.create(
-                    self.db, obj_in=document_in, auto_commit=False
-                )
-                await self.site_service.increment_article_count(site_id=site_id)
-
-            await self.db.refresh(document)
-            document_dict = await enrich_document_dict(document, self.db, crud_collection)
-            return document_dict
-
-        finally:
-            if tmp_path.exists():
-                try:
-                    tmp_path.unlink()
-                except Exception as e:
-                    logger.warning(f"清理临时文件失败: {tmp_path}, {e}")
+        return task
 
     async def dispatch_vectorization_tasks(
-        self, background_tasks: BackgroundTasks, document_ids: list[int]
+        self,
+        background_tasks: BackgroundTasks,
+        document_ids: list[int],
+        current_username: str = "system",
     ) -> tuple[list[int], int]:
         """统一处理向量化任务分发"""
         documents = await crud_document.get_multi(self.db, ids=document_ids)
@@ -338,8 +265,15 @@ class DocumentService:
             raise BadRequestException(detail=f"学习失败：{error_msg}")
 
         for doc_id in success_ids:
-            # 这里的 process_vectorization_task 是静态方法，直接通过类或 self 调用均可
-            background_tasks.add_task(self.process_vectorization_task, doc_id)
+            # 使用新的任务系统分发向量化任务
+            await TaskService.enqueue_task(
+                self.db,
+                task_type=TaskType.VECTORIZE,
+                tenant_id=target_tenant_id,
+                site_id=documents[0].site_id if documents else None,
+                created_by=current_username,
+                payload={"document_id": doc_id},
+            )
 
         return success_ids, failed_count
 
@@ -422,29 +356,40 @@ class DocumentService:
             document, self.db, crud_collection, include_site_info=True
         )
 
-    async def create_document(self, document_in: DocumentCreate) -> dict:
+    async def create_document(self, document_in: DocumentCreate, auto_commit: bool = True) -> dict:
         """创建文档"""
         site = await crud_site.get(self.db, id=document_in.site_id)
         if not site:
             raise BadRequestException(detail=f"站点 {document_in.site_id} 不存在")
 
-        async with self.db.begin():
-            document = await crud_document.create(self.db, obj_in=document_in, auto_commit=False)
-            await self.site_service.increment_article_count(site_id=document_in.site_id)
+        # 执行更新并手动提交
+        document = await crud_document.create(self.db, obj_in=document_in, auto_commit=False)
+        await self.site_service.increment_article_count(
+            site_id=document_in.site_id, auto_commit=False
+        )
 
-        await self.db.refresh(document)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(document)
+        else:
+            await self.db.flush()
+
         return await enrich_document_dict(document, self.db, crud_collection)
 
-    async def update_document(self, document_id: int, document_in: any) -> dict:
+    async def update_document(
+        self, document_id: int, document_in: any, auto_commit: bool = True
+    ) -> dict:
         """更新文档"""
         document = await crud_document.get(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
-        document = await crud_document.update(self.db, db_obj=document, obj_in=document_in)
+        document = await crud_document.update(
+            self.db, db_obj=document, obj_in=document_in, auto_commit=auto_commit
+        )
         return await enrich_document_dict(document, self.db, crud_collection)
 
-    async def delete_document(self, document_id: int) -> None:
+    async def delete_document(self, document_id: int, auto_commit: bool = True) -> None:
         """删除文档"""
         doc = await crud_document.get(self.db, id=document_id)
         if not doc:
@@ -461,9 +406,14 @@ class DocumentService:
         except Exception as e:
             logger.warning(f"删除文档向量失败: {e}")
 
-        async with self.db.begin():
-            await crud_document.delete(self.db, id=document_id, auto_commit=False)
-            await self.site_service.decrement_article_count(site_id=site_id)
+        # 执行删除并手动提交
+        await crud_document.delete(self.db, id=document_id, auto_commit=False)
+        await self.site_service.decrement_article_count(site_id=site_id, auto_commit=False)
+
+        if auto_commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def remove_document_vector(self, document_id: int) -> dict:
         """手动清空文档向量数据"""
@@ -493,15 +443,17 @@ class DocumentService:
             return []
 
     async def vectorize_single_document(
-        self, background_tasks: BackgroundTasks, document_id: int
+        self, background_tasks: BackgroundTasks, document_id: int, current_username: str = "system"
     ) -> dict:
-        """向量化单个文档"""
+        """为单个文档触发向量化（返回文档详情字典）"""
         document = await crud_document.get(self.db, id=document_id)
         if not document:
             raise NotFoundException(detail=f"文档 {document_id} 不存在")
 
         # 使用已有的批量分发逻辑
-        success_ids, _ = await self.dispatch_vectorization_tasks(background_tasks, [document_id])
+        success_ids, _ = await self.dispatch_vectorization_tasks(
+            background_tasks, [document_id], current_username
+        )
 
         if not success_ids:
             # 说明不可向量化 (can_vectorize 返回 False)
@@ -544,6 +496,7 @@ class DocumentService:
 def get_document_service(
     db: AsyncSession = Depends(get_db),
     site_service: SiteService = Depends(get_site_service),
+    system_config_service: SystemConfigService = Depends(get_system_config_service),
 ) -> DocumentService:
     """获取 DocumentService 实例的依赖注入函数"""
-    return DocumentService(db, site_service)
+    return DocumentService(db, site_service, system_config_service)

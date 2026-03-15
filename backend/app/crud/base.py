@@ -128,13 +128,16 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         result = await db.execute(query.offset(skip).limit(limit))
         return list(result.scalars())
 
-    async def create(self, db: AsyncSession, *, obj_in: CreateSchemaType) -> ModelType:
+    async def create(
+        self, db: AsyncSession, *, obj_in: CreateSchemaType, auto_commit: bool = True
+    ) -> ModelType:
         """
         创建记录（支持自动填充 tenant_id）
 
         参数:
             db: 数据库会话
             obj_in: 创建数据
+            auto_commit: 是否自动提交
 
         返回:
             创建的模型实例
@@ -143,8 +146,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(db_obj)
+        else:
+            await db.flush()
         return db_obj
 
     async def update(
@@ -153,6 +159,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         *,
         db_obj: ModelType,
         obj_in: UpdateSchemaType | dict[str, Any],
+        auto_commit: bool = True,
     ) -> ModelType:
         """
         更新记录
@@ -161,6 +168,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             db: 数据库会话
             db_obj: 要更新的模型实例
             obj_in: 更新数据
+            auto_commit: 是否自动提交
 
         返回:
             更新后的模型实例
@@ -175,8 +183,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 setattr(db_obj, field, value)
 
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        if auto_commit:
+            await db.commit()
+            await db.refresh(db_obj)
+        else:
+            await db.flush()
         return db_obj
 
     async def delete(
